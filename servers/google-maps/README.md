@@ -10,21 +10,21 @@ Google Maps MCP tools for places, geocoding, and routing.
 
 ### Linux / macOS
 ```bash
-cd ~/.openclaw/extensions/mcp-client/servers/google-maps
-chmod +x install.sh && ./install.sh
+# Using mcp-bridge CLI:
+mcp-bridge install google-maps
 ```
 
 ### Windows (PowerShell)
 ```powershell
-cd $env:USERPROFILE\.openclaw\extensions\mcp-client\servers\google-maps
-.\install.ps1
+# Using mcp-bridge CLI:
+mcp-bridge install google-maps
 ```
 
 ### Manual Setup
 1. Get your token: https://console.cloud.google.com/apis/credentials
 2. Add to .env: `GOOGLE_MAPS_API_KEY=your_token`
-3. Add config to openclaw.json (see config.json)
-4. Restart gateway
+3. Add config to ~/.mcp-bridge/config.json (see config.json)
+4. Restart mcp-bridge
 
 ## What you get
 - Geocoding and reverse geocoding

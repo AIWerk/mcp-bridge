@@ -11,21 +11,21 @@ Wise MCP server for multi-currency account and transfer workflows.
 
 ### Linux / macOS
 ```bash
-cd ~/.openclaw/extensions/mcp-client/servers/wise
-chmod +x install.sh && ./install.sh
+# Using mcp-bridge CLI:
+mcp-bridge install wise
 ```
 
 ### Windows (PowerShell)
 ```powershell
-cd $env:USERPROFILE\.openclaw\extensions\mcp-client\servers\wise
-.\install.ps1
+# Using mcp-bridge CLI:
+mcp-bridge install wise
 ```
 
 ### Manual Setup
 1. Get your token: https://wise.com/settings/api-tokens
 2. Add to .env: `WISE_API_TOKEN=your_token`
-3. Add config to openclaw.json (see config.json)
-4. Restart gateway
+3. Add config to ~/.mcp-bridge/config.json (see config.json)
+4. Restart mcp-bridge
 
 ## What you get
 - Profile and balance lookup tools

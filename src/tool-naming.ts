@@ -10,8 +10,8 @@ export function pickRegisteredToolName(
   globalNames: Set<string>,
   logger?: { warn: (...args: unknown[]) => void }
 ): string {
-  // toolPrefix: true = always prefix, false = never prefix, "auto" = prefix only on collision (default)
-  const effectivePrefix = toolPrefix === undefined ? "auto" : toolPrefix;
+  // toolPrefix: true = always prefix (default), false = never prefix, "auto" = prefix only on collision
+  const effectivePrefix = toolPrefix === undefined ? true : toolPrefix;
 
   let candidate: string;
   if (effectivePrefix === true) {

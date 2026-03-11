@@ -2,9 +2,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OPENCLAW_DIR="${HOME}/.openclaw"
-OPENCLAW_JSON="${OPENCLAW_DIR}/openclaw.json"
-ENV_FILE="${OPENCLAW_DIR}/.env"
+MCP_BRIDGE_DIR="${HOME}/.mcp-bridge"
+MCP_BRIDGE_JSON="${MCP_BRIDGE_DIR}/config.json"
+ENV_FILE="${MCP_BRIDGE_DIR}/.env"
 
 usage() {
     echo "Usage: $0 <server-name> [--dry-run] [--remove]"
@@ -128,17 +128,17 @@ if [[ "$REMOVE" == "true" ]]; then
     echo "Removing ${SERVER_TITLE} MCP Server"
     echo "========================================"
 
-    if [[ ! -f "$OPENCLAW_JSON" ]]; then
-        echo "❌ Config not found: $OPENCLAW_JSON"
+    if [[ ! -f "$MCP_BRIDGE_JSON" ]]; then
+        echo "❌ Config not found: $MCP_BRIDGE_JSON"
         exit 1
     fi
 
     # Check if server exists in config
     HAS_SERVER=$(python3 -c "
 import json
-with open('$OPENCLAW_JSON') as f:
+with open('$MCP_BRIDGE_JSON') as f:
     cfg = json.load(f)
-servers = cfg.get('plugins',{}).get('entries',{}).get('openclaw-mcp-bridge',{}).get('config',{}).get('servers',{})
+servers = cfg.get('servers',{})
 print('yes' if '$SERVER_NAME' in servers else 'no')
 " 2>/dev/null)
 
@@ -148,18 +148,18 @@ print('yes' if '$SERVER_NAME' in servers else 'no')
     fi
 
     # Backup
-    BACKUP_FILE="${OPENCLAW_JSON}.bak-$(date +%Y%m%d%H%M%S)"
-    cp "$OPENCLAW_JSON" "$BACKUP_FILE"
+    BACKUP_FILE="${MCP_BRIDGE_JSON}.bak-$(date +%Y%m%d%H%M%S)"
+    cp "$MCP_BRIDGE_JSON" "$BACKUP_FILE"
     echo "Backup: ${BACKUP_FILE}"
 
     # Remove server entry from config (keep servers/<name>/ directory)
     python3 -c "
 import json
-with open('$OPENCLAW_JSON') as f:
+with open('$MCP_BRIDGE_JSON') as f:
     cfg = json.load(f)
-servers = cfg['plugins']['entries']['openclaw-mcp-bridge']['config']['servers']
+servers = cfg.get('servers', {})
 del servers['$SERVER_NAME']
-with open('$OPENCLAW_JSON', 'w') as f:
+with open('$MCP_BRIDGE_JSON', 'w') as f:
     json.dump(cfg, f, indent=2)
     f.write('\n')
 print('✅ Removed $SERVER_NAME from config')
@@ -182,21 +182,21 @@ print('ℹ️  Server recipe kept in servers/$SERVER_NAME/ (reinstall anytime)')
         read -r -p "Restart gateway now? [Y/n]: " RESTART </dev/tty
     fi
     if [[ -z "$RESTART" || "$RESTART" =~ ^[Yy]$ ]]; then
-        systemctl --user restart openclaw-gateway 2>/dev/null || {
-            echo "⚠️  Auto-restart failed. Run: systemctl --user restart openclaw-gateway"
+        systemctl --user restart mcp-bridge 2>/dev/null || {
+            echo "⚠️  Auto-restart failed. Run: systemctl --user restart mcp-bridge"
             exit 0
         }
         sleep 3
-        if systemctl --user is-active --quiet openclaw-gateway 2>/dev/null; then
-            echo "✅ Gateway restarted. ${SERVER_TITLE} removed."
+        if systemctl --user is-active --quiet mcp-bridge 2>/dev/null; then
+            echo "✅ Service restarted. ${SERVER_TITLE} removed."
         else
-            echo "❌ Gateway failed to start! Restoring backup..."
-            cp "$BACKUP_FILE" "$OPENCLAW_JSON"
-            systemctl --user restart openclaw-gateway 2>/dev/null
+            echo "❌ Service failed to start! Restoring backup..."
+            cp "$BACKUP_FILE" "$MCP_BRIDGE_JSON"
+            systemctl --user restart mcp-bridge 2>/dev/null
             echo "Restored from backup."
         fi
     else
-        echo "⏭️  Run manually: systemctl --user restart openclaw-gateway"
+        echo "⏭️  Run manually: systemctl --user restart mcp-bridge"
     fi
     exit 0
 fi
@@ -235,7 +235,7 @@ if [[ -f "$ENV_VARS_FILE" ]] && [[ -s "$ENV_VARS_FILE" ]]; then
     done
 
     # Write to .env
-    mkdir -p "$OPENCLAW_DIR"
+    mkdir -p "$MCP_BRIDGE_DIR"
     touch "$ENV_FILE"
     chmod 600 "$ENV_FILE"
 
@@ -255,22 +255,22 @@ if [[ -f "$ENV_VARS_FILE" ]] && [[ -s "$ENV_VARS_FILE" ]]; then
     fi
 fi
 
-# 4. Backup and merge openclaw.json
-mkdir -p "$(dirname "$OPENCLAW_JSON")"
-[[ ! -f "$OPENCLAW_JSON" ]] && echo "{}" > "$OPENCLAW_JSON"
+# 4. Backup and merge config.json
+mkdir -p "$(dirname "$MCP_BRIDGE_JSON")"
+[[ ! -f "$MCP_BRIDGE_JSON" ]] && echo "{}" > "$MCP_BRIDGE_JSON"
 
-BACKUP_FILE="${OPENCLAW_JSON}.bak-$(date +%Y%m%d%H%M%S)"
-cp "$OPENCLAW_JSON" "$BACKUP_FILE"
+BACKUP_FILE="${MCP_BRIDGE_JSON}.bak-$(date +%Y%m%d%H%M%S)"
+cp "$MCP_BRIDGE_JSON" "$BACKUP_FILE"
 echo "Backup: ${BACKUP_FILE}"
 
 PATH_OVERRIDE="$(resolve_path_override)"
 
-python3 - "$OPENCLAW_JSON" "$SERVER_CONFIG_FILE" "$SERVER_NAME" "$PATH_OVERRIDE" <<'PY'
+python3 - "$MCP_BRIDGE_JSON" "$SERVER_CONFIG_FILE" "$SERVER_NAME" "$PATH_OVERRIDE" <<'PY'
 import json, sys
 
-openclaw_path, server_cfg_path, server_name, path_override = sys.argv[1:5]
+config_path, server_cfg_path, server_name, path_override = sys.argv[1:5]
 
-with open(openclaw_path, "r", encoding="utf-8") as f:
+with open(config_path, "r", encoding="utf-8") as f:
     raw = f.read().strip()
     cfg = json.loads(raw) if raw else {}
 
@@ -284,22 +284,14 @@ if path_override:
             if isinstance(value, str) and value.startswith("path/to/"):
                 args[idx] = path_override
 
-plugins = cfg.setdefault("plugins", {})
-allow = plugins.setdefault("allow", [])
-if "openclaw-mcp-bridge" not in allow:
-    allow.append("openclaw-mcp-bridge")
-entries = plugins.setdefault("entries", {})
-mcp_client = entries.setdefault("openclaw-mcp-bridge", {})
-mcp_client.setdefault("enabled", True)
-mcp_cfg = mcp_client.setdefault("config", {})
-mcp_cfg.setdefault("toolPrefix", True)
-mcp_cfg.setdefault("reconnectIntervalMs", 30000)
-mcp_cfg.setdefault("connectionTimeoutMs", 10000)
-mcp_cfg.setdefault("requestTimeoutMs", 60000)
-servers = mcp_cfg.setdefault("servers", {})
+cfg.setdefault("toolPrefix", True)
+cfg.setdefault("reconnectIntervalMs", 30000)
+cfg.setdefault("connectionTimeoutMs", 10000)
+cfg.setdefault("requestTimeoutMs", 60000)
+servers = cfg.setdefault("servers", {})
 servers[server_name] = server_cfg
 
-with open(openclaw_path, "w", encoding="utf-8") as f:
+with open(config_path, "w", encoding="utf-8") as f:
     json.dump(cfg, f, indent=2)
     f.write("\n")
 
@@ -308,50 +300,5 @@ PY
 
 # 5. Gateway restart
 echo ""
-read -r -p "Restart gateway now? [Y/n]: " RESTART </dev/tty
-if [[ -z "$RESTART" || "$RESTART" =~ ^[Yy]$ ]]; then
-    systemctl --user restart openclaw-gateway 2>/dev/null || {
-        echo "⚠️  Auto-restart failed. Run: systemctl --user restart openclaw-gateway"
-        exit 0
-    }
-    echo "Waiting for gateway startup..."
-    CONFIRMED=false
-    ROUTER_MODE=false
-    for i in 1 2 3 4 5 6; do
-        sleep 5
-        if ! systemctl --user is-active --quiet openclaw-gateway 2>/dev/null; then
-            echo "❌ Gateway failed to start!"
-            journalctl --user -u openclaw-gateway --since "1 min ago" --no-pager 2>/dev/null | grep -iE "error|fail|missing" | head -5
-            echo "Full logs: journalctl --user -u openclaw-gateway --since '1 min ago' --no-pager"
-            exit 1
-        fi
-        # Router mode: servers connect lazily, just check plugin loaded
-        if journalctl --user -u openclaw-gateway --since "1 min ago" --no-pager 2>/dev/null | grep -qi "Plugin activated with.*servers configured"; then
-            CONFIRMED=true
-            ROUTER_MODE=true
-            break
-        fi
-        # Direct mode: server connects at boot
-        if journalctl --user -u openclaw-gateway --since "1 min ago" --no-pager 2>/dev/null | grep -qi "Server ${SERVER_NAME} initialized"; then
-            CONFIRMED=true
-            break
-        fi
-        # Check if server explicitly failed
-        if journalctl --user -u openclaw-gateway --since "1 min ago" --no-pager 2>/dev/null | grep -qi "Startup failed: ${SERVER_NAME}"; then
-            echo "❌ ${SERVER_TITLE} MCP Server failed to start!"
-            journalctl --user -u openclaw-gateway --since "1 min ago" --no-pager 2>/dev/null | grep -i "$SERVER_NAME" | tail -5
-            exit 1
-        fi
-    done
-    if $CONFIRMED; then
-        if $ROUTER_MODE; then
-            echo "✅ ${SERVER_TITLE} configured! (Router mode — server connects on first use)"
-        else
-            echo "✅ ${SERVER_TITLE} MCP Server installed and running!"
-        fi
-    else
-        echo "⚠️  Gateway running but plugin not confirmed after 30s. Check: journalctl --user -u openclaw-gateway -f"
-    fi
-else
-    echo "⏭️  Run manually: systemctl --user restart openclaw-gateway"
-fi
+echo "✅ ${SERVER_TITLE} MCP Server installed."
+echo "Restart mcp-bridge to pick up the new server configuration."

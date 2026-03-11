@@ -13,6 +13,10 @@ import type { Logger } from "../src/types.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// After tsc, this file lives at dist/bin/mcp-bridge.js.
+// Package root is two levels up: dist/bin/ -> dist/ -> package root.
+const PACKAGE_ROOT = join(__dirname, "..", "..");
+
 // -- Logger ---------------------------------------------------------------
 
 type LogLevel = "error" | "warn" | "info" | "debug";
@@ -142,7 +146,7 @@ function cmdInit(logger: Logger): void {
 }
 
 function cmdCatalog(logger: Logger, offline: boolean): void {
-  const catalogPath = join(__dirname, "..", "servers", "index.json");
+  const catalogPath = join(PACKAGE_ROOT, "servers", "index.json");
   if (!existsSync(catalogPath)) {
     logger.error("Server catalog not found");
     process.exit(1);
@@ -191,7 +195,7 @@ function cmdServers(logger: Logger, configPath?: string): void {
 }
 
 function cmdSearch(query: string, logger: Logger): void {
-  const catalogPath = join(__dirname, "..", "servers", "index.json");
+  const catalogPath = join(PACKAGE_ROOT, "servers", "index.json");
   if (!existsSync(catalogPath)) {
     logger.error("Server catalog not found");
     process.exit(1);
@@ -219,7 +223,7 @@ function cmdSearch(query: string, logger: Logger): void {
 }
 
 function cmdInstall(serverName: string, logger: Logger): void {
-  const scriptPath = join(__dirname, "..", "scripts", "install-server.sh");
+  const scriptPath = join(PACKAGE_ROOT, "scripts", "install-server.sh");
   if (!existsSync(scriptPath)) {
     logger.error("Install script not found");
     process.exit(1);

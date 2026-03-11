@@ -10,21 +10,21 @@ Official GitHub MCP server running in Docker.
 
 ### Linux / macOS
 ```bash
-cd ~/.openclaw/extensions/mcp-client/servers/github
-chmod +x install.sh && ./install.sh
+# Using mcp-bridge CLI:
+mcp-bridge install github
 ```
 
 ### Windows (PowerShell)
 ```powershell
-cd $env:USERPROFILE\.openclaw\extensions\mcp-client\servers\github
-.\install.ps1
+# Using mcp-bridge CLI:
+mcp-bridge install github
 ```
 
 ### Manual Setup
 1. Get your token: https://github.com/settings/tokens
 2. Add to .env: `GITHUB_MCP_TOKEN=your_token`
-3. Add config to openclaw.json (see config.json)
-4. Restart gateway
+3. Add config to ~/.mcp-bridge/config.json (see config.json)
+4. Restart mcp-bridge
 
 ## What you get
 - Repository browsing and search tools

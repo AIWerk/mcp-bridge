@@ -10,21 +10,21 @@ Miro board MCP tools for collaborative whiteboards.
 
 ### Linux / macOS
 ```bash
-cd ~/.openclaw/extensions/mcp-client/servers/miro
-chmod +x install.sh && ./install.sh
+# Using mcp-bridge CLI:
+mcp-bridge install miro
 ```
 
 ### Windows (PowerShell)
 ```powershell
-cd $env:USERPROFILE\.openclaw\extensions\mcp-client\servers\miro
-.\install.ps1
+# Using mcp-bridge CLI:
+mcp-bridge install miro
 ```
 
 ### Manual Setup
 1. Get your token: https://miro.com/app/settings/user-profile/apps
 2. Add to .env: `MIRO_API_TOKEN=your_token`
-3. Add config to openclaw.json (see config.json)
-4. Restart gateway
+3. Add config to ~/.mcp-bridge/config.json (see config.json)
+4. Restart mcp-bridge
 
 ## What you get
 - Board content read tools

@@ -10,21 +10,21 @@ Linear issue and project management MCP server.
 
 ### Linux / macOS
 ```bash
-cd ~/.openclaw/extensions/mcp-client/servers/linear
-chmod +x install.sh && ./install.sh
+# Using mcp-bridge CLI:
+mcp-bridge install linear
 ```
 
 ### Windows (PowerShell)
 ```powershell
-cd $env:USERPROFILE\.openclaw\extensions\mcp-client\servers\linear
-.\install.ps1
+# Using mcp-bridge CLI:
+mcp-bridge install linear
 ```
 
 ### Manual Setup
 1. Get your token: https://linear.app/settings/api
 2. Add to .env: `LINEAR_API_KEY=your_token`
-3. Add config to openclaw.json (see config.json)
-4. Restart gateway
+3. Add config to ~/.mcp-bridge/config.json (see config.json)
+4. Restart mcp-bridge
 
 ## What you get
 - Issue create/update/search tools

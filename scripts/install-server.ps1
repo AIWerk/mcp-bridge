@@ -1,9 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$OpenclawDir = Join-Path $env:USERPROFILE ".openclaw"
-$EnvFile = Join-Path $OpenclawDir ".env"
-$OpenclawJson = Join-Path $OpenclawDir "openclaw.json"
+$McpBridgeDir = Join-Path $env:USERPROFILE ".mcp-bridge"
+$EnvFile = Join-Path $McpBridgeDir ".env"
+$McpBridgeJson = Join-Path $McpBridgeDir "config.json"
 
 if ($args.Count -eq 0) {
     Write-Host "Usage: install-server.ps1 <server-name> [--dry-run] [--remove]"
@@ -133,26 +133,26 @@ if ($Remove) {
     Write-Host "Removing $ServerTitle MCP Server"
     Write-Host "========================================"
 
-    if (-not (Test-Path $OpenclawJson)) {
-        Write-Host "❌ Config not found: $OpenclawJson" -ForegroundColor Red
+    if (-not (Test-Path $McpBridgeJson)) {
+        Write-Host "❌ Config not found: $McpBridgeJson" -ForegroundColor Red
         exit 1
     }
 
-    $cfg = Get-Content $OpenclawJson -Raw | ConvertFrom-Json
-    $servers = $cfg.plugins.entries.'openclaw-mcp-bridge'.config.servers
+    $cfg = Get-Content $McpBridgeJson -Raw | ConvertFrom-Json
+    $servers = $cfg.servers
     if (-not ($servers.PSObject.Properties.Name -contains $ServerName)) {
         Write-Host "ℹ️  Server '$ServerName' not found in config. Nothing to remove." -ForegroundColor Yellow
         exit 0
     }
 
     # Backup
-    $backupFile = "$OpenclawJson.bak-$(Get-Date -Format 'yyyyMMddHHmmss')"
-    Copy-Item $OpenclawJson $backupFile
+    $backupFile = "$McpBridgeJson.bak-$(Get-Date -Format 'yyyyMMddHHmmss')"
+    Copy-Item $McpBridgeJson $backupFile
     Write-Host "Backup: $backupFile"
 
     # Remove server entry
     $servers.PSObject.Properties.Remove($ServerName)
-    $cfg | ConvertTo-Json -Depth 10 | Set-Content $OpenclawJson -Encoding UTF8
+    $cfg | ConvertTo-Json -Depth 10 | Set-Content $McpBridgeJson -Encoding UTF8
     Write-Host "✅ Removed $ServerName from config" -ForegroundColor Green
     Write-Host "ℹ️  Server recipe kept in servers\$ServerName\ (reinstall anytime)" -ForegroundColor Cyan
 
@@ -168,17 +168,7 @@ if ($Remove) {
         }
     }
 
-    $restart = Read-Host "Restart gateway now? [Y/n]"
-    if ([string]::IsNullOrEmpty($restart) -or $restart -match '^[Yy]$') {
-        try {
-            Restart-Service openclaw-gateway -ErrorAction Stop
-            Write-Host "✅ Gateway restarted. $ServerTitle removed." -ForegroundColor Green
-        } catch {
-            Write-Host "⚠️  Auto-restart failed. Run: Restart-Service openclaw-gateway" -ForegroundColor Yellow
-        }
-    } else {
-        Write-Host "⏭️  Run manually: Restart-Service openclaw-gateway"
-    }
+    Write-Host "✅ $ServerTitle removed. Restart mcp-bridge to apply." -ForegroundColor Green
     exit 0
 }
 
@@ -218,7 +208,7 @@ while ([string]::IsNullOrWhiteSpace($Token)) {
 }
 
 # 4. Write to .env
-New-Item -ItemType Directory -Force -Path $OpenclawDir | Out-Null
+New-Item -ItemType Directory -Force -Path $McpBridgeDir | Out-Null
 if (-not (Test-Path $EnvFile)) { New-Item -ItemType File -Force -Path $EnvFile | Out-Null }
 
 $envExists = Select-String -Path $EnvFile -Pattern "^$([regex]::Escape($EnvVarName))=" -Quiet
@@ -237,14 +227,14 @@ if ($envExists) {
     Write-Host "Saved $EnvVarName to $EnvFile"
 }
 
-# 5. Backup and merge openclaw.json
-if (-not (Test-Path $OpenclawJson)) { Set-Content -Path $OpenclawJson -Value "{}" -Encoding UTF8 }
+# 5. Backup and merge config.json
+if (-not (Test-Path $McpBridgeJson)) { Set-Content -Path $McpBridgeJson -Value "{}" -Encoding UTF8 }
 
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-Copy-Item -Path $OpenclawJson -Destination "$OpenclawJson.bak-$timestamp" -Force
-Write-Host "Backup: $OpenclawJson.bak-$timestamp"
+Copy-Item -Path $McpBridgeJson -Destination "$McpBridgeJson.bak-$timestamp" -Force
+Write-Host "Backup: $McpBridgeJson.bak-$timestamp"
 
-$cfgRaw = Get-Content -Path $OpenclawJson -Raw
+$cfgRaw = Get-Content -Path $McpBridgeJson -Raw
 if ([string]::IsNullOrWhiteSpace($cfgRaw)) { $cfgRaw = "{}" }
 $cfg = $cfgRaw | ConvertFrom-Json
 $serverConfig = Get-Content -Path $ServerConfigFile -Raw | ConvertFrom-Json
@@ -258,43 +248,20 @@ if ($pathOverride -and $serverConfig.args -and $serverConfig.args.Count -gt 0) {
     }
 }
 
-$plugins = Ensure-Property -Object $cfg -Name "plugins" -DefaultValue ([PSCustomObject]@{})
-$allow = Ensure-Property -Object $plugins -Name "allow" -DefaultValue @()
-if ($allow -notcontains "openclaw-mcp-bridge") { $plugins.allow = @($allow) + "openclaw-mcp-bridge" }
-$entries = Ensure-Property -Object $plugins -Name "entries" -DefaultValue ([PSCustomObject]@{})
-
-if (-not ($entries.PSObject.Properties.Name -contains "openclaw-mcp-bridge")) {
-    $entries | Add-Member -NotePropertyName "openclaw-mcp-bridge" -NotePropertyValue ([PSCustomObject]@{})
-}
-$mcpClient = $entries."openclaw-mcp-bridge"
-if (-not ($mcpClient.PSObject.Properties.Name -contains "enabled")) {
-    $mcpClient | Add-Member -NotePropertyName "enabled" -NotePropertyValue $true
-}
-$mcpConfig = Ensure-Property -Object $mcpClient -Name "config" -DefaultValue ([PSCustomObject]@{})
-if (-not ($mcpConfig.PSObject.Properties.Name -contains "toolPrefix")) { $mcpConfig | Add-Member -NotePropertyName "toolPrefix" -NotePropertyValue $true }
-if (-not ($mcpConfig.PSObject.Properties.Name -contains "reconnectIntervalMs")) { $mcpConfig | Add-Member -NotePropertyName "reconnectIntervalMs" -NotePropertyValue 30000 }
-if (-not ($mcpConfig.PSObject.Properties.Name -contains "connectionTimeoutMs")) { $mcpConfig | Add-Member -NotePropertyName "connectionTimeoutMs" -NotePropertyValue 10000 }
-if (-not ($mcpConfig.PSObject.Properties.Name -contains "requestTimeoutMs")) { $mcpConfig | Add-Member -NotePropertyName "requestTimeoutMs" -NotePropertyValue 60000 }
-$servers = Ensure-Property -Object $mcpConfig -Name "servers" -DefaultValue ([PSCustomObject]@{})
+if (-not ($cfg.PSObject.Properties.Name -contains "toolPrefix")) { $cfg | Add-Member -NotePropertyName "toolPrefix" -NotePropertyValue $true }
+if (-not ($cfg.PSObject.Properties.Name -contains "reconnectIntervalMs")) { $cfg | Add-Member -NotePropertyName "reconnectIntervalMs" -NotePropertyValue 30000 }
+if (-not ($cfg.PSObject.Properties.Name -contains "connectionTimeoutMs")) { $cfg | Add-Member -NotePropertyName "connectionTimeoutMs" -NotePropertyValue 10000 }
+if (-not ($cfg.PSObject.Properties.Name -contains "requestTimeoutMs")) { $cfg | Add-Member -NotePropertyName "requestTimeoutMs" -NotePropertyValue 60000 }
+$servers = Ensure-Property -Object $cfg -Name "servers" -DefaultValue ([PSCustomObject]@{})
 
 if ($servers.PSObject.Properties.Name -contains $ServerName) {
     $servers.PSObject.Properties.Remove($ServerName)
 }
 $servers | Add-Member -NotePropertyName $ServerName -NotePropertyValue $serverConfig
 
-$cfg | ConvertTo-Json -Depth 30 | Set-Content -Path $OpenclawJson -Encoding UTF8
+$cfg | ConvertTo-Json -Depth 30 | Set-Content -Path $McpBridgeJson -Encoding UTF8
 Write-Host "Configuration merged for: $ServerName"
 
-# 6. Gateway restart
 Write-Host ""
-$restart = Read-Host "Restart gateway now? [Y/n]"
-if ([string]::IsNullOrWhiteSpace($restart) -or $restart -match "^[Yy]$") {
-    try {
-        openclaw gateway restart 2>$null
-        Write-Host "Gateway restarting... Check 'openclaw gateway status' in a moment."
-    } catch {
-        Write-Host "Could not restart automatically. Run: openclaw gateway restart"
-    }
-} else {
-    Write-Host "Run manually: openclaw gateway restart"
-}
+Write-Host "$ServerTitle MCP Server installed."
+Write-Host "Restart mcp-bridge to pick up the new server configuration."
