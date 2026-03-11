@@ -1,6 +1,19 @@
 # @aiwerk/mcp-bridge
 
-Standalone MCP server that multiplexes multiple MCP servers into one interface. Works with Claude Desktop, Cursor, Windsurf, Cline, or any MCP client.
+Multiplex multiple MCP servers into one interface. One config, one connection, all your tools.
+
+Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, **OpenClaw**, or any MCP client.
+
+## Why?
+
+Most AI agents connect to MCP servers one-by-one. With 10+ servers, that's 10+ connections, 200+ tools in context, and thousands of wasted tokens.
+
+**MCP Bridge** solves this:
+- **Router mode**: all servers behind one `mcp` meta-tool (~99% token reduction)
+- **Direct mode**: all tools registered individually with automatic prefixing
+- **3 transports**: stdio, SSE, streamable-http
+- **Built-in catalog**: install popular servers with one command
+- **Zero config secrets in files**: `${ENV_VAR}` resolution from `.env`
 
 ## Install
 
@@ -11,22 +24,62 @@ npm install -g @aiwerk/mcp-bridge
 ## Quick Start
 
 ```bash
-# Initialize config directory
+# 1. Initialize config
 mcp-bridge init
 
-# Edit your config
-vi ~/.mcp-bridge/config.json
-
-# Install a server from the catalog
+# 2. Install a server from the catalog
 mcp-bridge install todoist
 
-# Start (stdio mode for MCP clients)
+# 3. Add your API key
+echo "TODOIST_API_TOKEN=your-token" >> ~/.mcp-bridge/.env
+
+# 4. Start (stdio mode — connects to any MCP client)
 mcp-bridge
 ```
 
+## Use with Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "bridge": {
+      "command": "mcp-bridge",
+      "args": []
+    }
+  }
+}
+```
+
+## Use with Cursor / Windsurf
+
+Add to your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "bridge": {
+      "command": "mcp-bridge",
+      "args": ["--config", "/path/to/config.json"]
+    }
+  }
+}
+```
+
+## Use with OpenClaw
+
+Install as a plugin (handles everything automatically):
+
+```bash
+openclaw plugins install @aiwerk/openclaw-mcp-bridge
+```
+
+See [@aiwerk/openclaw-mcp-bridge](https://github.com/AIWerk/openclaw-mcp-bridge) for details.
+
 ## Configuration
 
-Config location: `~/.mcp-bridge/config.json`
+Config: `~/.mcp-bridge/config.json` | Secrets: `~/.mcp-bridge/.env`
 
 ```json
 {
@@ -36,19 +89,22 @@ Config location: `~/.mcp-bridge/config.json`
       "transport": "stdio",
       "command": "npx",
       "args": ["-y", "@doist/todoist-ai"],
-      "env": {
-        "TODOIST_API_KEY": "${TODOIST_API_TOKEN}"
-      },
+      "env": { "TODOIST_API_KEY": "${TODOIST_API_TOKEN}" },
       "description": "Task management"
     },
     "github": {
       "transport": "stdio",
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
-      },
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" },
       "description": "GitHub repos, issues, PRs"
+    },
+    "notion": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-notion"],
+      "env": { "NOTION_API_KEY": "${NOTION_TOKEN}" },
+      "description": "Notion pages and databases"
     }
   },
   "toolPrefix": true,
@@ -57,61 +113,123 @@ Config location: `~/.mcp-bridge/config.json`
 }
 ```
 
-Environment variables go in `~/.mcp-bridge/.env`:
+### Modes
+
+| Mode | Tools exposed | Best for |
+|------|--------------|----------|
+| `router` (default) | Single `mcp` meta-tool | 3+ servers, token-conscious agents |
+| `direct` | All tools individually | Few servers, simple agents |
+
+**Router mode** — the agent calls `mcp(server="todoist", action="list")` to discover, then `mcp(server="todoist", tool="find-tasks", params={...})` to execute.
+
+**Direct mode** — tools are registered as `todoist_find_tasks`, `github_list_repos`, etc.
+
+### Transports
+
+| Transport | Config key | Use case |
+|-----------|-----------|----------|
+| `stdio` | `command`, `args` | Local CLI servers (most common) |
+| `sse` | `url`, `headers` | Remote SSE servers |
+| `streamable-http` | `url`, `headers` | Modern HTTP-based servers |
+
+### Environment variables
+
+Secrets go in `~/.mcp-bridge/.env` (chmod 600 on init):
 
 ```
 TODOIST_API_TOKEN=your-token-here
 GITHUB_TOKEN=ghp_xxxxx
+NOTION_TOKEN=ntn_xxxxx
 ```
 
-## Modes
+Use `${VAR_NAME}` in config — resolved from `.env` + system env.
 
-**Router mode** (default) — exposes a single `mcp` meta-tool. The agent calls `mcp(server="todoist", action="list")` to discover tools, then `mcp(server="todoist", tool="get_tasks", params={...})` to call them. ~99% reduction in tool registration tokens.
-
-**Direct mode** — registers all tools from all servers individually (`todoist_get_tasks`, `github_list_repos`, etc.). Better for few servers or simpler agents.
-
-## Claude Desktop
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "mcp-bridge": {
-      "command": "mcp-bridge",
-      "args": []
-    }
-  }
-}
-```
-
-## CLI
+## CLI Reference
 
 ```bash
-mcp-bridge                        # stdio mode (default)
-mcp-bridge --verbose              # info-level logs to stderr
-mcp-bridge --debug                # full protocol logs to stderr
-mcp-bridge --config ./config.json # custom config file
+mcp-bridge                        # Start in stdio mode (default)
+mcp-bridge --sse --port 3000      # Start as SSE server
+mcp-bridge --http --port 3000     # Start as HTTP server
+mcp-bridge --verbose              # Info-level logs to stderr
+mcp-bridge --debug                # Full protocol logs to stderr
+mcp-bridge --config ./my.json     # Custom config file
 
-mcp-bridge init                   # create ~/.mcp-bridge/ with template
-mcp-bridge install <server>       # install from catalog
-mcp-bridge catalog                # list available servers
-mcp-bridge servers                # list configured servers
-mcp-bridge search <query>         # search catalog
-mcp-bridge update --check         # check for updates
-mcp-bridge update                 # install updates
+mcp-bridge init                   # Create ~/.mcp-bridge/ with template
+mcp-bridge install <server>       # Install from catalog
+mcp-bridge catalog                # List available servers
+mcp-bridge servers                # List configured servers
+mcp-bridge search <query>         # Search catalog by keyword
+mcp-bridge update [--check]       # Check for / install updates
+mcp-bridge --version              # Print version
+```
+
+## Server Catalog
+
+Built-in catalog with pre-configured servers:
+
+| Server | Transport | Description |
+|--------|-----------|-------------|
+| todoist | stdio | Task management |
+| github | stdio | Repos, issues, PRs |
+| notion | stdio | Pages and databases |
+| stripe | stdio | Payments and billing |
+| linear | stdio | Project management |
+| google-maps | stdio | Places, geocoding, directions |
+| hetzner | stdio | Cloud infrastructure |
+| miro | stdio | Collaborative whiteboard |
+| wise | stdio | International payments |
+| tavily | stdio | AI-optimized web search |
+| apify | streamable-http | Web scraping and automation |
+
+```bash
+mcp-bridge install todoist    # Interactive setup with API key prompt
+mcp-bridge catalog            # Full list
+mcp-bridge search payments    # Search by keyword
 ```
 
 ## Library Usage
 
+Use as a dependency in your own MCP server or OpenClaw plugin:
+
 ```typescript
 import { McpRouter, StandaloneServer, loadConfig } from "@aiwerk/mcp-bridge";
 
+// Quick start
 const config = loadConfig({ configPath: "./config.json" });
 const server = new StandaloneServer(config, console);
 await server.startStdio();
 ```
 
+```typescript
+// Use the router directly
+import { McpRouter } from "@aiwerk/mcp-bridge";
+
+const router = new McpRouter(servers, config, logger);
+const result = await router.dispatch("todoist", "call", "find-tasks", { query: "today" });
+```
+
+## Architecture
+
+```
+┌─────────────────┐     ┌──────────────────────────────────────┐
+│  Claude Desktop  │     │  MCP Bridge                          │
+│  Cursor          │◄───►│                                      │
+│  Windsurf        │stdio│  ┌─────────┐  ┌──────────────────┐  │
+│  OpenClaw        │     │  │ Router / │  │ Backend servers:  │  │
+│  Any MCP client  │     │  │ Direct   │──│ • todoist (stdio) │  │
+└─────────────────┘     │  │ mode     │  │ • github (stdio)  │  │
+                        │  └─────────┘  │ • notion (stdio)  │  │
+                        │               │ • stripe (sse)    │  │
+                        │               └──────────────────┘  │
+                        └──────────────────────────────────────┘
+```
+
+## Related
+
+- **[@aiwerk/openclaw-mcp-bridge](https://github.com/AIWerk/openclaw-mcp-bridge)** — OpenClaw plugin wrapper (uses this package as core)
+- **[MCP Specification](https://spec.modelcontextprotocol.io)** — Model Context Protocol spec
+- **[Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers)** — Community server directory
+
 ## License
 
-MIT
+MIT — [AIWerk](https://aiwerk.ch)
