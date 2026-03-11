@@ -1,0 +1,42 @@
+{
+  "name": "@aiwerk/mcp-bridge",
+  "version": "1.0.0",
+  "description": "Standalone MCP server that multiplexes multiple MCP servers into one interface",
+  "type": "module",
+  "main": "./src/index.ts",
+  "bin": {
+    "mcp-bridge": "./bin/mcp-bridge.js"
+  },
+  "license": "MIT",
+  "author": "AIWerk <kontakt@aiwerk.ch>",
+  "homepage": "https://github.com/AIWerk/mcp-bridge#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AIWerk/mcp-bridge"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "bridge",
+    "multiplexer",
+    "ai",
+    "agent",
+    "tools"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}
