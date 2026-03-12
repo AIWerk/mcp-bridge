@@ -62,7 +62,7 @@ export class SmartFilter {
   constructor(config: SmartFilterConfig, logger: OpenClawLogger) {
     // Apply defaults
     this.config = {
-      enabled: config.enabled ?? false,
+      enabled: config.enabled ?? true,
       embedding: config.embedding ?? "auto",
       topServers: config.topServers ?? 5,
       hardCap: config.hardCap ?? 8,
@@ -532,7 +532,7 @@ const NOISE_WORDS = new Set([
 ]);
 
 export const DEFAULTS: Required<SmartFilterConfig> = {
-  enabled: false,
+  enabled: true,
   embedding: "keyword",
   topServers: 5,
   hardCap: 8,
