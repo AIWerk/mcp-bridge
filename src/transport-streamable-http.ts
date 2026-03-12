@@ -75,28 +75,17 @@ export class StreamableHttpTransport extends BaseTransport {
               const dataLines = text.split('\n')
                 .filter((line: string) => line.startsWith('data:'))
                 .map((line: string) => line.substring(5).trim());
-              if (dataLines.length > 0) {
-                for (const dl of dataLines) {
-                  try {
-                    const parsed = JSON.parse(dl);
-                    if (parsed.id !== undefined) {
-                      jsonResponse = parsed;
-                    } else {
-                      this.handleMessage(parsed);
-                    }
-                  } catch { /* skip malformed lines */ }
-                }
-                if (!jsonResponse) {
-                  jsonResponse = JSON.parse(dataLines[dataLines.length - 1]);
-                }
-              } else {
+              if (dataLines.length === 0) {
                 throw new Error("No data lines in SSE response");
               }
+              for (const dl of dataLines) {
+                try {
+                  this.handleMessage(JSON.parse(dl));
+                } catch { /* skip malformed lines */ }
+              }
             } else {
-              jsonResponse = await response.json();
+              this.handleMessage(await response.json());
             }
-
-            this.handleMessage(jsonResponse);
           } catch (error) {
             clearTimeout(timeout);
             this.pendingRequests.delete(id);

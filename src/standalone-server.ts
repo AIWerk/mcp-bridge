@@ -304,7 +304,13 @@ export class StandaloneServer {
   /** Connect to all backend servers and discover their tools (direct mode). */
   private async discoverDirectTools(force = false): Promise<void> {
     if (this.directTools.length > 0 && !force) return; // Already discovered
-    if (force) this.directTools = [];
+    if (force) {
+      this.directTools = [];
+      for (const [, conn] of this.directConnections) {
+        await conn.transport.disconnect().catch(() => {});
+      }
+      this.directConnections.clear();
+    }
 
     const globalNames = new Set<string>();
 

@@ -26,6 +26,7 @@ export type {
   McpClientConfig,
   McpTool,
   McpRequest,
+  McpCallRequest,
   McpResponse,
   McpTransport,
   McpServerConnection,

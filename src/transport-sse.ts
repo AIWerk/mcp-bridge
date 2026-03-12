@@ -67,7 +67,7 @@ export class SseTransport extends BaseTransport {
       const decoder = new TextDecoder();
 
       let buffer = "";
-      const state = { event: "", dataBuffer: this.currentDataBuffer };
+      const state = { event: "", dataBuffer: [] as string[] };
 
       while (true) {
         const { done, value } = await reader.read();

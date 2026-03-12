@@ -60,15 +60,10 @@ export interface LoadConfigOptions {
  * 4. Validate required fields
  */
 export function loadConfig(options: LoadConfigOptions = {}): BridgeConfig {
-  const configDir = options.configPath
-    ? join(options.configPath, "..")  // If a file path is given, derive directory
-    : DEFAULT_CONFIG_DIR;
+  const configDir = getConfigDir(options.configPath);
 
   const configPath = options.configPath || join(DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE);
-  const envPath = join(
-    options.configPath ? join(options.configPath, "..") : DEFAULT_CONFIG_DIR,
-    DEFAULT_ENV_FILE
-  );
+  const envPath = join(configDir, DEFAULT_ENV_FILE);
 
   if (!existsSync(configPath)) {
     throw new Error(
