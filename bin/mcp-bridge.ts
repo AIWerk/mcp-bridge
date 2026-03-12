@@ -83,6 +83,7 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--config":
         i++;
+        if (!argv[i]) { process.stderr.write("Error: --config requires a path\n"); process.exit(1); }
         args.configPath = resolve(argv[i]);
         break;
       case "--verbose": args.verbose = true; break;

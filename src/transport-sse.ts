@@ -105,9 +105,10 @@ export class SseTransport extends BaseTransport {
 
       const data = state.dataBuffer.join("\n");
       state.dataBuffer.length = 0;
+      const eventType = state.event;
       state.event = "";
 
-      if (state.event === "endpoint") {
+      if (eventType === "endpoint") {
         if (data.startsWith("/")) {
           const base = new URL(this.config.url!);
           this.endpointUrl = `${base.origin}${data}`;

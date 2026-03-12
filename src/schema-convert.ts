@@ -108,17 +108,17 @@ export async function convertJsonSchemaToTypeBox(schema: any, depth = 0): Promis
         return Type.String(stringOptions);
       }
       case "number": {
+        if (schema.enum) return Type.Union(schema.enum.map((v: number) => Type.Literal(v)));
         const numberOptions: Record<string, unknown> = {};
         if (schema.minimum !== undefined) numberOptions.minimum = schema.minimum;
         if (schema.maximum !== undefined) numberOptions.maximum = schema.maximum;
-        if (schema.enum) return Type.Union(schema.enum.map((v: number) => Type.Literal(v)));
         return Type.Number(numberOptions);
       }
       case "integer": {
+        if (schema.enum) return Type.Union(schema.enum.map((v: number) => Type.Literal(v)));
         const intOptions: Record<string, unknown> = {};
         if (schema.minimum !== undefined) intOptions.minimum = schema.minimum;
         if (schema.maximum !== undefined) intOptions.maximum = schema.maximum;
-        if (schema.enum) return Type.Union(schema.enum.map((v: number) => Type.Literal(v)));
         return Type.Integer(intOptions);
       }
       case "boolean":
