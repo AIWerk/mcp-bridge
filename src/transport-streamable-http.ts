@@ -72,16 +72,31 @@ export class StreamableHttpTransport extends BaseTransport {
 
             if (contentType.includes("text/event-stream")) {
               const text = await response.text();
-              const dataLines = text.split('\n')
-                .filter((line: string) => line.startsWith('data:'))
-                .map((line: string) => line.substring(5).trim());
-              if (dataLines.length === 0) {
-                throw new Error("No data lines in SSE response");
-              }
-              for (const dl of dataLines) {
+              const lines = text.split('\n');
+              // SSE event boundary parsing: collect data lines, dispatch on empty line
+              let dataBuffer: string[] = [];
+              const dispatch = () => {
+                if (dataBuffer.length === 0) return;
+                const data = dataBuffer.join("\n");
+                dataBuffer = [];
                 try {
-                  this.handleMessage(JSON.parse(dl));
-                } catch { /* skip malformed lines */ }
+                  this.handleMessage(JSON.parse(data));
+                } catch { /* skip malformed events */ }
+              };
+              let hasData = false;
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith("data:")) {
+                  dataBuffer.push(trimmed.substring(5).trimStart());
+                  hasData = true;
+                } else if (trimmed === "" && dataBuffer.length > 0) {
+                  dispatch();
+                }
+              }
+              // Dispatch any trailing data (server may omit final empty line)
+              dispatch();
+              if (!hasData) {
+                throw new Error("No data lines in SSE response");
               }
             } else {
               this.handleMessage(await response.json());

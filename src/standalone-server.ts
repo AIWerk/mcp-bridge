@@ -301,9 +301,24 @@ export class StandaloneServer {
     }
   }
 
+  private discoveryPromise?: Promise<void>;
+
   /** Connect to all backend servers and discover their tools (direct mode). */
   private async discoverDirectTools(force = false): Promise<void> {
     if (this.directTools.length > 0 && !force) return; // Already discovered
+    if (this.discoveryPromise && !force) {
+      await this.discoveryPromise;
+      return;
+    }
+    this.discoveryPromise = this._doDiscovery(force);
+    try {
+      await this.discoveryPromise;
+    } finally {
+      this.discoveryPromise = undefined;
+    }
+  }
+
+  private async _doDiscovery(force: boolean): Promise<void> {
     if (force) {
       this.directTools = [];
       for (const [, conn] of this.directConnections) {
