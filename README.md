@@ -75,6 +75,8 @@ Install as a plugin (handles everything automatically):
 openclaw plugins install @aiwerk/openclaw-mcp-bridge
 ```
 
+> ⚠️ **Important:** Always use the full scoped name `@aiwerk/openclaw-mcp-bridge`. The unscoped `openclaw-mcp-bridge` on npm is a **different, unrelated package**.
+
 See [@aiwerk/openclaw-mcp-bridge](https://github.com/AIWerk/openclaw-mcp-bridge) for details.
 
 ## Configuration
