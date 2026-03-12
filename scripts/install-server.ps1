@@ -9,7 +9,7 @@ if ($args.Count -eq 0) {
     Write-Host "Usage: install-server.ps1 <server-name> [--dry-run] [--remove]"
     Write-Host ""
     Write-Host "Available servers:"
-    Get-ChildItem -Path (Join-Path $ScriptDir "servers") -Directory | ForEach-Object { Write-Host "  - $($_.Name)" }
+    Get-ChildItem -Path (Join-Path (Split-Path $ScriptDir -Parent) "servers") -Directory | ForEach-Object { Write-Host "  - $($_.Name)" }
     exit 1
 }
 
@@ -17,10 +17,10 @@ $ServerName = $args[0]
 $DryRun = $args -contains "--dry-run"
 $Remove = $args -contains "--remove"
 
-$ServerDir = Join-Path $ScriptDir "servers\$ServerName"
+$ServerDir = Join-Path (Split-Path $ScriptDir -Parent) "servers\$ServerName"
 if (-not (Test-Path $ServerDir)) {
     Write-Host "Error: Server '$ServerName' not found."
-    Get-ChildItem -Path (Join-Path $ScriptDir "servers") -Directory | ForEach-Object { Write-Host "  - $($_.Name)" }
+    Get-ChildItem -Path (Join-Path (Split-Path $ScriptDir -Parent) "servers") -Directory | ForEach-Object { Write-Host "  - $($_.Name)" }
     exit 1
 }
 

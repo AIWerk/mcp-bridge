@@ -105,6 +105,7 @@ export class SseTransport extends BaseTransport {
 
       const data = state.dataBuffer.join("\n");
       state.dataBuffer.length = 0;
+      state.event = "";
 
       if (state.event === "endpoint") {
         if (data.startsWith("/")) {

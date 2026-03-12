@@ -10,7 +10,7 @@ usage() {
     echo "Usage: $0 <server-name> [--dry-run] [--remove]"
     echo ""
     echo "Available servers:"
-    for server_dir in "$SCRIPT_DIR/servers"/*; do
+    for server_dir in "$SCRIPT_DIR/../servers"/*; do
         [[ -d "$server_dir" ]] && echo "  - $(basename "$server_dir")"
     done
     exit 1
@@ -30,7 +30,7 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-SERVER_DIR="$SCRIPT_DIR/servers/$SERVER_NAME"
+SERVER_DIR="$SCRIPT_DIR/../servers/$SERVER_NAME"
 if [[ ! -d "$SERVER_DIR" ]]; then
     echo "Error: Server '$SERVER_NAME' not found."
     usage

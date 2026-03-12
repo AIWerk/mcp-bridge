@@ -157,8 +157,8 @@ export class StreamableHttpTransport extends BaseTransport {
       if (!headResponse.ok) {
         this.logger.warn(`[mcp-bridge] Streamable HTTP server probe: OPTIONS ${optionsResponse.status}, HEAD ${headResponse.status} (non-blocking, connection continues)`);
       }
-    } catch (error: any) {
-      this.logger.warn(`[mcp-bridge] Streamable HTTP server probe failed (non-blocking): ${error?.message || error}`);
+    } catch (error) {
+      this.logger.warn(`[mcp-bridge] Streamable HTTP server probe failed (non-blocking): ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
