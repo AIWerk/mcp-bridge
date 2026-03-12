@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync } from "fs";
-import { join } from "path";
+import { join, extname } from "path";
 import { homedir } from "os";
 import { BridgeConfig, Logger } from "./types.js";
 import { resolveEnvVars } from "./transport-base.js";
@@ -116,7 +116,7 @@ export function loadConfig(options: LoadConfigOptions = {}): BridgeConfig {
 export function getConfigDir(configPath?: string): string {
   if (!configPath) return DEFAULT_CONFIG_DIR;
   // If path ends with separator or has no extension, treat as directory
-  if (configPath.endsWith("/") || configPath.endsWith("\\") || !configPath.includes(".")) {
+  if (configPath.endsWith("/") || configPath.endsWith("\\") || !extname(configPath)) {
     return configPath;
   }
   return join(configPath, "..");

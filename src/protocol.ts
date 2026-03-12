@@ -42,8 +42,10 @@ export async function initializeProtocol(transport: McpTransport, version: strin
 export async function fetchToolsList(transport: McpTransport): Promise<McpTool[]> {
   const allTools: McpTool[] = [];
   let cursor: string | undefined;
+  const MAX_PAGES = 100;
+  let page = 0;
 
-  while (true) {
+  while (page++ < MAX_PAGES) {
     const request: McpRequest = {
       jsonrpc: "2.0",
       method: "tools/list",
@@ -63,6 +65,10 @@ export async function fetchToolsList(transport: McpTransport): Promise<McpTool[]
       break;
     }
     cursor = nextCursor;
+  }
+
+  if (page >= MAX_PAGES) {
+    console.warn("[mcp-bridge] Tool list pagination exceeded max pages, possible cursor loop");
   }
 
   return allTools;

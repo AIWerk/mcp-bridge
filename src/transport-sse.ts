@@ -81,6 +81,9 @@ export class SseTransport extends BaseTransport {
           this.processEventLine(line, state);
         }
       }
+      // Stream ended normally — server closed connection
+      this.logger.warn("[mcp-bridge] SSE stream ended, scheduling reconnect");
+      this.scheduleReconnect();
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       this.logger.error("SSE stream error:", error);
@@ -90,13 +93,13 @@ export class SseTransport extends BaseTransport {
 
   private processEventLine(line: string, state: { event: string; dataBuffer: string[] }): void {
     const trimmed = line.trim();
-    if (trimmed.startsWith("event: ")) {
-      state.event = trimmed.substring(7).trim();
+    if (trimmed.startsWith("event:")) {
+      state.event = trimmed.substring(6).trim();
       return;
     }
 
-    if (trimmed.startsWith("data: ")) {
-      state.dataBuffer.push(trimmed.substring(6));
+    if (trimmed.startsWith("data:")) {
+      state.dataBuffer.push(trimmed.substring(5).trimStart());
       return;
     }
 
