@@ -68,7 +68,7 @@ export async function fetchToolsList(transport: McpTransport): Promise<McpTool[]
   }
 
   if (page >= MAX_PAGES) {
-    console.warn("[mcp-bridge] Tool list pagination exceeded max pages, possible cursor loop");
+    process.stderr.write("[mcp-bridge] Tool list pagination exceeded max pages, possible cursor loop\n");
   }
 
   return allTools;

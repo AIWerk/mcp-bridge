@@ -1,6 +1,6 @@
 import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger } from "./types.js";
 
-export type PendingRequest = { resolve: Function; reject: Function; timeout: NodeJS.Timeout };
+export type PendingRequest = { resolve: (value: McpResponse) => void; reject: (reason: Error) => void; timeout: NodeJS.Timeout };
 
 /**
  * Base class for all MCP transports. Provides shared logic for:
@@ -46,7 +46,9 @@ export abstract class BaseTransport implements McpTransport {
    * - Responses with id -> resolve/reject matching pending request
    */
   protected handleMessage(message: any): void {
-    if (!message.id && message.method === "notifications/tools/list_changed") {
+    const hasId = message.id !== undefined && message.id !== null;
+
+    if (!hasId && message.method === "notifications/tools/list_changed") {
       if (this.onReconnected) {
         this.onReconnected().catch((error) => {
           this.logger.error("[mcp-bridge] Failed to refresh tools after list_changed notification:", error);
@@ -55,12 +57,12 @@ export abstract class BaseTransport implements McpTransport {
       return;
     }
 
-    if (!message.id && message.method) {
+    if (!hasId && message.method) {
       this.logger.debug(`[mcp-bridge] Unhandled ${this.transportName} notification: ${message.method}`);
       return;
     }
 
-    if (message.id && this.pendingRequests.has(message.id)) {
+    if (hasId && this.pendingRequests.has(message.id)) {
       const pending = this.pendingRequests.get(message.id)!;
       clearTimeout(pending.timeout);
       this.pendingRequests.delete(message.id);

@@ -17,6 +17,9 @@ export class SseTransport extends BaseTransport {
     // Validate that all header env vars resolve (fail fast)
     resolveEnvRecord(this.config.headers || {}, "header");
 
+    if (this.sseAbortController) {
+      this.sseAbortController.abort();
+    }
     this.sseAbortController = new AbortController();
 
     const connectionTimeout = this.clientConfig.connectionTimeoutMs || 10000;

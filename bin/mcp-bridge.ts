@@ -3,7 +3,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import { loadConfig, initConfigDir, getConfigDir } from "../src/config.js";
 import { StandaloneServer } from "../src/standalone-server.js";
 import { PACKAGE_VERSION } from "../src/protocol.js";
@@ -231,7 +231,7 @@ function cmdInstall(serverName: string, logger: Logger): void {
   }
 
   try {
-    execSync(`bash "${scriptPath}" "${serverName}"`, { stdio: "inherit" });
+    execFileSync("bash", [scriptPath, serverName], { stdio: "inherit" });
   } catch (err) {
     process.exit(1);
   }
