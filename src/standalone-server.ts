@@ -302,8 +302,9 @@ export class StandaloneServer {
   }
 
   /** Connect to all backend servers and discover their tools (direct mode). */
-  private async discoverDirectTools(): Promise<void> {
-    if (this.directTools.length > 0) return; // Already discovered
+  private async discoverDirectTools(force = false): Promise<void> {
+    if (this.directTools.length > 0 && !force) return; // Already discovered
+    if (force) this.directTools = [];
 
     const globalNames = new Set<string>();
 
@@ -348,7 +349,8 @@ export class StandaloneServer {
 
   private createTransport(serverName: string, serverConfig: McpServerConfig): McpTransport {
     const onReconnected = async () => {
-      this.logger.info(`[mcp-bridge] ${serverName} reconnected`);
+      this.logger.info(`[mcp-bridge] ${serverName} reconnected, refreshing tools`);
+      await this.discoverDirectTools(true);
     };
 
     switch (serverConfig.transport) {

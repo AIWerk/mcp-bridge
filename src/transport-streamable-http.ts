@@ -76,7 +76,19 @@ export class StreamableHttpTransport extends BaseTransport {
                 .filter((line: string) => line.startsWith('data:'))
                 .map((line: string) => line.substring(5).trim());
               if (dataLines.length > 0) {
-                jsonResponse = JSON.parse(dataLines[dataLines.length - 1]);
+                for (const dl of dataLines) {
+                  try {
+                    const parsed = JSON.parse(dl);
+                    if (parsed.id !== undefined) {
+                      jsonResponse = parsed;
+                    } else {
+                      this.handleMessage(parsed);
+                    }
+                  } catch { /* skip malformed lines */ }
+                }
+                if (!jsonResponse) {
+                  jsonResponse = JSON.parse(dataLines[dataLines.length - 1]);
+                }
               } else {
                 throw new Error("No data lines in SSE response");
               }

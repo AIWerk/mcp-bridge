@@ -1,4 +1,4 @@
-import { execSync, exec as execCb } from "child_process";
+import { execSync, exec as execCb, execFile } from "child_process";
 import { Logger } from "./types.js";
 import { PACKAGE_VERSION } from "./protocol.js";
 
@@ -113,7 +113,7 @@ export async function runUpdate(logger: Logger): Promise<string> {
 function npmViewVersion(_logger: Logger): Promise<string> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("npm view timed out")), 10_000);
-    execCb(`npm view ${PACKAGE_NAME} version`, { encoding: "utf-8" }, (err, stdout) => {
+    execFile("npm", ["view", PACKAGE_NAME, "version"], { encoding: "utf-8" }, (err, stdout) => {
       clearTimeout(timeout);
       if (err) return reject(err);
       const ver = (stdout ?? "").trim();

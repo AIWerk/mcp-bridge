@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 export const PACKAGE_VERSION: string = (() => {
   try {
-    return JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8")).version;
+    return JSON.parse(readFileSync(join(__dirname, "..", "..", "package.json"), "utf-8")).version;
   } catch {
     return "0.0.0";
   }

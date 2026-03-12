@@ -67,7 +67,7 @@ export class SseTransport extends BaseTransport {
       const decoder = new TextDecoder();
 
       let buffer = "";
-      let currentEvent = "";
+      const state = { event: "", dataBuffer: this.currentDataBuffer };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -78,15 +78,7 @@ export class SseTransport extends BaseTransport {
         buffer = lines.pop() || "";
 
         for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("event: ")) {
-            currentEvent = trimmed.substring(7).trim();
-          } else if (trimmed === "") {
-            this.processEventLine(line, currentEvent);
-            currentEvent = "";
-          } else {
-            this.processEventLine(line, currentEvent);
-          }
+          this.processEventLine(line, state);
         }
       }
     } catch (error) {
@@ -96,22 +88,25 @@ export class SseTransport extends BaseTransport {
     }
   }
 
-  private processEventLine(line: string, currentEvent: string = ""): void {
+  private processEventLine(line: string, state: { event: string; dataBuffer: string[] }): void {
     const trimmed = line.trim();
-    if (trimmed.startsWith("event: ")) return;
+    if (trimmed.startsWith("event: ")) {
+      state.event = trimmed.substring(7).trim();
+      return;
+    }
 
     if (trimmed.startsWith("data: ")) {
-      this.currentDataBuffer.push(trimmed.substring(6));
+      state.dataBuffer.push(trimmed.substring(6));
       return;
     }
 
     if (trimmed === "") {
-      if (this.currentDataBuffer.length === 0) return;
+      if (state.dataBuffer.length === 0) return;
 
-      const data = this.currentDataBuffer.join("\n");
-      this.currentDataBuffer = [];
+      const data = state.dataBuffer.join("\n");
+      state.dataBuffer.length = 0;
 
-      if (currentEvent === "endpoint") {
+      if (state.event === "endpoint") {
         if (data.startsWith("/")) {
           const base = new URL(this.config.url!);
           this.endpointUrl = `${base.origin}${data}`;
