@@ -269,7 +269,9 @@ export class SmartFilter {
 
     // Calculate overlaps
     const descMatches = this.countOverlap(queryWords, descriptionWords);
-    const keywordOnlyMatches = this.countOverlap(queryWords, keywordWords) - descMatches;
+    // Count keyword matches that are NOT already counted in description
+    const keywordOnlyWords = keywordWords.filter(kw => !descriptionWords.includes(kw));
+    const keywordOnlyMatches = this.countOverlap(queryWords, keywordOnlyWords);
 
     // Add basic synonym matching for common terms
     let semanticMatches = 0;
@@ -288,7 +290,7 @@ export class SmartFilter {
     }
 
     // Weighted scoring: description 1.0x, keywords 0.7x, semantic 0.5x, partial matches 0.3x
-    const score = (descMatches * 1.0 + Math.max(0, keywordOnlyMatches) * 0.7 + semanticMatches * 0.5 + partialMatches) / queryWords.length;
+    const score = (descMatches * 1.0 + keywordOnlyMatches * 0.7 + semanticMatches * 0.5 + partialMatches) / queryWords.length;
 
     return score;
   }

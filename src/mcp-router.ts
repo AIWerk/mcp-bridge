@@ -2,7 +2,8 @@ import {
   McpClientConfig,
   McpServerConfig,
   McpTool,
-  McpTransport
+  McpTransport,
+  Logger
 } from "./types.js";
 import { SseTransport } from "./transport-sse.js";
 import { StdioTransport } from "./transport-stdio.js";
@@ -43,9 +44,9 @@ export type RouterDispatchResponse =
     };
 
 export interface RouterTransportRefs {
-  sse: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: any, onReconnected?: () => Promise<void>) => McpTransport;
-  stdio: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: any, onReconnected?: () => Promise<void>) => McpTransport;
-  streamableHttp: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: any, onReconnected?: () => Promise<void>) => McpTransport;
+  sse: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: Logger, onReconnected?: () => Promise<void>) => McpTransport;
+  stdio: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: Logger, onReconnected?: () => Promise<void>) => McpTransport;
+  streamableHttp: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: Logger, onReconnected?: () => Promise<void>) => McpTransport;
 }
 
 interface RouterServerState {
@@ -64,7 +65,7 @@ const DEFAULT_MAX_CONCURRENT = 5;
 export class McpRouter {
   private readonly servers: Record<string, McpServerConfig>;
   private readonly clientConfig: McpClientConfig;
-  private readonly logger: any;
+  private readonly logger: Logger;
   private readonly transportRefs: RouterTransportRefs;
   private readonly idleTimeoutMs: number;
   private readonly maxConcurrent: number;
@@ -73,7 +74,7 @@ export class McpRouter {
   constructor(
     servers: Record<string, McpServerConfig>,
     clientConfig: McpClientConfig,
-    logger: any,
+    logger: Logger,
     transportRefs?: Partial<RouterTransportRefs>
   ) {
     this.servers = servers;

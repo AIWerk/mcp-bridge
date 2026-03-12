@@ -119,7 +119,12 @@ export function loadConfig(options: LoadConfigOptions = {}): BridgeConfig {
 
 /** Get the default config directory path. */
 export function getConfigDir(configPath?: string): string {
-  return configPath ? join(configPath, "..") : DEFAULT_CONFIG_DIR;
+  if (!configPath) return DEFAULT_CONFIG_DIR;
+  // If path ends with separator or has no extension, treat as directory
+  if (configPath.endsWith("/") || configPath.endsWith("\\") || !configPath.includes(".")) {
+    return configPath;
+  }
+  return join(configPath, "..");
 }
 
 /** Initialize the config directory with template files. */

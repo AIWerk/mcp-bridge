@@ -1,4 +1,4 @@
-import { McpTransport, McpRequest, McpResponse, McpServerConfig } from "./types.js";
+import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger } from "./types.js";
 
 export type PendingRequest = { resolve: Function; reject: Function; timeout: NodeJS.Timeout };
 
@@ -12,15 +12,15 @@ export type PendingRequest = { resolve: Function; reject: Function; timeout: Nod
  */
 export abstract class BaseTransport implements McpTransport {
   protected config: McpServerConfig;
-  protected clientConfig: any;
+  protected clientConfig: McpClientConfig;
   protected connected = false;
   protected pendingRequests = new Map<number, PendingRequest>();
-  protected logger: any;
+  protected logger: Logger;
   protected reconnectTimer: NodeJS.Timeout | null = null;
   protected onReconnected?: () => Promise<void>;
   protected backoffDelay = 0;
 
-  constructor(config: McpServerConfig, clientConfig: any, logger: any, onReconnected?: () => Promise<void>) {
+  constructor(config: McpServerConfig, clientConfig: McpClientConfig, logger: Logger, onReconnected?: () => Promise<void>) {
     this.config = config;
     this.clientConfig = clientConfig;
     this.logger = logger;
@@ -186,7 +186,7 @@ export function resolveArgs(
 /**
  * Warn if a URL uses non-TLS HTTP to a remote (non-localhost) host.
  */
-export function warnIfNonTlsRemoteUrl(rawUrl: string, logger: any): void {
+export function warnIfNonTlsRemoteUrl(rawUrl: string, logger: Logger): void {
   try {
     const parsed = new URL(rawUrl);
     if (parsed.protocol !== "http:") return;

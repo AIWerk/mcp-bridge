@@ -37,11 +37,17 @@ export interface McpTool {
   inputSchema: any; // JSON Schema
 }
 
+/** MCP JSON-RPC request. id is required for requests (omit only for notifications). */
 export interface McpRequest {
   jsonrpc: "2.0";
   id?: number;
   method: string;
   params?: any;
+}
+
+/** MCP request that requires a response (id is mandatory). */
+export interface McpCallRequest extends McpRequest {
+  id: number;
 }
 
 let globalRequestId = 1;
