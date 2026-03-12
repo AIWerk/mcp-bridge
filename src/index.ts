@@ -42,3 +42,6 @@ export { StandaloneServer } from "./standalone-server.js";
 // Update checker
 export { checkForUpdate, getUpdateNotice, runUpdate, resetNoticeFlag } from "./update-checker.js";
 export type { UpdateInfo } from "./update-checker.js";
+
+// Smart filter
+export { filterServers, buildFilteredDescription } from "./smart-filter.js";
