@@ -28,6 +28,7 @@ export type {
   McpRequest,
   McpCallRequest,
   McpResponse,
+  JsonRpcMessage,
   McpTransport,
   McpServerConnection,
   BridgeConfig,

@@ -1,4 +1,4 @@
-import { execSync, exec as execCb, execFile } from "child_process";
+import { execFileSync, execFile } from "child_process";
 import { Logger } from "./types.js";
 import { PACKAGE_VERSION } from "./protocol.js";
 
@@ -86,7 +86,8 @@ export async function runUpdate(logger: Logger): Promise<string> {
   logger.info(`[mcp-bridge] Running update: ${info.updateCommand}`);
 
   try {
-    const output = await execAsync(info.updateCommand, 60_000);
+    const parts = info.updateCommand.split(/\s+/);
+    const output = await execFileAsync(parts[0], parts.slice(1), 60_000);
     // Invalidate cache so next check re-fetches
     cachedUpdateInfo = null;
     noticeDelivered = false;
@@ -125,16 +126,16 @@ function npmViewVersion(_logger: Logger): Promise<string> {
 
 function npmViewVersionSync(_logger: Logger): string {
   try {
-    return execSync(`npm view ${PACKAGE_NAME} version`, { encoding: "utf-8", timeout: 10_000 }).trim();
+    return execFileSync("npm", ["view", PACKAGE_NAME, "version"], { encoding: "utf-8", timeout: 10_000 }).trim();
   } catch {
     return "unknown";
   }
 }
 
-function execAsync(cmd: string, timeoutMs: number): Promise<string> {
+function execFileAsync(file: string, args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Command timed out after ${timeoutMs}ms`)), timeoutMs);
-    execCb(cmd, { encoding: "utf-8", timeout: timeoutMs }, (err, stdout, stderr) => {
+    execFile(file, args, { encoding: "utf-8", timeout: timeoutMs }, (err, stdout, stderr) => {
       clearTimeout(timeout);
       if (err) return reject(new Error(`${err.message}\n${stderr ?? ""}`));
       resolve(stdout ?? "");

@@ -1,4 +1,4 @@
-import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger } from "./types.js";
+import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, JsonRpcMessage } from "./types.js";
 
 export type PendingRequest = { resolve: (value: McpResponse) => void; reject: (reason: Error) => void; timeout: NodeJS.Timeout };
 
@@ -45,7 +45,7 @@ export abstract class BaseTransport implements McpTransport {
    * - Other notifications -> debug log
    * - Responses with id -> resolve/reject matching pending request
    */
-  protected handleMessage(message: any): void {
+  protected handleMessage(message: JsonRpcMessage): void {
     const hasId = message.id !== undefined && message.id !== null;
 
     if (!hasId && message.method === "notifications/tools/list_changed") {
@@ -62,15 +62,18 @@ export abstract class BaseTransport implements McpTransport {
       return;
     }
 
-    if (hasId && this.pendingRequests.has(message.id)) {
-      const pending = this.pendingRequests.get(message.id)!;
-      clearTimeout(pending.timeout);
-      this.pendingRequests.delete(message.id);
+    if (hasId) {
+      const id = message.id as number;
+      if (this.pendingRequests.has(id)) {
+        const pending = this.pendingRequests.get(id)!;
+        clearTimeout(pending.timeout);
+        this.pendingRequests.delete(id);
 
-      if (message.error) {
-        pending.reject(new Error(message.error.message || "MCP error"));
-      } else {
-        pending.resolve(message);
+        if (message.error) {
+          pending.reject(new Error(message.error.message || "MCP error"));
+        } else {
+          pending.resolve({ jsonrpc: "2.0", id, result: message.result });
+        }
       }
     }
   }

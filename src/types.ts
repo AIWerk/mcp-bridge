@@ -37,6 +37,15 @@ export interface McpTool {
   inputSchema: any; // JSON Schema
 }
 
+/** Incoming JSON-RPC message (response or notification). */
+export interface JsonRpcMessage {
+  jsonrpc: "2.0";
+  id?: number | null;
+  method?: string;
+  result?: any;
+  error?: { code: number; message: string; data?: unknown };
+}
+
 /** MCP JSON-RPC request. id is required for requests (omit only for notifications). */
 export interface McpRequest {
   jsonrpc: "2.0";

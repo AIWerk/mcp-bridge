@@ -122,10 +122,19 @@ export class StandaloneServer {
       case "initialize":
         return this.handleInitialize(id);
 
+      case "notifications/initialized":
+        return { jsonrpc: "2.0", id, result: {} };
+
       case "tools/list":
+        if (!this.initialized) {
+          return { jsonrpc: "2.0", id, error: { code: -32002, message: "Server not initialized. Call 'initialize' first." } };
+        }
         return this.handleToolsList(id);
 
       case "tools/call":
+        if (!this.initialized) {
+          return { jsonrpc: "2.0", id, error: { code: -32002, message: "Server not initialized. Call 'initialize' first." } };
+        }
         return this.handleToolsCall(id, request.params);
 
       case "ping":
@@ -310,11 +319,15 @@ export class StandaloneServer {
       await this.discoveryPromise;
       return;
     }
-    this.discoveryPromise = this._doDiscovery(force);
+    const promise = this._doDiscovery(force);
+    this.discoveryPromise = promise;
     try {
-      await this.discoveryPromise;
+      await promise;
     } finally {
-      this.discoveryPromise = undefined;
+      // Only clear if we're still the active promise (a force call may have replaced us)
+      if (this.discoveryPromise === promise) {
+        this.discoveryPromise = undefined;
+      }
     }
   }
 
