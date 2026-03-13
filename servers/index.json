@@ -11,6 +11,21 @@
         "APIFY_TOKEN"
       ]
     },
+    "atlassian": {
+      "description": "Confluence wiki & Jira project management",
+      "transport": "stdio",
+      "authRequired": true,
+      "homepage": "https://github.com/sooperset/mcp-atlassian",
+      "installMethod": "uvx",
+      "envVars": [
+        "CONFLUENCE_URL",
+        "CONFLUENCE_USERNAME",
+        "CONFLUENCE_API_TOKEN",
+        "JIRA_URL",
+        "JIRA_USERNAME",
+        "JIRA_API_TOKEN"
+      ]
+    },
     "github": {
       "description": "repos, issues, PRs",
       "transport": "stdio",

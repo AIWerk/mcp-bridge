@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "name": "atlassian",
+  "description": "Confluence wiki and Jira project management (search, create, update pages and issues)",
+  "transport": "stdio",
+  "command": "uvx",
+  "args": ["mcp-atlassian"],
+  "env": {
+    "CONFLUENCE_URL": "${CONFLUENCE_URL}",
+    "CONFLUENCE_USERNAME": "${CONFLUENCE_USERNAME}",
+    "CONFLUENCE_API_TOKEN": "${CONFLUENCE_API_TOKEN}",
+    "JIRA_URL": "${JIRA_URL}",
+    "JIRA_USERNAME": "${JIRA_USERNAME}",
+    "JIRA_API_TOKEN": "${JIRA_API_TOKEN}"
+  },
+  "authRequired": true,
+  "credentialsUrl": "https://id.atlassian.com/manage-profile/security/api-tokens",
+  "homepage": "https://github.com/sooperset/mcp-atlassian"
+}
