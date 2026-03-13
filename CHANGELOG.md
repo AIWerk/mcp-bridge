@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.2.2] - 2026-03-13
+
+### Fixed
+- `transport-base.ts`: Fall back to `~/.openclaw/.env` when `process.env` has empty values — fixes env var substitution failing when a pre-existing empty env var shadows the `.env` file value (dotenv `override:false` behavior)
+
+### Added
+- `config.ts`: `loadOpenClawDotEnvFallback()` — loads `~/.openclaw/.env` as a secondary env source
+- `config.ts`: `resetOpenClawDotEnvCache()` — cache reset for testing
+
+## [1.2.1] - 2026-03-13
+
+### Fixed
+- `servers/tavily/config.json`: `tavily-mcp@0.3.0` → `tavily-mcp@0.2.18` (0.3.0 does not exist on npm)
+- `servers/google-maps/config.json`: `@anthropic-pb/google-maps-mcp-server` → `@modelcontextprotocol/server-google-maps` (404 on npm)
+- `servers/stripe/config.json`: `@anthropic-pb/stripe-mcp-server` → `@stripe/mcp` (404 on npm)
+
 ## [1.2.0] - 2026-03-12
 
 ### Changed
