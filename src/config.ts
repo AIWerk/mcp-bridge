@@ -9,6 +9,42 @@ const DEFAULT_CONFIG_DIR = join(homedir(), ".mcp-bridge");
 const DEFAULT_CONFIG_FILE = "config.json";
 const DEFAULT_ENV_FILE = ".env";
 
+/** Cached fallback env from ~/.openclaw/.env (loaded once). */
+let _openclawDotEnvCache: Record<string, string> | null = null;
+
+/**
+ * Load ~/.openclaw/.env as a fallback env source.
+ * 
+ * When running as an OpenClaw plugin, dotenv uses `override: false` which means
+ * pre-existing env vars (even empty strings) take precedence over .env values.
+ * This fallback allows the bridge to recover the intended .env values when
+ * process.env has empty/missing entries.
+ */
+export function loadOpenClawDotEnvFallback(): Record<string, string> {
+  if (_openclawDotEnvCache !== null) return _openclawDotEnvCache;
+
+  const openclawEnvPath = join(
+    process.env.OPENCLAW_CONFIG_DIR || join(homedir(), ".openclaw"),
+    ".env"
+  );
+
+  if (existsSync(openclawEnvPath)) {
+    try {
+      _openclawDotEnvCache = parseEnvFile(readFileSync(openclawEnvPath, "utf-8"));
+    } catch {
+      _openclawDotEnvCache = {};
+    }
+  } else {
+    _openclawDotEnvCache = {};
+  }
+  return _openclawDotEnvCache;
+}
+
+/** Reset the cached OpenClaw .env (for testing). */
+export function resetOpenClawDotEnvCache(): void {
+  _openclawDotEnvCache = null;
+}
+
 /** Parse a simple KEY=VALUE .env file (no npm dependency). */
 export function parseEnvFile(content: string): Record<string, string> {
   const env: Record<string, string> = {};

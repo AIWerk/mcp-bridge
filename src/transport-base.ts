@@ -1,4 +1,5 @@
 import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, JsonRpcMessage } from "./types.js";
+import { loadOpenClawDotEnvFallback } from "./config.js";
 
 export type PendingRequest = { resolve: (value: McpResponse) => void; reject: (reason: Error) => void; timeout: NodeJS.Timeout };
 
@@ -147,6 +148,15 @@ export function resolveEnvVars(
 ): string {
   return value.replace(/\$\{(\w+)\}/g, (_, varName) => {
     const resolved = extraEnv?.[varName] ?? process.env[varName];
+    // If resolved is undefined or empty string, try the OpenClaw .env fallback.
+    // This handles the case where dotenv(override:false) didn't overwrite a
+    // pre-existing empty env var in process.env.
+    if (resolved === undefined || resolved === "") {
+      const fallback = loadOpenClawDotEnvFallback()[varName];
+      if (fallback !== undefined && fallback !== "") {
+        return fallback;
+      }
+    }
     if (resolved === undefined) {
       throw new Error(`[mcp-bridge] Missing required environment variable "${varName}" while resolving ${contextDescription}`);
     }

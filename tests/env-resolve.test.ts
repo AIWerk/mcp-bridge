@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolveEnvVars, resolveEnvRecord, resolveArgs } from "../src/transport-base.ts";
+import { resetOpenClawDotEnvCache } from "../src/config.ts";
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 
 test("resolveEnvRecord throws when env var is missing", () => {
   assert.throws(
@@ -64,5 +68,43 @@ test("resolveEnvVars uses extraEnv before process.env", () => {
     assert.equal(result, "from-extra");
   } finally {
     delete process.env.__TEST_MCP_PRIO;
+  }
+});
+
+test("resolveEnvVars falls back to OpenClaw .env when process.env value is empty", () => {
+  // Simulate: process.env has empty string (dotenv override:false didn't overwrite)
+  // but ~/.openclaw/.env has the correct value
+  const openclawDir = join(homedir(), ".openclaw");
+  const envPath = join(openclawDir, ".env");
+
+  // Read existing .env content to restore later
+  let originalContent: string | null = null;
+  if (existsSync(envPath)) {
+    originalContent = readFileSync(envPath, "utf-8");
+  }
+
+  try {
+    // Append test var to .env
+    mkdirSync(openclawDir, { recursive: true });
+    const testLine = "\n__TEST_FALLBACK_TOKEN=ATATT3xFake123==\n";
+    if (originalContent !== null) {
+      writeFileSync(envPath, originalContent + testLine);
+    } else {
+      writeFileSync(envPath, testLine);
+    }
+
+    // Set process.env to empty string (simulating dotenv override:false issue)
+    process.env.__TEST_FALLBACK_TOKEN = "";
+    resetOpenClawDotEnvCache();
+
+    const result = resolveEnvVars("${__TEST_FALLBACK_TOKEN}", "test");
+    assert.equal(result, "ATATT3xFake123==", "Should fall back to .env value when process.env is empty");
+  } finally {
+    delete process.env.__TEST_FALLBACK_TOKEN;
+    resetOpenClawDotEnvCache();
+    // Restore original .env
+    if (originalContent !== null) {
+      writeFileSync(envPath, originalContent);
+    }
   }
 });
