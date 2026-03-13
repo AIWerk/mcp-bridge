@@ -6,7 +6,7 @@
   "command": "npx",
   "args": [
     "-y",
-    "@anthropic-pb/google-maps-mcp-server"
+    "@modelcontextprotocol/server-google-maps"
   ],
   "env": {
     "GOOGLE_MAPS_API_KEY": "${GOOGLE_MAPS_API_KEY}"

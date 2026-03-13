@@ -6,7 +6,7 @@
   "command": "npx",
   "args": [
     "-y",
-    "@anthropic-pb/stripe-mcp-server",
+    "@stripe/mcp",
     "--tools=all",
     "--api-key=${STRIPE_API_KEY}"
   ],
