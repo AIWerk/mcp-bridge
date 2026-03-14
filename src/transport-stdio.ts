@@ -29,8 +29,35 @@ export class StdioTransport extends BaseTransport {
   private async startProcess(): Promise<void> {
     if (!this.config.command) return;
 
-    const env = { ...process.env, ...resolveEnvRecord(this.config.env || {}, "env key") };
+    const configEnv = resolveEnvRecord(this.config.env || {}, "env key");
+    const env = { ...process.env, ...configEnv };
     const args = resolveArgs(this.config.args || [], env);
+
+    if (process.env.DEBUG_STDIO_ENV) {
+      this.logger.info(`[mcp-bridge] stdio spawn: ${this.config.command} ${args.join(" ")}`);
+      for (const [key, value] of Object.entries(configEnv)) {
+        const len = value.length;
+        const head = len > 4 ? value.slice(0, 4) : "****";
+        const tail = len > 4 ? value.slice(-4) : "****";
+        const hasPlaceholder = /\$\{/.test(value);
+        const inProcessEnv = process.env[key] !== undefined;
+        const processEnvLen = inProcessEnv ? (process.env[key]?.length ?? 0) : -1;
+        const processEnvMatch = inProcessEnv ? (process.env[key] === value) : null;
+        this.logger.info(
+          `[mcp-bridge] stdio env: ${key} len=${len} head=${head}... tail=...${tail} placeholder=${hasPlaceholder} inProcessEnv=${inProcessEnv}(len=${processEnvLen}, match=${processEnvMatch})`
+        );
+      }
+      // Log the FINAL merged value that the child will receive
+      for (const key of Object.keys(configEnv)) {
+        const finalVal = env[key] ?? "(undefined)";
+        const finalLen = typeof finalVal === "string" ? finalVal.length : -1;
+        const finalHead = typeof finalVal === "string" && finalLen > 4 ? finalVal.slice(0, 4) : "****";
+        const finalTail = typeof finalVal === "string" && finalLen > 4 ? finalVal.slice(-4) : "****";
+        this.logger.info(
+          `[mcp-bridge] stdio env FINAL: ${key} len=${finalLen} head=${finalHead}... tail=...${finalTail}`
+        );
+      }
+    }
 
     this.process = spawn(this.config.command, args, {
       stdio: ["pipe", "pipe", "pipe"],
@@ -39,6 +66,10 @@ export class StdioTransport extends BaseTransport {
 
     if (!this.process.stdin || !this.process.stdout || !this.process.stderr) {
       throw new Error("Failed to create process pipes");
+    }
+
+    if (process.env.DEBUG_STDIO_ENV) {
+      this.logger.info(`[mcp-bridge] stdio child PID: ${this.process.pid} (check /proc/${this.process.pid}/environ if needed)`);
     }
 
     this.framingMode = this.config.framing || "auto";
@@ -56,7 +87,12 @@ export class StdioTransport extends BaseTransport {
     });
 
     this.process.stderr.on("data", (data: Buffer) => {
-      this.logger.debug(`MCP server stderr: ${data.toString()}`);
+      const msg = data.toString();
+      if (process.env.DEBUG_STDIO_ENV) {
+        this.logger.info(`[mcp-bridge] stdio stderr: ${msg.trimEnd()}`);
+      } else {
+        this.logger.debug(`MCP server stderr: ${msg}`);
+      }
     });
 
     this.process.on("exit", (code, signal) => {
