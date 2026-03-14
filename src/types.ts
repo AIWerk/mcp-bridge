@@ -18,6 +18,15 @@ export interface McpServerConfig {
   env?: Record<string, string>;
   // Stdio framing override (default: auto-detect from first message)
   framing?: "auto" | "lsp" | "newline";
+  // Security: trust level for results from this server
+  trust?: "trusted" | "untrusted" | "sanitize";
+  // Security: tool allow/deny filter
+  toolFilter?: {
+    deny?: string[];
+    allow?: string[];
+  };
+  // Security: max result size (overrides global)
+  maxResultChars?: number;
 }
 
 export interface McpClientConfig {
@@ -38,6 +47,8 @@ export interface McpClientConfig {
     model?: string;
     minScore?: number;
   };
+  // Security: global max result size in chars
+  maxResultChars?: number;
 }
 
 export interface McpTool {

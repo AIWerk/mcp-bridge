@@ -98,6 +98,7 @@ function makeRouter(
     routerMaxConcurrent?: number;
     schemaCompression?: { enabled?: boolean; maxDescriptionLength?: number };
     intentRouting?: McpClientConfig["intentRouting"];
+    maxResultChars?: number;
   } = {}
 ): McpRouter {
   return new McpRouter(
@@ -107,7 +108,8 @@ function makeRouter(
       routerIdleTimeoutMs: overrides.routerIdleTimeoutMs,
       routerMaxConcurrent: overrides.routerMaxConcurrent,
       schemaCompression: overrides.schemaCompression,
-      intentRouting: overrides.intentRouting
+      intentRouting: overrides.intentRouting,
+      maxResultChars: overrides.maxResultChars
     },
     makeLogger(),
     {
@@ -441,6 +443,124 @@ test("action=intent returns error for unknown intent gracefully", async () => {
   if ("error" in result) {
     assert.equal(result.error, "invalid_params");
     assert.ok(result.message.includes("No tool found"));
+  }
+});
+
+// ─── Security integration tests ──────────────────────────────────────────────
+
+test("security: tool filter hides tools from getToolList", async () => {
+  MockTransport.behaviors.set("mock://filter", {
+    tools: [
+      { name: "safe", description: "Safe tool", inputSchema: { type: "object" } },
+      { name: "dangerous", description: "Dangerous tool", inputSchema: { type: "object" } },
+    ],
+  });
+
+  const router = makeRouter({
+    filtered: { transport: "sse", url: "mock://filter", toolFilter: { deny: ["dangerous"] } },
+  });
+
+  const result = await router.dispatch("filtered", "list");
+  assert.equal("error" in result, false);
+  if (!("error" in result) && result.action === "list") {
+    assert.equal(result.tools.length, 1);
+    assert.equal(result.tools[0].name, "safe");
+  }
+});
+
+test("security: deny list blocks dispatch call", async () => {
+  MockTransport.behaviors.set("mock://deny", {
+    tools: [
+      { name: "allowed", description: "OK", inputSchema: { type: "object" } },
+      { name: "blocked", description: "No", inputSchema: { type: "object" } },
+    ],
+  });
+
+  const router = makeRouter({
+    deny: { transport: "sse", url: "mock://deny", toolFilter: { deny: ["blocked"] } },
+  });
+
+  const result = await router.dispatch("deny", "call", "blocked");
+  assert.ok("error" in result);
+  if ("error" in result) {
+    assert.equal(result.error, "unknown_tool");
+  }
+});
+
+test("security: trust=untrusted wraps call result", async () => {
+  MockTransport.behaviors.set("mock://untrust", {
+    tools: [{ name: "read", description: "Read", inputSchema: { type: "object" } }],
+    callResult: { data: "secret" },
+  });
+
+  const router = makeRouter({
+    untrust: { transport: "sse", url: "mock://untrust", trust: "untrusted" },
+  });
+
+  const result = await router.dispatch("untrust", "call", "read");
+  assert.equal("error" in result, false);
+  if (!("error" in result) && result.action === "call") {
+    assert.equal(result.result._trust, "untrusted");
+    assert.equal(result.result._server, "untrust");
+    assert.deepEqual(result.result.result, { data: "secret" });
+  }
+});
+
+test("security: trust=sanitize strips HTML from call result", async () => {
+  MockTransport.behaviors.set("mock://san", {
+    tools: [{ name: "get", description: "Get", inputSchema: { type: "object" } }],
+    callResult: { content: [{ type: "text", text: "<script>alert(1)</script>Hello" }] },
+  });
+
+  const router = makeRouter({
+    san: { transport: "sse", url: "mock://san", trust: "sanitize" },
+  });
+
+  const result = await router.dispatch("san", "call", "get");
+  assert.equal("error" in result, false);
+  if (!("error" in result) && result.action === "call") {
+    assert.ok(!JSON.stringify(result.result).includes("<script>"));
+    assert.ok(JSON.stringify(result.result).includes("Hello"));
+  }
+});
+
+test("security: maxResultChars truncates large results", async () => {
+  MockTransport.behaviors.set("mock://big", {
+    tools: [{ name: "dump", description: "Dump", inputSchema: { type: "object" } }],
+    callResult: { data: "x".repeat(500) },
+  });
+
+  const router = makeRouter(
+    { big: { transport: "sse", url: "mock://big" } },
+    { maxResultChars: 50 }
+  );
+
+  const result = await router.dispatch("big", "call", "dump");
+  assert.equal("error" in result, false);
+  if (!("error" in result) && result.action === "call") {
+    assert.equal(result.result._truncated, true);
+    assert.equal(typeof result.result._originalLength, "number");
+    assert.equal(result.result.result.length, 50);
+  }
+});
+
+test("security: pipeline order - truncate then trust-tag", async () => {
+  MockTransport.behaviors.set("mock://pipe", {
+    tools: [{ name: "tool", description: "Tool", inputSchema: { type: "object" } }],
+    callResult: { data: "x".repeat(500) },
+  });
+
+  const router = makeRouter(
+    { pipe: { transport: "sse", url: "mock://pipe", trust: "untrusted", maxResultChars: 30 } },
+  );
+
+  const result = await router.dispatch("pipe", "call", "tool");
+  assert.equal("error" in result, false);
+  if (!("error" in result) && result.action === "call") {
+    // Outer: trust wrapper
+    assert.equal(result.result._trust, "untrusted");
+    // Inner: truncation wrapper
+    assert.equal(result.result.result._truncated, true);
   }
 });
 

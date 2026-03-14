@@ -12,6 +12,7 @@ import { fetchToolsList, initializeProtocol, PACKAGE_VERSION } from "./protocol.
 import { compressDescription } from "./schema-compression.js";
 import { IntentRouter } from "./intent-router.js";
 import { createEmbeddingProvider } from "./embeddings.js";
+import { isToolAllowed, processResult } from "./security.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -204,6 +205,12 @@ export class McpRouter {
         return this.error("unknown_tool", `Tool '${tool}' not found on server '${server}'`, state.toolNames);
       }
 
+      // Defense in depth: double-check tool filter
+      const serverConfig = this.servers[server];
+      if (!isToolAllowed(tool, serverConfig)) {
+        return this.error("unknown_tool", `Tool '${tool}' is not allowed on server '${server}'`, state.toolNames);
+      }
+
       this.markUsed(server);
       const response = await state.transport.sendRequest({
         jsonrpc: "2.0",
@@ -218,7 +225,9 @@ export class McpRouter {
         return this.error("mcp_error", response.error.message, undefined, response.error.code);
       }
 
-      return { server, action: "call", tool, result: response.result };
+      // Security pipeline: truncate → sanitize → trust-tag
+      const result = processResult(response.result, server, serverConfig, this.clientConfig);
+      return { server, action: "call", tool, result };
     } catch (error) {
       return this.error("mcp_error", error instanceof Error ? error.message : String(error));
     }
@@ -235,7 +244,9 @@ export class McpRouter {
       return state.toolsCache;
     }
 
-    const tools = await fetchToolsList(state.transport);
+    const allTools = await fetchToolsList(state.transport);
+    const serverConfig = this.servers[server];
+    const tools = allTools.filter((tool) => isToolAllowed(tool.name, serverConfig));
     state.toolNames = tools.map((tool) => tool.name);
 
     // Store full tool metadata for action=schema
