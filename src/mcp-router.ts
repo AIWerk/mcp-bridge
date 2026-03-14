@@ -9,6 +9,7 @@ import { SseTransport } from "./transport-sse.js";
 import { StdioTransport } from "./transport-stdio.js";
 import { StreamableHttpTransport } from "./transport-streamable-http.js";
 import { fetchToolsList, initializeProtocol, PACKAGE_VERSION } from "./protocol.js";
+import { compressDescription } from "./schema-compression.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -35,6 +36,7 @@ export type RouterDispatchResponse =
   | { server: string; action: "list"; tools: RouterToolHint[] }
   | { server: string; action: "refresh"; refreshed: true; tools: RouterToolHint[] }
   | { server: string; action: "call"; tool: string; result: any }
+  | { server: string; action: "schema"; tool: string; schema: any; description: string }
   | { action: "status"; servers: RouterServerStatus[] }
   | {
       error: RouterErrorCode;
@@ -53,6 +55,8 @@ interface RouterServerState {
   transport: McpTransport;
   initialized: boolean;
   toolsCache?: RouterToolHint[];
+  /** Full uncompressed tool metadata keyed by tool name */
+  fullToolsMap?: Map<string, { description: string; inputSchema: any }>;
   toolNames: string[];
   lastUsedAt: number;
   idleTimer: NodeJS.Timeout | null;
@@ -129,10 +133,28 @@ export class McpRouter {
         }
       }
 
+      if (normalizedAction === "schema") {
+        if (!tool) {
+          return this.error("invalid_params", "tool is required for action=schema");
+        }
+        try {
+          await this.getToolList(server);
+        } catch (error) {
+          return this.error("connection_failed", `Failed to connect to ${server}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        const state = this.states.get(server)!;
+        const fullTool = state.fullToolsMap?.get(tool);
+        if (!fullTool) {
+          return this.error("unknown_tool", `Tool '${tool}' not found on server '${server}'`, state.toolNames);
+        }
+        return { server, action: "schema", tool, schema: fullTool.inputSchema, description: fullTool.description };
+      }
+
       if (normalizedAction === "refresh") {
         try {
           const state = await this.ensureConnected(server);
           state.toolsCache = undefined;
+          state.fullToolsMap = undefined;
           state.toolNames = [];
           const tools = await this.getToolList(server);
           return { server, action: "refresh", refreshed: true, tools };
@@ -142,7 +164,7 @@ export class McpRouter {
       }
 
       if (normalizedAction !== "call") {
-        return this.error("invalid_params", `action must be one of: list, call, refresh`);
+        return this.error("invalid_params", `action must be one of: list, call, refresh, schema`);
       }
 
       if (!tool) {
@@ -193,9 +215,20 @@ export class McpRouter {
 
     const tools = await fetchToolsList(state.transport);
     state.toolNames = tools.map((tool) => tool.name);
+
+    // Store full tool metadata for action=schema
+    state.fullToolsMap = new Map(
+      tools.map((tool) => [tool.name, { description: tool.description || "", inputSchema: tool.inputSchema }])
+    );
+
+    const compressionEnabled = this.clientConfig.schemaCompression?.enabled ?? true;
+    const maxLen = this.clientConfig.schemaCompression?.maxDescriptionLength ?? 80;
+
     state.toolsCache = tools.map((tool) => ({
       name: tool.name,
-      description: tool.description || "",
+      description: compressionEnabled
+        ? compressDescription(tool.description || "", maxLen)
+        : (tool.description || ""),
       requiredParams: this.extractRequiredParams(tool)
     }));
 
@@ -302,6 +335,7 @@ export class McpRouter {
 
     state.initialized = false;
     state.toolsCache = undefined;
+    state.fullToolsMap = undefined;
     state.toolNames = [];
   }
 
@@ -332,6 +366,7 @@ export class McpRouter {
       if (!state) return;
       state.initialized = false;
       state.toolsCache = undefined;
+      state.fullToolsMap = undefined;
       state.toolNames = [];
     };
 

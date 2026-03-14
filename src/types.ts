@@ -29,6 +29,10 @@ export interface McpClientConfig {
   requestTimeoutMs?: number;
   routerIdleTimeoutMs?: number;
   routerMaxConcurrent?: number;
+  schemaCompression?: {
+    enabled?: boolean;
+    maxDescriptionLength?: number;
+  };
 }
 
 export interface McpTool {

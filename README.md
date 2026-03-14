@@ -115,9 +115,37 @@ Config: `~/.mcp-bridge/config.json` | Secrets: `~/.mcp-bridge/.env`
   },
   "toolPrefix": true,
   "connectionTimeoutMs": 5000,
-  "requestTimeoutMs": 60000
+  "requestTimeoutMs": 60000,
+  "schemaCompression": {
+    "enabled": true,
+    "maxDescriptionLength": 80
+  }
 }
 ```
+
+### Schema Compression
+
+In router mode, tool descriptions from upstream servers can be verbose (100-300+ chars each). Schema compression truncates them to save tokens:
+
+- **Enabled by default** — descriptions capped at 80 characters
+- Cuts at sentence boundary when possible, otherwise word boundary
+- Use `action=schema` to retrieve the full uncompressed schema for any tool on demand
+
+```json
+"schemaCompression": {
+  "enabled": true,
+  "maxDescriptionLength": 80
+}
+```
+
+**Token savings example:** 30 Todoist tools: ~2800 tokens uncompressed -> ~1200 compressed (~57% reduction).
+
+To get full details for a specific tool:
+```
+mcp(server="todoist", action="schema", tool="find-tasks")
+```
+
+Set `"enabled": false` to disable compression and return full descriptions.
 
 ### Modes
 
@@ -186,6 +214,9 @@ Built-in catalog with pre-configured servers:
 | wise | stdio | International payments |
 | tavily | stdio | AI-optimized web search |
 | apify | streamable-http | Web scraping and automation |
+| atlassian | stdio | Confluence and Jira |
+| chrome-devtools | stdio | Chrome browser automation |
+| hostinger | sse | Web hosting management |
 
 ```bash
 mcp-bridge install todoist    # Interactive setup with API key prompt

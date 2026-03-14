@@ -93,14 +93,15 @@ function makeLogger() {
 
 function makeRouter(
   servers: Record<string, McpServerConfig>,
-  overrides: { routerIdleTimeoutMs?: number; routerMaxConcurrent?: number } = {}
+  overrides: { routerIdleTimeoutMs?: number; routerMaxConcurrent?: number; schemaCompression?: { enabled?: boolean; maxDescriptionLength?: number } } = {}
 ): McpRouter {
   return new McpRouter(
     servers,
     {
       servers,
       routerIdleTimeoutMs: overrides.routerIdleTimeoutMs,
-      routerMaxConcurrent: overrides.routerMaxConcurrent
+      routerMaxConcurrent: overrides.routerMaxConcurrent,
+      schemaCompression: overrides.schemaCompression
     },
     makeLogger(),
     {
@@ -298,4 +299,90 @@ test("generateDescription includes status action", () => {
     test: { transport: "stdio", command: "node", args: [] }
   });
   assert.match(description, /action='status'/);
+});
+
+test("action=schema returns full schema and description", async () => {
+  const longDesc = "Create a new virtual server. This provisions compute resources and sets up networking for production workloads.";
+  MockTransport.behaviors.set("mock://schema", {
+    tools: [
+      {
+        name: "create_vm",
+        description: longDesc,
+        inputSchema: {
+          type: "object",
+          properties: { name: { type: "string" }, region: { type: "string" } },
+          required: ["name"]
+        }
+      }
+    ]
+  });
+
+  const router = makeRouter({ schema: { transport: "sse", url: "mock://schema" } });
+
+  const result = await router.dispatch("schema", "schema", "create_vm");
+  assert.equal("error" in result, false);
+  if (!("error" in result) && result.action === "schema") {
+    assert.equal(result.tool, "create_vm");
+    assert.equal(result.description, longDesc);
+    assert.deepEqual(result.schema, {
+      type: "object",
+      properties: { name: { type: "string" }, region: { type: "string" } },
+      required: ["name"]
+    });
+  }
+});
+
+test("action=schema returns error for unknown tool", async () => {
+  MockTransport.behaviors.set("mock://schema2", {
+    tools: [{ name: "ping", description: "Ping", inputSchema: { type: "object" } }]
+  });
+
+  const router = makeRouter({ s: { transport: "sse", url: "mock://schema2" } });
+  const result = await router.dispatch("s", "schema", "nonexistent");
+  assert.equal("error" in result ? result.error : "", "unknown_tool");
+});
+
+test("compressed descriptions in tool list (default enabled)", async () => {
+  const longDesc = "Create a new virtual server. This provisions compute resources and sets up networking for production workloads.";
+  MockTransport.behaviors.set("mock://compress", {
+    tools: [
+      {
+        name: "create_vm",
+        description: longDesc,
+        inputSchema: { type: "object", required: ["name"] }
+      }
+    ]
+  });
+
+  const router = makeRouter({ comp: { transport: "sse", url: "mock://compress" } });
+  const result = await router.dispatch("comp", "list");
+  assert.equal("error" in result, false);
+  if (!("error" in result) && result.action === "list") {
+    const tool = result.tools[0];
+    // Should be truncated at sentence boundary
+    assert.equal(tool.description, "Create a new virtual server.\u2026");
+  }
+});
+
+test("disabled compression returns full description", async () => {
+  const longDesc = "Create a new virtual server. This provisions compute resources and sets up networking for production workloads.";
+  MockTransport.behaviors.set("mock://nocompress", {
+    tools: [
+      {
+        name: "create_vm",
+        description: longDesc,
+        inputSchema: { type: "object" }
+      }
+    ]
+  });
+
+  const router = makeRouter(
+    { nc: { transport: "sse", url: "mock://nocompress" } },
+    { schemaCompression: { enabled: false } }
+  );
+  const result = await router.dispatch("nc", "list");
+  assert.equal("error" in result, false);
+  if (!("error" in result) && result.action === "list") {
+    assert.equal(result.tools[0].description, longDesc);
+  }
 });
