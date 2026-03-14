@@ -13,6 +13,7 @@ import { compressDescription } from "./schema-compression.js";
 import { IntentRouter } from "./intent-router.js";
 import { createEmbeddingProvider } from "./embeddings.js";
 import { isToolAllowed, processResult } from "./security.js";
+import { AdaptivePromotion } from "./adaptive-promotion.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -41,6 +42,7 @@ export type RouterDispatchResponse =
   | { server: string; action: "call"; tool: string; result: any }
   | { server: string; action: "schema"; tool: string; schema: any; description: string }
   | { action: "status"; servers: RouterServerStatus[] }
+  | { action: "promotions"; promoted: Array<{ server: string; tool: string; callCount: number }>; stats: Array<{ server: string; tool: string; callCount: number; lastCall: string }> }
   | {
       action: "intent";
       intent: string;
@@ -84,6 +86,7 @@ export class McpRouter {
   private readonly maxConcurrent: number;
   private readonly states = new Map<string, RouterServerState>();
   private intentRouter: IntentRouter | null = null;
+  private readonly promotion: AdaptivePromotion | null = null;
 
   constructor(
     servers: Record<string, McpServerConfig>,
@@ -101,6 +104,10 @@ export class McpRouter {
     };
     this.idleTimeoutMs = clientConfig.routerIdleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
     this.maxConcurrent = clientConfig.routerMaxConcurrent ?? DEFAULT_MAX_CONCURRENT;
+
+    if (clientConfig.adaptivePromotion?.enabled) {
+      this.promotion = new AdaptivePromotion(clientConfig.adaptivePromotion, logger);
+    }
   }
 
   static generateDescription(servers: Record<string, McpServerConfig>): string {
@@ -126,6 +133,11 @@ export class McpRouter {
       // Status action: no server required, shows all server states
       if (normalizedAction === "status") {
         return this.getStatus();
+      }
+
+      // Promotions action: return promotion stats
+      if (normalizedAction === "promotions") {
+        return this.getPromotionStats();
       }
 
       // Intent action: find server+tool from natural language
@@ -223,6 +235,11 @@ export class McpRouter {
 
       if (response.error) {
         return this.error("mcp_error", response.error.message, undefined, response.error.code);
+      }
+
+      // Record usage for adaptive promotion
+      if (this.promotion) {
+        this.promotion.recordCall(server, tool);
       }
 
       // Security pipeline: truncate → sanitize → trust-tag
@@ -341,6 +358,43 @@ export class McpRouter {
       };
     });
     return { action: "status", servers: serverStatuses };
+  }
+
+  getPromotedTools(): Array<{ server: string; tool: string; toolHint: RouterToolHint; inputSchema: any }> {
+    if (!this.promotion) return [];
+
+    const promoted = this.promotion.getPromotedTools();
+    const result: Array<{ server: string; tool: string; toolHint: RouterToolHint; inputSchema: any }> = [];
+
+    for (const p of promoted) {
+      const state = this.states.get(p.server);
+      const fullTool = state?.fullToolsMap?.get(p.tool);
+      const hint = state?.toolsCache?.find(t => t.name === p.tool);
+      if (fullTool && hint) {
+        result.push({
+          server: p.server,
+          tool: p.tool,
+          toolHint: hint,
+          inputSchema: fullTool.inputSchema
+        });
+      }
+    }
+
+    return result;
+  }
+
+  private getPromotionStats(): RouterDispatchResponse {
+    if (!this.promotion) {
+      return { action: "promotions", promoted: [], stats: [] };
+    }
+
+    const promoted = this.promotion.getPromotedTools();
+    const stats = this.promotion.getStats().map(s => ({
+      ...s,
+      lastCall: new Date(s.lastCall).toISOString()
+    }));
+
+    return { action: "promotions", promoted, stats };
   }
 
   async disconnectAll(): Promise<void> {

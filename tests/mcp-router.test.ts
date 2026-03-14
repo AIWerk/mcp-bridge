@@ -99,6 +99,7 @@ function makeRouter(
     schemaCompression?: { enabled?: boolean; maxDescriptionLength?: number };
     intentRouting?: McpClientConfig["intentRouting"];
     maxResultChars?: number;
+    adaptivePromotion?: McpClientConfig["adaptivePromotion"];
   } = {}
 ): McpRouter {
   return new McpRouter(
@@ -109,7 +110,8 @@ function makeRouter(
       routerMaxConcurrent: overrides.routerMaxConcurrent,
       schemaCompression: overrides.schemaCompression,
       intentRouting: overrides.intentRouting,
-      maxResultChars: overrides.maxResultChars
+      maxResultChars: overrides.maxResultChars,
+      adaptivePromotion: overrides.adaptivePromotion
     },
     makeLogger(),
     {
@@ -572,4 +574,86 @@ test("action=intent requires intent parameter", async () => {
     assert.equal(result.error, "invalid_params");
     assert.ok(result.message.includes("intent"));
   }
+});
+
+// ─── Adaptive promotion integration tests ────────────────────────────────────
+
+test("action=promotions returns stats", async () => {
+  MockTransport.behaviors.set("mock://promo", {
+    tools: [
+      { name: "tool_a", description: "Tool A", inputSchema: { type: "object" } },
+      { name: "tool_b", description: "Tool B", inputSchema: { type: "object" } }
+    ],
+    callResult: { ok: true }
+  });
+
+  const router = makeRouter(
+    { promo: { transport: "sse", url: "mock://promo" } },
+    { adaptivePromotion: { enabled: true, minCalls: 2, windowMs: 60_000 } }
+  );
+
+  await router.dispatch("promo", "call", "tool_a");
+  await router.dispatch("promo", "call", "tool_a");
+  await router.dispatch("promo", "call", "tool_b");
+
+  const result = await router.dispatch(undefined, "promotions");
+  assert.equal("error" in result, false);
+  if ("action" in result && result.action === "promotions") {
+    assert.equal(result.promoted.length, 1);
+    assert.equal(result.promoted[0].tool, "tool_a");
+    assert.equal(result.promoted[0].callCount, 2);
+    assert.equal(result.stats.length, 2);
+  }
+});
+
+test("recordCall is called after successful tool dispatch", async () => {
+  MockTransport.behaviors.set("mock://track", {
+    tools: [{ name: "ping", description: "Ping", inputSchema: { type: "object" } }],
+    callResult: { pong: true }
+  });
+
+  const router = makeRouter(
+    { track: { transport: "sse", url: "mock://track" } },
+    { adaptivePromotion: { enabled: true, minCalls: 1, windowMs: 60_000 } }
+  );
+
+  await router.dispatch("track", "call", "ping");
+
+  const result = await router.dispatch(undefined, "promotions");
+  if ("action" in result && result.action === "promotions") {
+    assert.equal(result.promoted.length, 1);
+    assert.equal(result.promoted[0].server, "track");
+    assert.equal(result.promoted[0].tool, "ping");
+  }
+});
+
+test("getPromotedTools returns tool metadata", async () => {
+  MockTransport.behaviors.set("mock://meta", {
+    tools: [{
+      name: "create_issue",
+      description: "Create a GitHub issue",
+      inputSchema: {
+        type: "object",
+        properties: { title: { type: "string" } },
+        required: ["title"]
+      }
+    }],
+    callResult: { id: 1 }
+  });
+
+  const router = makeRouter(
+    { meta: { transport: "sse", url: "mock://meta" } },
+    { adaptivePromotion: { enabled: true, minCalls: 1, windowMs: 60_000 } }
+  );
+
+  await router.dispatch("meta", "call", "create_issue", { title: "test" });
+
+  const promoted = router.getPromotedTools();
+  assert.equal(promoted.length, 1);
+  assert.equal(promoted[0].server, "meta");
+  assert.equal(promoted[0].tool, "create_issue");
+  assert.ok(promoted[0].toolHint);
+  assert.equal(promoted[0].toolHint.name, "create_issue");
+  assert.ok(promoted[0].inputSchema);
+  assert.deepEqual(promoted[0].inputSchema.required, ["title"]);
 });

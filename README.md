@@ -228,6 +228,35 @@ Control which tools are visible and callable per server:
 - If both: allowed tools minus denied ones
 - Applied in both tool listing and execution (defense in depth)
 
+### Adaptive Promotion
+
+Frequently used tools can be automatically "promoted" to standalone tools alongside the `mcp` meta-tool. The promotion system tracks usage and reports which tools qualify — the host environment (e.g., OpenClaw plugin) decides how to register them.
+
+```json
+"adaptivePromotion": {
+  "enabled": true,
+  "maxPromoted": 10,
+  "minCalls": 3,
+  "windowMs": 86400000,
+  "decayMs": 172800000
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `false` | Opt-in: must be explicitly enabled |
+| `maxPromoted` | `10` | Maximum number of tools to promote |
+| `minCalls` | `3` | Minimum calls within window to qualify |
+| `windowMs` | `86400000` (24h) | Time window for counting calls |
+| `decayMs` | `172800000` (48h) | Demote tools with no calls in this period |
+
+Use `action="promotions"` to check current promotion state:
+```
+mcp(action="promotions")
+```
+
+Returns promoted tools (sorted by frequency) and full usage stats. All tracking is in-memory — promotion rebuilds naturally from usage after restart.
+
 #### Max Result Size
 
 Prevent oversized responses from consuming your context:

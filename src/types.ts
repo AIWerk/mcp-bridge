@@ -49,6 +49,14 @@ export interface McpClientConfig {
   };
   // Security: global max result size in chars
   maxResultChars?: number;
+  // Adaptive promotion: frequently used tools get promoted to standalone
+  adaptivePromotion?: {
+    enabled?: boolean;
+    maxPromoted?: number;
+    windowMs?: number;
+    minCalls?: number;
+    decayMs?: number;
+  };
 }
 
 export interface McpTool {
