@@ -1,6 +1,15 @@
 {
   "schemaVersion": 1,
   "servers": {
+    "chrome-devtools": {
+      "description": "Control and inspect a live Chrome browser",
+      "transport": "stdio",
+      "authRequired": false,
+      "homepage": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+      "installMethod": "npx",
+      "envVars": [],
+      "notes": "Requires Chrome >= 144 with chrome://inspect/#remote-debugging enabled"
+    },
     "apify": {
       "description": "web scraping & automation",
       "transport": "streamable-http",
