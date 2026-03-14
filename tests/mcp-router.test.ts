@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { McpRouter } from "../src/mcp-router.ts";
-import type { McpRequest, McpResponse, McpServerConfig, McpTransport, McpTool } from "../src/types.ts";
+import type { McpRequest, McpResponse, McpServerConfig, McpClientConfig, McpTransport, McpTool } from "../src/types.ts";
 
 type Behavior = {
   tools: McpTool[];
@@ -93,7 +93,12 @@ function makeLogger() {
 
 function makeRouter(
   servers: Record<string, McpServerConfig>,
-  overrides: { routerIdleTimeoutMs?: number; routerMaxConcurrent?: number; schemaCompression?: { enabled?: boolean; maxDescriptionLength?: number } } = {}
+  overrides: {
+    routerIdleTimeoutMs?: number;
+    routerMaxConcurrent?: number;
+    schemaCompression?: { enabled?: boolean; maxDescriptionLength?: number };
+    intentRouting?: McpClientConfig["intentRouting"];
+  } = {}
 ): McpRouter {
   return new McpRouter(
     servers,
@@ -101,7 +106,8 @@ function makeRouter(
       servers,
       routerIdleTimeoutMs: overrides.routerIdleTimeoutMs,
       routerMaxConcurrent: overrides.routerMaxConcurrent,
-      schemaCompression: overrides.schemaCompression
+      schemaCompression: overrides.schemaCompression,
+      intentRouting: overrides.intentRouting
     },
     makeLogger(),
     {
@@ -384,5 +390,66 @@ test("disabled compression returns full description", async () => {
   assert.equal("error" in result, false);
   if (!("error" in result) && result.action === "list") {
     assert.equal(result.tools[0].description, longDesc);
+  }
+});
+
+test("action=intent dispatches correctly and finds matching tool", async () => {
+  MockTransport.behaviors.set("mock://github", {
+    tools: [
+      { name: "create_issue", description: "Create a GitHub issue for tracking bugs", inputSchema: { type: "object" } },
+      { name: "list_repos", description: "List all GitHub repositories", inputSchema: { type: "object" } }
+    ]
+  });
+  MockTransport.behaviors.set("mock://email", {
+    tools: [
+      { name: "send_email", description: "Send an email message to a recipient", inputSchema: { type: "object" } }
+    ]
+  });
+
+  const router = makeRouter(
+    {
+      github: { transport: "sse", url: "mock://github" },
+      email: { transport: "sse", url: "mock://email" }
+    },
+    { intentRouting: { embedding: "keyword" } }
+  );
+
+  const result = await router.dispatch(undefined, "intent", undefined, { intent: "create a new issue on GitHub" });
+  assert.equal("error" in result, false);
+  if (!("error" in result) && "action" in result && result.action === "intent") {
+    assert.equal(result.match.server, "github");
+    assert.equal(result.match.tool, "create_issue");
+    assert.ok(result.match.score > 0);
+    assert.ok(Array.isArray(result.alternatives));
+  }
+});
+
+test("action=intent returns error for unknown intent gracefully", async () => {
+  MockTransport.behaviors.set("mock://srv", {
+    tools: [
+      { name: "specific_tool", description: "Does one very specific thing", inputSchema: { type: "object" } }
+    ]
+  });
+
+  const router = makeRouter(
+    { srv: { transport: "sse", url: "mock://srv" } },
+    { intentRouting: { embedding: "keyword", minScore: 0.99 } }
+  );
+
+  const result = await router.dispatch(undefined, "intent", undefined, { intent: "completely unrelated cooking recipe" });
+  assert.ok("error" in result);
+  if ("error" in result) {
+    assert.equal(result.error, "invalid_params");
+    assert.ok(result.message.includes("No tool found"));
+  }
+});
+
+test("action=intent requires intent parameter", async () => {
+  const router = makeRouter({ s: { transport: "sse", url: "mock://s" } });
+  const result = await router.dispatch(undefined, "intent");
+  assert.ok("error" in result);
+  if ("error" in result) {
+    assert.equal(result.error, "invalid_params");
+    assert.ok(result.message.includes("intent"));
   }
 });

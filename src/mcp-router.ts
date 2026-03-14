@@ -10,6 +10,8 @@ import { StdioTransport } from "./transport-stdio.js";
 import { StreamableHttpTransport } from "./transport-streamable-http.js";
 import { fetchToolsList, initializeProtocol, PACKAGE_VERSION } from "./protocol.js";
 import { compressDescription } from "./schema-compression.js";
+import { IntentRouter } from "./intent-router.js";
+import { createEmbeddingProvider } from "./embeddings.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -38,6 +40,12 @@ export type RouterDispatchResponse =
   | { server: string; action: "call"; tool: string; result: any }
   | { server: string; action: "schema"; tool: string; schema: any; description: string }
   | { action: "status"; servers: RouterServerStatus[] }
+  | {
+      action: "intent";
+      intent: string;
+      match: { server: string; tool: string; score: number };
+      alternatives: Array<{ server: string; tool: string; score: number }>;
+    }
   | {
       error: RouterErrorCode;
       message: string;
@@ -74,6 +82,7 @@ export class McpRouter {
   private readonly idleTimeoutMs: number;
   private readonly maxConcurrent: number;
   private readonly states = new Map<string, RouterServerState>();
+  private intentRouter: IntentRouter | null = null;
 
   constructor(
     servers: Record<string, McpServerConfig>,
@@ -118,6 +127,15 @@ export class McpRouter {
         return this.getStatus();
       }
 
+      // Intent action: find server+tool from natural language
+      if (normalizedAction === "intent") {
+        const intent = params?.intent || tool;
+        if (!intent) {
+          return this.error("invalid_params", "intent string is required for action=intent");
+        }
+        return this.resolveIntent(intent);
+      }
+
       if (!server) {
         return this.error("invalid_params", "server is required");
       }
@@ -156,6 +174,10 @@ export class McpRouter {
           state.toolsCache = undefined;
           state.fullToolsMap = undefined;
           state.toolNames = [];
+          // Clear intent index so it re-indexes on next intent query
+          if (this.intentRouter) {
+            this.intentRouter.clearIndex();
+          }
           const tools = await this.getToolList(server);
           return { server, action: "refresh", refreshed: true, tools };
         } catch (error) {
@@ -164,7 +186,7 @@ export class McpRouter {
       }
 
       if (normalizedAction !== "call") {
-        return this.error("invalid_params", `action must be one of: list, call, refresh, schema`);
+        return this.error("invalid_params", `action must be one of: list, call, refresh, schema, intent`);
       }
 
       if (!tool) {
@@ -234,6 +256,61 @@ export class McpRouter {
 
     this.markUsed(server);
     return state.toolsCache;
+  }
+
+  private async resolveIntent(intent: string): Promise<RouterDispatchResponse> {
+    try {
+      // Lazily create the intent router
+      if (!this.intentRouter) {
+        const routingConfig = this.clientConfig.intentRouting;
+        const embeddingType = routingConfig?.embedding ?? "auto";
+        const provider = createEmbeddingProvider(
+          embeddingType,
+          { model: routingConfig?.model },
+          this.logger
+        );
+        this.intentRouter = new IntentRouter(
+          provider,
+          this.logger,
+          routingConfig?.minScore
+        );
+      }
+
+      // Index tools if not already done
+      if (!this.intentRouter.isIndexed()) {
+        const allTools: Record<string, McpTool[]> = {};
+        for (const serverName of Object.keys(this.servers)) {
+          try {
+            await this.getToolList(serverName);
+            const state = this.states.get(serverName);
+            if (state?.fullToolsMap) {
+              allTools[serverName] = [...state.fullToolsMap.entries()].map(([name, meta]) => ({
+                name,
+                description: meta.description,
+                inputSchema: meta.inputSchema
+              }));
+            }
+          } catch (err) {
+            this.logger.warn(`[mcp-bridge] Intent routing: failed to index tools from ${serverName}:`, err);
+          }
+        }
+        await this.intentRouter.indexTools(allTools);
+      }
+
+      const match = await this.intentRouter.resolve(intent);
+      if (!match) {
+        return this.error("invalid_params", `No tool found matching intent: "${intent}"`);
+      }
+
+      return {
+        action: "intent",
+        intent,
+        match: { server: match.server, tool: match.tool, score: match.score },
+        alternatives: match.alternatives
+      };
+    } catch (err) {
+      return this.error("mcp_error", `Intent resolution failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private getStatus(): RouterDispatchResponse {

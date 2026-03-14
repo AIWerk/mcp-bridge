@@ -33,6 +33,11 @@ export interface McpClientConfig {
     enabled?: boolean;
     maxDescriptionLength?: number;
   };
+  intentRouting?: {
+    embedding?: "auto" | "gemini" | "openai" | "ollama" | "keyword";
+    model?: string;
+    minScore?: number;
+  };
 }
 
 export interface McpTool {
