@@ -14,9 +14,12 @@ Most AI agents connect to MCP servers one-by-one. With 10+ servers, that's 10+ c
 
 **MCP Bridge** solves this:
 - **Router mode**: all servers behind one `mcp` meta-tool (~99% token reduction)
+- **Intent routing**: say what you need in plain language, the bridge finds the right tool
+- **Schema compression**: tool descriptions compressed ~57%, full schema on demand
+- **Security layer**: trust levels, tool deny/allow lists, result size limits
 - **Direct mode**: all tools registered individually with automatic prefixing
 - **3 transports**: stdio, SSE, streamable-http
-- **Built-in catalog**: install popular servers with one command
+- **Built-in catalog**: 14 pre-configured servers, install with one command
 - **Zero config secrets in files**: `${ENV_VAR}` resolution from `.env`
 
 ## Install
@@ -147,6 +150,102 @@ mcp(server="todoist", action="schema", tool="find-tasks")
 
 Set `"enabled": false` to disable compression and return full descriptions.
 
+### Intent Routing
+
+Instead of specifying the exact server and tool, describe what you need:
+
+```
+mcp(action="intent", intent="find my tasks for today")
+```
+
+The bridge uses vector embeddings to match your intent to the right server and tool automatically. Returns the best match with a confidence score and alternatives.
+
+**Embedding providers** (configured via `intentRouting.embedding`):
+
+| Provider | Config | Requires |
+|----------|--------|----------|
+| `gemini` (default for auto) | `GEMINI_API_KEY` in `.env` | Free tier available |
+| `openai` | `OPENAI_API_KEY` in `.env` | Paid API |
+| `ollama` | Local Ollama running | No API key |
+| `keyword` | Nothing | Offline fallback, less accurate |
+
+```json
+"intentRouting": {
+  "embedding": "auto",
+  "minScore": 0.3
+}
+```
+
+- `auto` (default): tries gemini, openai, ollama, then keyword - in order of availability
+- `minScore`: minimum confidence to return a match (0-1, default: 0.3)
+- Index is built lazily on first `action=intent` call
+
+### Security
+
+Three layers of protection for tool results:
+
+#### Trust Levels
+
+Per-server control over how results are passed to the agent:
+
+```json
+"servers": {
+  "my-trusted-server": {
+    "trust": "trusted"
+  },
+  "unknown-server": {
+    "trust": "untrusted"
+  },
+  "sketchy-server": {
+    "trust": "sanitize"
+  }
+}
+```
+
+| Level | Behavior |
+|-------|----------|
+| `trusted` (default) | Results pass through as-is |
+| `untrusted` | Results tagged with `_trust: "untrusted"` metadata |
+| `sanitize` | HTML tags stripped, prompt injection patterns removed |
+
+#### Tool Filter
+
+Control which tools are visible and callable per server:
+
+```json
+"servers": {
+  "github": {
+    "toolFilter": {
+      "deny": ["delete_repository"],
+      "allow": ["list_repos", "create_issue", "search_code"]
+    }
+  }
+}
+```
+
+- `deny`: block specific dangerous tools
+- `allow`: whitelist mode - only these tools are visible
+- If both: allowed tools minus denied ones
+- Applied in both tool listing and execution (defense in depth)
+
+#### Max Result Size
+
+Prevent oversized responses from consuming your context:
+
+```json
+{
+  "maxResultChars": 50000,
+  "servers": {
+    "verbose-server": {
+      "maxResultChars": 10000
+    }
+  }
+}
+```
+
+- Global default + per-server override
+- Truncated results include `_truncated: true` and `_originalLength`
+
 ### Modes
 
 | Mode | Tools exposed | Best for |
@@ -248,17 +347,18 @@ const result = await router.dispatch("todoist", "call", "find-tasks", { query: "
 ## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────────────────────────┐
-│  Claude Desktop  │     │  MCP Bridge                          │
-│  Cursor          │◄───►│                                      │
-│  Windsurf        │stdio│  ┌─────────┐  ┌──────────────────┐  │
-│  OpenClaw        │     │  │ Router / │  │ Backend servers:  │  │
-│  Any MCP client  │     │  │ Direct   │──│ • todoist (stdio) │  │
-└─────────────────┘     │  │ mode     │  │ • github (stdio)  │  │
-                        │  └─────────┘  │ • notion (stdio)  │  │
-                        │               │ • stripe (sse)    │  │
-                        │               └──────────────────┘  │
-                        └──────────────────────────────────────┘
+┌─────────────────┐     ┌──────────────────────────────────────────────┐
+│  Claude Desktop  │     │  MCP Bridge                                  │
+│  Cursor          │◄───►│                                              │
+│  Windsurf        │stdio│  ┌──────────┐  ┌────────┐  ┌────────────┐  │
+│  OpenClaw        │ SSE │  │  Router   │  │Security│  │  Backend   │  │
+│  Any MCP client  │ HTTP│  │  Intent   │─►│ Trust  │─►│  servers:  │  │
+└─────────────────┘     │  │  Schema   │  │ Filter │  │  • todoist │  │
+                        │  │  Compress │  │ Limit  │  │  • github  │  │
+                        │  └──────────┘  └────────┘  │  • notion  │  │
+                        │                            │  • stripe  │  │
+                        │                            └────────────┘  │
+                        └──────────────────────────────────────────────┘
 ```
 
 ## Related
