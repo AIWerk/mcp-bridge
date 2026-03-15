@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.2] - 2026-03-15
+
+### Fixed
+- `transport-base.ts`: dependency injection for env fallback (`envFallback` config option) — removes hardcoded OpenClaw import from core
+- `standalone-server.ts`: LSP Content-Length framing support in `startStdio()` (alongside newline-delimited JSON)
+- `standalone-server.ts`: `isError: true` flag on router error results (MCP spec compliant)
+- `protocol.ts`: `PACKAGE_VERSION` multi-path candidate lookup (resilient to different build output structures)
+
+### Added
+- `tests/integration.test.ts`: end-to-end stdio child process test (initialize + tools/list)
+
 ## [1.6.1] - 2026-03-15
 
 ### Fixed
