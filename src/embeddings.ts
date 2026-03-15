@@ -107,7 +107,10 @@ export class OpenAIEmbedding implements EmbeddingProvider {
   }
 
   dimensions(): number {
-    return 1536;
+    if (this.model.includes("3-large")) return 3072;
+    if (this.model.includes("3-small")) return 1536;
+    if (this.model.includes("ada-002")) return 1536;
+    return 1536; // safe default
   }
 }
 

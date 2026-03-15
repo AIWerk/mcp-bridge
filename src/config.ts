@@ -127,7 +127,11 @@ export function loadConfig(options: LoadConfigOptions = {}): BridgeConfig {
   // Read and parse config
   const rawConfig = JSON.parse(readFileSync(configPath, "utf-8"));
 
-  // Resolve ${VAR} placeholders using .env + process.env
+  // Merge order: .env file values take priority over process.env for config resolution.
+  // This is intentional: .env is the user-controlled secrets file, process.env may have
+  // stale or system-level values. Note: dotenv loads .env INTO process.env without
+  // overwriting (opposite direction), but our config resolver uses this merged map
+  // where .env wins.
   const mergedEnv: Record<string, string | undefined> = { ...dotEnv };
   for (const [k, v] of Object.entries(process.env)) {
     if (mergedEnv[k] === undefined) mergedEnv[k] = v;

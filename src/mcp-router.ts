@@ -86,7 +86,7 @@ export class McpRouter {
   private readonly maxConcurrent: number;
   private readonly states = new Map<string, RouterServerState>();
   private intentRouter: IntentRouter | null = null;
-  private readonly promotion: AdaptivePromotion | null = null;
+  private promotion: AdaptivePromotion | null = null;
 
   constructor(
     servers: Record<string, McpServerConfig>,

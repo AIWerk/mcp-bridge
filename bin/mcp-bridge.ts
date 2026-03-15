@@ -147,7 +147,7 @@ function cmdInit(logger: Logger): void {
   initConfigDir(logger);
 }
 
-function cmdCatalog(logger: Logger, offline: boolean): void {
+function cmdCatalog(logger: Logger): void {
   const catalogPath = join(PACKAGE_ROOT, "servers", "index.json");
   if (!existsSync(catalogPath)) {
     logger.error("Server catalog not found");
@@ -317,7 +317,7 @@ async function main(): Promise<void> {
       cmdInit(logger);
       break;
     case "catalog":
-      cmdCatalog(logger, args.offline);
+      cmdCatalog(logger);
       break;
     case "servers":
       cmdServers(logger, args.configPath);

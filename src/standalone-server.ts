@@ -32,6 +32,7 @@ export class StandaloneServer {
   private logger: Logger;
   private router: McpRouter | null = null;
   private initialized = false;
+  private lspMode = false;
 
   // Direct mode state
   private directTools: DirectToolEntry[] = [];
@@ -72,9 +73,12 @@ export class StandaloneServer {
 
         // If we're reading an LSP body, check if we have enough bytes
         if (lspContentLength >= 0 && lspHeadersDone) {
-          if (buffer.length >= lspContentLength) {
-            const body = buffer.slice(0, lspContentLength);
-            buffer = buffer.slice(lspContentLength);
+          const bufferBytes = Buffer.byteLength(buffer, "utf8");
+          if (bufferBytes >= lspContentLength) {
+            // Extract exactly lspContentLength bytes (LSP spec defines Content-Length in bytes)
+            const bodyBuffer = Buffer.from(buffer, "utf8").slice(0, lspContentLength);
+            const body = bodyBuffer.toString("utf8");
+            buffer = buffer.substring(body.length);
             lspContentLength = -1;
             lspHeadersDone = false;
             const trimmed = body.trim();
@@ -110,6 +114,7 @@ export class StandaloneServer {
 
         if (trimmed.startsWith("Content-Length:")) {
           // Start of LSP-framed message
+          this.lspMode = true;
           const lengthStr = trimmed.slice("Content-Length:".length).trim();
           const length = parseInt(lengthStr, 10);
           if (!isNaN(length) && length > 0) {
@@ -171,7 +176,13 @@ export class StandaloneServer {
   }
 
   private writeResponse(stdout: NodeJS.WriteStream, response: any): void {
-    stdout.write(JSON.stringify(response) + "\n");
+    const json = JSON.stringify(response);
+    if (this.lspMode) {
+      const byteLength = Buffer.byteLength(json, "utf8");
+      stdout.write(`Content-Length: ${byteLength}\r\n\r\n${json}`);
+    } else {
+      stdout.write(json + "\n");
+    }
   }
 
   /** Handle a single MCP JSON-RPC request. */

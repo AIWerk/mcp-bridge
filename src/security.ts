@@ -145,7 +145,8 @@ export function applyTrustLevel(
 }
 
 /**
- * Full security pipeline: truncate → sanitize → trust-tag
+ * Full security pipeline: truncate → trust-tag (which includes sanitize for trust="sanitize")
+ * Note: sanitization only runs when trust="sanitize". trust="untrusted" wraps without sanitizing.
  */
 export function processResult(
   result: any,

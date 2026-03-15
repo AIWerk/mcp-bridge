@@ -89,10 +89,13 @@ export interface McpCallRequest extends McpRequest {
   id: number;
 }
 
-let globalRequestId = 1;
+let globalRequestId = 0;
 
 export function nextRequestId(): number {
-  globalRequestId = (globalRequestId + 1) % Number.MAX_SAFE_INTEGER;
+  globalRequestId++;
+  if (globalRequestId >= Number.MAX_SAFE_INTEGER) {
+    globalRequestId = 1;
+  }
   return globalRequestId;
 }
 

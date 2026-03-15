@@ -4,7 +4,7 @@ import { BaseTransport, resolveEnvRecord, warnIfNonTlsRemoteUrl } from "./transp
 export class SseTransport extends BaseTransport {
   private endpointUrl: string | null = null;
   private sseAbortController: AbortController | null = null;
-  private currentDataBuffer: string[] = [];
+  private resolvedHeaders: Record<string, string> | null = null;
 
   protected get transportName(): string { return "SSE"; }
 
@@ -14,8 +14,8 @@ export class SseTransport extends BaseTransport {
     }
 
     warnIfNonTlsRemoteUrl(this.config.url, this.logger);
-    // Validate that all header env vars resolve (fail fast)
-    resolveEnvRecord(this.config.headers || {}, "header");
+    // Resolve headers once and cache for all subsequent requests
+    this.resolvedHeaders = resolveEnvRecord(this.config.headers || {}, "header");
 
     if (this.sseAbortController) {
       this.sseAbortController.abort();
@@ -46,10 +46,8 @@ export class SseTransport extends BaseTransport {
   private async startEventStream(): Promise<void> {
     if (!this.config.url) return;
 
-    const headers = resolveEnvRecord({
-      ...this.config.headers,
-      "Accept": "text/event-stream"
-    }, "header");
+    const base = this.resolvedHeaders ?? resolveEnvRecord(this.config.headers || {}, "header");
+    const headers = { ...base, "Accept": "text/event-stream" };
 
     try {
       const response = await fetch(this.config.url, {
@@ -150,10 +148,8 @@ export class SseTransport extends BaseTransport {
     if (!this.connected || !this.endpointUrl) {
       throw new Error("SSE transport not connected or no endpoint URL");
     }
-    const headers = resolveEnvRecord({
-      ...this.config.headers,
-      "Content-Type": "application/json"
-    }, "header");
+    const base = this.resolvedHeaders ?? resolveEnvRecord(this.config.headers || {}, "header");
+    const headers = { ...base, "Content-Type": "application/json" };
     const response = await fetch(this.endpointUrl!, {
       method: "POST",
       headers,
@@ -181,10 +177,8 @@ export class SseTransport extends BaseTransport {
 
       this.pendingRequests.set(id, { resolve, reject, timeout });
 
-      const headers = resolveEnvRecord({
-        ...this.config.headers,
-        "Content-Type": "application/json"
-      }, "header");
+      const base = this.resolvedHeaders ?? resolveEnvRecord(this.config.headers || {}, "header");
+      const headers = { ...base, "Content-Type": "application/json" };
 
       // The response arrives via the SSE stream (handleMessage), not from this fetch.
       // The fetch only confirms the server accepted the request (HTTP 200).
