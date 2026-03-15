@@ -2,9 +2,27 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MCP_BRIDGE_DIR="${HOME}/.mcp-bridge"
-MCP_BRIDGE_JSON="${MCP_BRIDGE_DIR}/config.json"
-ENV_FILE="${MCP_BRIDGE_DIR}/.env"
+
+# Detect OpenClaw plugin or standalone mode
+OPENCLAW_JSON="${HOME}/.openclaw/openclaw.json"
+OPENCLAW_PLUGIN_DIR="${HOME}/.openclaw/extensions/openclaw-mcp-bridge"
+if [[ -f "$OPENCLAW_JSON" ]] && python3 -c "
+import json
+with open('$OPENCLAW_JSON') as f:
+    c = json.load(f)
+assert 'openclaw-mcp-bridge' in c.get('plugins',{}).get('entries',{})
+" 2>/dev/null; then
+    CONFIG_MODE="openclaw"
+    MCP_BRIDGE_DIR="$OPENCLAW_PLUGIN_DIR"
+    MCP_BRIDGE_JSON="$OPENCLAW_JSON"
+    ENV_FILE="${HOME}/.openclaw/.env"
+    echo "[mcp-bridge] Detected OpenClaw plugin mode"
+else
+    CONFIG_MODE="standalone"
+    MCP_BRIDGE_DIR="${HOME}/.mcp-bridge"
+    MCP_BRIDGE_JSON="${MCP_BRIDGE_DIR}/config.json"
+    ENV_FILE="${MCP_BRIDGE_DIR}/.env"
+fi
 
 usage() {
     echo "Usage: $0 <server-name> [--dry-run] [--remove]"
@@ -160,11 +178,15 @@ if [[ "$REMOVE" == "true" ]]; then
 import json, sys
 server_name = sys.argv[1]
 config_path = sys.argv[2]
+config_mode = sys.argv[3]
 with open(config_path) as f:
     cfg = json.load(f)
-servers = cfg.get('servers',{})
+if config_mode == 'openclaw':
+    servers = cfg.get('plugins',{}).get('entries',{}).get('openclaw-mcp-bridge',{}).get('config',{}).get('servers',{})
+else:
+    servers = cfg.get('servers',{})
 print('yes' if server_name in servers else 'no')
-" "$SERVER_NAME" "$MCP_BRIDGE_JSON" 2>/dev/null)
+" "$SERVER_NAME" "$MCP_BRIDGE_JSON" "$CONFIG_MODE" 2>/dev/null)
 
     if [[ "$HAS_SERVER" != "yes" ]]; then
         echo "ℹ️  Server '$SERVER_NAME' not found in config. Nothing to remove."
@@ -181,16 +203,20 @@ print('yes' if server_name in servers else 'no')
 import json, sys
 server_name = sys.argv[1]
 config_path = sys.argv[2]
+config_mode = sys.argv[3]
 with open(config_path) as f:
     cfg = json.load(f)
-servers = cfg.get('servers', {})
+if config_mode == 'openclaw':
+    servers = cfg['plugins']['entries']['openclaw-mcp-bridge']['config']['servers']
+else:
+    servers = cfg.get('servers', {})
 del servers[server_name]
 with open(config_path, 'w') as f:
     json.dump(cfg, f, indent=2)
     f.write('\n')
 print(f'✅ Removed {server_name} from config')
 print(f'ℹ️  Server recipe kept in servers/{server_name}/ (reinstall anytime)')
-" "$SERVER_NAME" "$MCP_BRIDGE_JSON" 2>/dev/null
+" "$SERVER_NAME" "$MCP_BRIDGE_JSON" "$CONFIG_MODE" 2>/dev/null
 
     # Remove env var from .env if exists
     REMOVE_ENV_VAR=""
