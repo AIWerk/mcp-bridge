@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.0] - 2026-03-15
+
+### Added
+- **HTTP Auth** — Bearer token and custom header auth for SSE and streamable-HTTP transports. Auth headers merge with config headers (auth wins on conflict). Env var expansion in tokens.
+- **Configurable Retries** — Global and per-server retry config with exponential backoff. Only retries transient errors (timeout, connection_error). Response includes `retries` count when applicable.
+- **Graceful Shutdown** — `router.shutdown(timeoutMs)` sends SIGTERM to stdio processes, waits, then SIGKILL. Closes SSE/HTTP connections, clears result cache. Exposed for plugin/CLI integration.
+- New shared auth header resolution in `transport-base.ts`
+- 9 new tests (235 total)
+
+### Changed
+- **Smart Router v2 complete** — all planned features implemented
+
 ## [1.9.0] - 2026-03-15
 
 ### Added
