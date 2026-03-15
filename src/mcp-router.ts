@@ -24,6 +24,24 @@ type RouterErrorCode =
   | "mcp_error"
   | "invalid_params";
 
+interface RouterBatchCall {
+  server?: string;
+  tool?: string;
+  params?: any;
+}
+
+interface RouterBatchResult {
+  server: string;
+  tool: string;
+  result?: any;
+  error?: {
+    error: RouterErrorCode;
+    message: string;
+    available?: string[];
+    code?: number;
+  };
+}
+
 export interface RouterToolHint {
   name: string;
   description: string;
@@ -44,6 +62,7 @@ export type RouterDispatchResponse =
   | { server: string; action: "call"; tool: string; result: any }
   | { server: string; action: "schema"; tool: string; schema: any; description: string }
   | { action: "status"; servers: RouterServerStatus[] }
+  | { action: "batch"; results: RouterBatchResult[] }
   | { action: "promotions"; promoted: Array<{ server: string; tool: string; callCount: number }>; stats: Array<{ server: string; tool: string; callCount: number; lastCall: string }> }
   | {
       action: "intent";
@@ -83,6 +102,7 @@ interface RouterServerState {
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_CONCURRENT = 5;
+const DEFAULT_MAX_BATCH_SIZE = 10;
 
 export class McpRouter {
   private readonly servers: Record<string, McpServerConfig>;
@@ -92,6 +112,7 @@ export class McpRouter {
   private readonly idleTimeoutMs: number;
   private readonly maxConcurrent: number;
   private readonly resultCache: ResultCache | null;
+  private readonly maxBatchSize: number;
   private readonly states = new Map<string, RouterServerState>();
   private readonly toolResolver: ToolResolver;
   private intentRouter: IntentRouter | null = null;
@@ -120,6 +141,7 @@ export class McpRouter {
           cacheTtl: clientConfig.resultCache.cacheTtl
         })
       : null;
+    this.maxBatchSize = clientConfig.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;
     this.toolResolver = new ToolResolver(Object.keys(servers));
 
     if (clientConfig.adaptivePromotion?.enabled) {
@@ -140,7 +162,7 @@ export class McpRouter {
       })
       .join(", ");
 
-    return `Call any MCP server tool. Servers: ${serverList}. Use action='list' to discover tools and required parameters, action='call' to execute a tool, action='refresh' to clear cache and re-discover tools, and action='status' to check server connection states. If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
+    return `Call any MCP server tool. Servers: ${serverList}. Use action='list' to discover tools and required parameters, action='call' to execute a tool, action='batch' to execute multiple calls in one round-trip, action='refresh' to clear cache and re-discover tools, and action='status' to check server connection states. If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
   }
 
   async dispatch(server?: string, action: string = "call", tool?: string, params?: any): Promise<RouterDispatchResponse> {
@@ -166,6 +188,44 @@ export class McpRouter {
         return this.resolveIntent(intent);
       }
 
+      if (normalizedAction === "batch") {
+        const calls = params?.calls;
+        if (!Array.isArray(calls) || calls.length === 0) {
+          return this.error("invalid_params", "calls must be a non-empty array for action=batch");
+        }
+        if (calls.length > this.maxBatchSize) {
+          return this.error("invalid_params", `batch size exceeds maxBatchSize (${this.maxBatchSize})`);
+        }
+
+        const results = await Promise.all(
+          calls.map(async (call: RouterBatchCall): Promise<RouterBatchResult> => {
+            const callServer = typeof call?.server === "string" ? call.server : "";
+            const callTool = typeof call?.tool === "string" ? call.tool : "";
+            const response = await this.dispatch(callServer, "call", callTool, call?.params);
+
+            if ("error" in response) {
+              return {
+                server: callServer,
+                tool: callTool,
+                error: {
+                  error: response.error,
+                  message: response.message,
+                  ...(response.available ? { available: response.available } : {}),
+                  ...(typeof response.code === "number" ? { code: response.code } : {})
+                }
+              };
+            }
+
+            return {
+              server: callServer,
+              tool: callTool,
+              result: "result" in response ? response.result : response
+            };
+          })
+        );
+
+        return { action: "batch", results };
+      }
       if (normalizedAction === "list") {
         if (!server) {
           return this.error("invalid_params", "server is required for action=list");
@@ -230,7 +290,7 @@ export class McpRouter {
       }
 
       if (normalizedAction !== "call") {
-        return this.error("invalid_params", `action must be one of: list, call, refresh, schema, intent`);
+        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent`);
       }
 
       if (!tool) {

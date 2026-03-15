@@ -251,9 +251,22 @@ export class StandaloneServer {
               type: "object",
               properties: {
                 server: { type: "string", description: "Server name" },
-                action: { type: "string", description: "list | call | refresh | status" },
-                tool: { type: "string", description: "Tool name for action=call" },
-                params: { type: "object", description: "Tool arguments" }
+                action: { type: "string", description: "list | call | batch | refresh | status | intent | schema | promotions" },
+                tool: { type: "string", description: "Tool name for action=call/schema" },
+                params: { type: "object", description: "Tool arguments" },
+                calls: {
+                  type: "array",
+                  description: "Batch calls for action=batch",
+                  items: {
+                    type: "object",
+                    properties: {
+                      server: { type: "string" },
+                      tool: { type: "string" },
+                      params: { type: "object" }
+                    },
+                    required: ["server", "tool"]
+                  }
+                }
               },
               required: []
             }
@@ -294,11 +307,15 @@ export class StandaloneServer {
         };
       }
 
+      const dispatchParams = toolArgs.action === "batch"
+        ? { ...(toolArgs.params ?? {}), calls: toolArgs.calls }
+        : toolArgs.params;
+
       const result = await this.router!.dispatch(
         toolArgs.server,
         toolArgs.action,
         toolArgs.tool,
-        toolArgs.params
+        dispatchParams
       );
 
       // Check if result is an error

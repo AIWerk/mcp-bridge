@@ -38,6 +38,7 @@ export interface McpClientConfig {
   requestTimeoutMs?: number;
   routerIdleTimeoutMs?: number;
   routerMaxConcurrent?: number;
+  maxBatchSize?: number;
   schemaCompression?: {
     enabled?: boolean;
     maxDescriptionLength?: number;
