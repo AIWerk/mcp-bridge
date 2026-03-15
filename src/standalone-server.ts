@@ -255,7 +255,7 @@ export class StandaloneServer {
                 tool: { type: "string", description: "Tool name for action=call" },
                 params: { type: "object", description: "Tool arguments" }
               },
-              required: ["server"]
+              required: []
             }
           }]
         }

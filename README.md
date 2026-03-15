@@ -325,6 +325,19 @@ Returns promoted tools (sorted by frequency) and full usage stats. All tracking 
 
 **Router mode** — the agent calls `mcp(server="todoist", action="list")` to discover, then `mcp(server="todoist", tool="find-tasks", params={...})` to execute.
 
+### Multi-Server Tool Resolution
+
+When `action="call"` is used without `server=`, mcp-bridge can resolve collisions automatically.
+
+- Tool exists on exactly one server → direct dispatch.
+- Tool exists on multiple servers + explicit `server=` → explicit target wins.
+- Tool exists on multiple servers + no `server=` → score each candidate:
+  - **base_priority**: reverse config order (`last=1.0`, then `0.9`, `0.8`, floor `0.1`)
+  - **recency_boost**: `+0.3` if server used in last 5 successful calls
+  - **param_match**: up to `+0.2` based on parameter-name overlap with input schema
+- If top score gap is `>= 0.15` → auto-dispatch to the winner.
+- If top score gap is `< 0.15` → return normal `{ ambiguous: true, candidates: [...] }` response.
+
 **Direct mode** — tools are registered as `todoist_find_tasks`, `github_list_repos`, etc.
 
 ### Transports

@@ -166,13 +166,13 @@ export class McpRouter {
         return this.resolveIntent(intent);
       }
 
-      if (!server) {
-        return this.error("invalid_params", "server is required");
-      }
-      if (!this.servers[server]) {
-        return this.error("unknown_server", `Server '${server}' not found`, Object.keys(this.servers));
-      }
       if (normalizedAction === "list") {
+        if (!server) {
+          return this.error("invalid_params", "server is required for action=list");
+        }
+        if (!this.servers[server]) {
+          return this.error("unknown_server", `Server '${server}' not found`, Object.keys(this.servers));
+        }
         try {
           const tools = await this.getToolList(server);
           return { server, action: "list", tools };
@@ -182,6 +182,12 @@ export class McpRouter {
       }
 
       if (normalizedAction === "schema") {
+        if (!server) {
+          return this.error("invalid_params", "server is required for action=schema");
+        }
+        if (!this.servers[server]) {
+          return this.error("unknown_server", `Server '${server}' not found`, Object.keys(this.servers));
+        }
         if (!tool) {
           return this.error("invalid_params", "tool is required for action=schema");
         }
@@ -199,12 +205,19 @@ export class McpRouter {
       }
 
       if (normalizedAction === "refresh") {
+        if (!server) {
+          return this.error("invalid_params", "server is required for action=refresh");
+        }
+        if (!this.servers[server]) {
+          return this.error("unknown_server", `Server '${server}' not found`, Object.keys(this.servers));
+        }
         this.resultCache?.invalidate();
         try {
           const state = await this.ensureConnected(server);
           state.toolsCache = undefined;
           state.fullToolsMap = undefined;
           state.toolNames = [];
+          this.toolResolver.removeServer(server);
           // Clear intent index so it re-indexes on next intent query
           if (this.intentRouter) {
             this.intentRouter.clearIndex();
@@ -224,22 +237,41 @@ export class McpRouter {
         return this.error("invalid_params", "tool is required for action=call");
       }
 
-      try {
-        await this.getToolList(server);
-      } catch (error) {
-        return this.error("connection_failed", `Failed to connect to ${server}: ${error instanceof Error ? error.message : String(error)}`);
+      let targetServer = server;
+      if (!targetServer) {
+        await this.primeToolResolutionIndex();
+        const resolution = this.toolResolver.resolve(tool, params ?? {});
+        if (!resolution) {
+          return this.error("unknown_tool", `Tool '${tool}' was not found on any connected server`, this.toolResolver.getKnownToolNames());
+        }
+        if ("ambiguous" in resolution) {
+          return resolution;
+        }
+        targetServer = resolution.server;
       }
-      const state = this.states.get(server)!;
+
+      if (!this.servers[targetServer]) {
+        return this.error("unknown_server", `Server '${targetServer}' not found`, Object.keys(this.servers));
+      }
+
+      try {
+        await this.getToolList(targetServer);
+      } catch (error) {
+        return this.error("connection_failed", `Failed to connect to ${targetServer}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      const state = this.states.get(targetServer)!;
 
       if (!state.toolNames.includes(tool)) {
-        return this.error("unknown_tool", `Tool '${tool}' not found on server '${server}'`, state.toolNames);
+        return this.error("unknown_tool", `Tool '${tool}' not found on server '${targetServer}'`, state.toolNames);
       }
 
       // Defense in depth: double-check tool filter
-      const serverConfig = this.servers[server];
+      const serverConfig = this.servers[targetServer];
       if (!isToolAllowed(tool, serverConfig)) {
-        return this.error("unknown_tool", `Tool '${tool}' is not allowed on server '${server}'`, state.toolNames);
+        return this.error("unknown_tool", `Tool '${tool}' is not allowed on server '${targetServer}'`, state.toolNames);
       }
+
+      server = targetServer;
 
       const cacheKey = this.resultCache
         ? createResultCacheKey(server, tool, params ?? {})
@@ -250,6 +282,7 @@ export class McpRouter {
           if (this.promotion) {
             this.promotion.recordCall(server, tool);
           }
+          this.toolResolver.recordCall(server, tool);
           return { server, action: "call", tool, result: cachedResult };
         }
       }
@@ -272,6 +305,7 @@ export class McpRouter {
       if (this.promotion) {
         this.promotion.recordCall(server, tool);
       }
+      this.toolResolver.recordCall(server, tool);
 
       // Security pipeline: truncate → sanitize → trust-tag
       const result = processResult(response.result, server, serverConfig, this.clientConfig);
@@ -305,6 +339,11 @@ export class McpRouter {
       tools.map((tool) => [tool.name, { description: tool.description || "", inputSchema: tool.inputSchema }])
     );
 
+    this.toolResolver.registerServerTools(server, tools.map((tool) => ({
+      name: tool.name,
+      inputSchema: tool.inputSchema
+    })));
+
     const compressionEnabled = this.clientConfig.schemaCompression?.enabled ?? true;
     const maxLen = this.clientConfig.schemaCompression?.maxDescriptionLength ?? 80;
 
@@ -318,6 +357,17 @@ export class McpRouter {
 
     this.markUsed(server);
     return state.toolsCache;
+  }
+
+  private async primeToolResolutionIndex(): Promise<void> {
+    for (const serverName of Object.keys(this.servers)) {
+      try {
+        await this.getToolList(serverName);
+      } catch (error) {
+        this.toolResolver.removeServer(serverName);
+        this.logger.warn(`[mcp-bridge] Tool resolution: failed to load tools from ${serverName}:`, error);
+      }
+    }
   }
 
   private async resolveIntent(intent: string): Promise<RouterDispatchResponse> {
@@ -513,6 +563,7 @@ export class McpRouter {
     state.toolsCache = undefined;
     state.fullToolsMap = undefined;
     state.toolNames = [];
+    this.toolResolver.removeServer(server);
     this.resultCache?.invalidate(`${server}:`);
   }
 
@@ -545,6 +596,7 @@ export class McpRouter {
       state.toolsCache = undefined;
       state.fullToolsMap = undefined;
       state.toolNames = [];
+      this.toolResolver.removeServer(serverName);
       this.resultCache?.invalidate(`${serverName}:`);
     };
 
