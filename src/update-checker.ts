@@ -11,8 +11,17 @@ export interface UpdateInfo {
 }
 
 const PACKAGE_NAME = "@aiwerk/mcp-bridge";
+const PLUGIN_PACKAGE_NAME = "@aiwerk/openclaw-mcp-bridge";
+
+export interface PluginUpdateInfo {
+  pluginName: string;
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+}
 
 let cachedUpdateInfo: UpdateInfo | null = null;
+let cachedPluginUpdateInfo: PluginUpdateInfo | null = null;
 let noticeDelivered = false;
 
 /**
@@ -58,16 +67,67 @@ export async function checkForUpdate(logger: Logger): Promise<UpdateInfo> {
 }
 
 /**
+ * Check if a wrapper plugin (e.g. openclaw-mcp-bridge) has an update.
+ * The caller passes the installed plugin version; we check npm for the latest.
+ */
+export async function checkPluginUpdate(
+  pluginName: string,
+  installedVersion: string,
+  logger: Logger
+): Promise<PluginUpdateInfo> {
+  if (cachedPluginUpdateInfo) return cachedPluginUpdateInfo;
+
+  try {
+    const latest = await npmViewVersionOf(pluginName, logger);
+    const updateAvailable = latest !== installedVersion && isNewer(latest, installedVersion);
+
+    cachedPluginUpdateInfo = {
+      pluginName,
+      currentVersion: installedVersion,
+      latestVersion: latest,
+      updateAvailable,
+    };
+
+    if (updateAvailable) {
+      logger.info(`[mcp-bridge] Plugin update available: ${pluginName} ${installedVersion} → ${latest}`);
+    }
+  } catch (err) {
+    logger.warn(`[mcp-bridge] Plugin version check failed: ${err instanceof Error ? err.message : err}`);
+    cachedPluginUpdateInfo = {
+      pluginName,
+      currentVersion: installedVersion,
+      latestVersion: installedVersion,
+      updateAvailable: false,
+    };
+  }
+
+  return cachedPluginUpdateInfo;
+}
+
+/**
  * Build the notice string to inject into the first tool response.
  * Returns empty string if no update or already delivered.
  */
 export function getUpdateNotice(): string {
-  if (noticeDelivered || !cachedUpdateInfo?.updateAvailable) return "";
+  const coreUpdate = cachedUpdateInfo?.updateAvailable;
+  const pluginUpdate = cachedPluginUpdateInfo?.updateAvailable;
+
+  if (noticeDelivered || (!coreUpdate && !pluginUpdate)) return "";
   noticeDelivered = true;
-  return (
-    `\n\n---\nUpdate available: ${cachedUpdateInfo.currentVersion} → ${cachedUpdateInfo.latestVersion}\n` +
-    `Run: ${cachedUpdateInfo.updateCommand}`
-  );
+
+  const lines: string[] = ["\n\n---"];
+  if (coreUpdate) {
+    lines.push(`Core update: ${cachedUpdateInfo!.currentVersion} → ${cachedUpdateInfo!.latestVersion}`);
+  }
+  if (pluginUpdate) {
+    lines.push(`Plugin update: ${cachedPluginUpdateInfo!.pluginName} ${cachedPluginUpdateInfo!.currentVersion} → ${cachedPluginUpdateInfo!.latestVersion}`);
+  }
+  const installCmd = cachedPluginUpdateInfo?.pluginName
+    ? `openclaw plugins install ${cachedPluginUpdateInfo.pluginName}`
+    : cachedUpdateInfo!.updateCommand;
+  lines.push(`Run: ${installCmd}`);
+
+  return lines.join("\n");
 }
 
 /**
@@ -116,8 +176,12 @@ export async function runUpdate(logger: Logger): Promise<string> {
 // --- helpers ---
 
 function npmViewVersion(_logger: Logger): Promise<string> {
+  return npmViewVersionOf(PACKAGE_NAME, _logger);
+}
+
+function npmViewVersionOf(packageName: string, _logger: Logger): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile("npm", ["view", PACKAGE_NAME, "version"], { encoding: "utf-8", timeout: 10_000 }, (err, stdout) => {
+    execFile("npm", ["view", packageName, "version"], { encoding: "utf-8", timeout: 10_000 }, (err, stdout) => {
       if (err) return reject(err);
       const ver = (stdout ?? "").trim();
       if (!ver) return reject(new Error("empty version from npm"));

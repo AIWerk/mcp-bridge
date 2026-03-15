@@ -63,8 +63,8 @@ export { pickRegisteredToolName } from "./tool-naming.js";
 export { StandaloneServer } from "./standalone-server.js";
 
 // Update checker
-export { checkForUpdate, getUpdateNotice, runUpdate, resetNoticeFlag } from "./update-checker.js";
-export type { UpdateInfo } from "./update-checker.js";
+export { checkForUpdate, checkPluginUpdate, getUpdateNotice, runUpdate, resetNoticeFlag } from "./update-checker.js";
+export type { UpdateInfo, PluginUpdateInfo } from "./update-checker.js";
 
 // Smart filter
 export { filterServers, buildFilteredDescription } from "./smart-filter.js";
