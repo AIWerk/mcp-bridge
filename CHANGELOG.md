@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.2] - 2026-03-15
+
+### Fixed
+- `types.ts`: `nextRequestId()` starts at 1, never returns 0, wraps at `MAX_SAFE_INTEGER`
+- `standalone-server.ts`: LSP `Content-Length` now uses `Buffer.byteLength` (was using string length - byte vs char mismatch on UTF-8)
+- `standalone-server.ts`: `writeResponse` matches client framing mode (LSP or newline-delimited)
+- `transport-sse.ts`: headers resolved once in `connect()` and cached (was re-resolving env vars on every request)
+- `transport-sse.ts`: removed dead `currentDataBuffer` field
+- `embeddings.ts`: `OpenAIEmbedding.dimensions()` model-aware (`text-embedding-3-large` = 3072)
+- `security.ts`: corrected pipeline JSDoc (sanitize only runs for `trust="sanitize"`)
+- `config.ts`: clarifying comment on env merge order
+- `mcp-router.ts`: removed misleading `readonly` on promotion field
+- `bin/mcp-bridge.ts`: removed unused `offline` parameter from `cmdCatalog`
+
 ## [1.7.1] - 2026-03-15
 
 ### Added
