@@ -135,12 +135,14 @@ if [[ "$REMOVE" == "true" ]]; then
 
     # Check if server exists in config
     HAS_SERVER=$(python3 -c "
-import json
-with open('$MCP_BRIDGE_JSON') as f:
+import json, sys
+server_name = sys.argv[1]
+config_path = sys.argv[2]
+with open(config_path) as f:
     cfg = json.load(f)
 servers = cfg.get('servers',{})
-print('yes' if '$SERVER_NAME' in servers else 'no')
-" 2>/dev/null)
+print('yes' if server_name in servers else 'no')
+" "$SERVER_NAME" "$MCP_BRIDGE_JSON" 2>/dev/null)
 
     if [[ "$HAS_SERVER" != "yes" ]]; then
         echo "ℹ️  Server '$SERVER_NAME' not found in config. Nothing to remove."
@@ -154,17 +156,19 @@ print('yes' if '$SERVER_NAME' in servers else 'no')
 
     # Remove server entry from config (keep servers/<name>/ directory)
     python3 -c "
-import json
-with open('$MCP_BRIDGE_JSON') as f:
+import json, sys
+server_name = sys.argv[1]
+config_path = sys.argv[2]
+with open(config_path) as f:
     cfg = json.load(f)
 servers = cfg.get('servers', {})
-del servers['$SERVER_NAME']
-with open('$MCP_BRIDGE_JSON', 'w') as f:
+del servers[server_name]
+with open(config_path, 'w') as f:
     json.dump(cfg, f, indent=2)
     f.write('\n')
-print('✅ Removed $SERVER_NAME from config')
-print('ℹ️  Server recipe kept in servers/$SERVER_NAME/ (reinstall anytime)')
-" 2>/dev/null
+print(f'✅ Removed {server_name} from config')
+print(f'ℹ️  Server recipe kept in servers/{server_name}/ (reinstall anytime)')
+" "$SERVER_NAME" "$MCP_BRIDGE_JSON" 2>/dev/null
 
     # Remove env var from .env if exists
     if [[ -f "$ENV_VARS_FILE" ]] && [[ -s "$ENV_VARS_FILE" ]] && [[ -f "$ENV_FILE" ]]; then

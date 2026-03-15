@@ -14,20 +14,20 @@
 - [x] CHANGELOG.md
 
 ## Smart Router v2 (spec: mcp-smart-router-spec.md)
-- [ ] Intent-based routing — agent omits `server=`, router resolves
+- [x] Intent-based routing — agent omits `server=`, router resolves ✅
 - [ ] Multi-server tool resolution — pick best match from overlapping tool names
-- [ ] Vector search for tool discovery — embed tool descriptions, match semantically
-- [ ] Schema compression — truncate descriptions, reduce optional params (~350→60 tokens per tool)
+- [x] Vector search for tool discovery — embed tool descriptions, match semantically ✅
+- [x] Schema compression — truncate descriptions, reduce optional params (~350→60 tokens per tool) ✅
 - [ ] Tool call result caching — LRU cache with configurable TTL
-- [ ] Adaptive promotion — track usage, auto-register top N tools as native
-- [ ] Natural language routing — `mcp(intent="...")` without explicit server/tool
-- [ ] Full schema on demand — `action=schema` returns full JSON Schema for one tool
+- [x] Adaptive promotion — track usage, auto-register top N tools as native ✅
+- [x] Natural language routing — `mcp(intent="...")` without explicit server/tool ✅
+- [x] Full schema on demand — `action=schema` returns full JSON Schema for one tool ✅
 - [ ] Batch calls — `action=batch` for multiple tool calls in one round-trip
 
 ## Security
-- [ ] Trust levels for MCP server results (trusted / untrusted / sanitize per server)
-- [ ] Tool deny list (toolFilter) — block specific dangerous tools per server
-- [ ] Max result size limit (maxResultChars) — cap tool response size
+- [x] Trust levels for MCP server results (trusted / untrusted / sanitize per server) ✅
+- [x] Tool deny list (toolFilter) — block specific dangerous tools per server ✅
+- [x] Max result size limit (maxResultChars) — cap tool response size ✅
 - [ ] HTTP auth enforcement for SSE/streamable-http mode (spec: bearer token)
 
 ## Reliability

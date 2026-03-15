@@ -7,6 +7,7 @@ export interface UpdateInfo {
   latestVersion: string;
   updateAvailable: boolean;
   updateCommand: string;
+  updateCommandParts: string[];
 }
 
 const PACKAGE_NAME = "@aiwerk/mcp-bridge";
@@ -22,7 +23,8 @@ export async function checkForUpdate(logger: Logger): Promise<UpdateInfo> {
   if (cachedUpdateInfo) return cachedUpdateInfo;
 
   const current = PACKAGE_VERSION;
-  const updateCmd = `npm update -g ${PACKAGE_NAME}`;
+  const updateCmdParts = ["npm", "update", "-g", PACKAGE_NAME];
+  const updateCmd = updateCmdParts.join(" ");
 
   try {
     const latest = await npmViewVersion(logger);
@@ -33,6 +35,7 @@ export async function checkForUpdate(logger: Logger): Promise<UpdateInfo> {
       latestVersion: latest,
       updateAvailable,
       updateCommand: updateCmd,
+      updateCommandParts: updateCmdParts,
     };
 
     if (updateAvailable) {
@@ -47,6 +50,7 @@ export async function checkForUpdate(logger: Logger): Promise<UpdateInfo> {
       latestVersion: current,
       updateAvailable: false,
       updateCommand: updateCmd,
+      updateCommandParts: updateCmdParts,
     };
   }
 
@@ -86,8 +90,8 @@ export async function runUpdate(logger: Logger): Promise<string> {
   logger.info(`[mcp-bridge] Running update: ${info.updateCommand}`);
 
   try {
-    const parts = info.updateCommand.split(/\s+/);
-    const output = await execFileAsync(parts[0], parts.slice(1), 60_000);
+    const [cmd, ...args] = info.updateCommandParts;
+    const output = await execFileAsync(cmd, args, 60_000);
     // Invalidate cache so next check re-fetches
     cachedUpdateInfo = null;
     noticeDelivered = false;
@@ -113,9 +117,7 @@ export async function runUpdate(logger: Logger): Promise<string> {
 
 function npmViewVersion(_logger: Logger): Promise<string> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("npm view timed out")), 10_000);
-    execFile("npm", ["view", PACKAGE_NAME, "version"], { encoding: "utf-8" }, (err, stdout) => {
-      clearTimeout(timeout);
+    execFile("npm", ["view", PACKAGE_NAME, "version"], { encoding: "utf-8", timeout: 10_000 }, (err, stdout) => {
       if (err) return reject(err);
       const ver = (stdout ?? "").trim();
       if (!ver) return reject(new Error("empty version from npm"));
@@ -134,9 +136,7 @@ function npmViewVersionSync(_logger: Logger): string {
 
 function execFileAsync(file: string, args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Command timed out after ${timeoutMs}ms`)), timeoutMs);
     execFile(file, args, { encoding: "utf-8", timeout: timeoutMs }, (err, stdout, stderr) => {
-      clearTimeout(timeout);
       if (err) return reject(new Error(`${err.message}\n${stderr ?? ""}`));
       resolve(stdout ?? "");
     });

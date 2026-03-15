@@ -3,6 +3,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
+import { platform } from "os";
 import { execFileSync } from "child_process";
 import { loadConfig, initConfigDir, getConfigDir } from "../src/config.js";
 import { StandaloneServer } from "../src/standalone-server.js";
@@ -217,21 +218,31 @@ function cmdSearch(query: string, logger: Logger): void {
   }
 
   process.stdout.write(`\nSearch results for "${query}":\n\n`);
-  for (const [i, [name, info]] of matches.entries() as any) {
+  matches.forEach(([name, info], i) => {
     process.stdout.write(`  ${i + 1}  ${name.padEnd(16)}${(info as any).description || ""}\n`);
-  }
+  });
   process.stdout.write("\n");
 }
 
 function cmdInstall(serverName: string, logger: Logger): void {
-  const scriptPath = join(PACKAGE_ROOT, "scripts", "install-server.sh");
-  if (!existsSync(scriptPath)) {
-    logger.error("Install script not found");
-    process.exit(1);
-  }
+  const scriptDir = join(PACKAGE_ROOT, "scripts");
 
   try {
-    execFileSync("bash", [scriptPath, serverName], { stdio: "inherit" });
+    if (platform() === "win32") {
+      const psScript = join(scriptDir, "install-server.ps1");
+      if (!existsSync(psScript)) {
+        logger.error("Install script not found (install-server.ps1)");
+        process.exit(1);
+      }
+      execFileSync("powershell", ["-ExecutionPolicy", "Bypass", "-File", psScript, serverName], { stdio: "inherit" });
+    } else {
+      const scriptPath = join(scriptDir, "install-server.sh");
+      if (!existsSync(scriptPath)) {
+        logger.error("Install script not found (install-server.sh)");
+        process.exit(1);
+      }
+      execFileSync("bash", [scriptPath, serverName], { stdio: "inherit" });
+    }
   } catch (err) {
     process.exit(1);
   }

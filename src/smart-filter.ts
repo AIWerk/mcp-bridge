@@ -52,479 +52,68 @@ export interface UserTurn {
   timestamp: number;
 }
 
-/**
- * Smart Filter implementation - Phase 1
- */
-export class SmartFilter {
-  private config: Required<SmartFilterConfig>;
-  private logger: OpenClawLogger;
+// ── Shared helpers (used by both standalone functions and legacy class) ───────
 
-  constructor(config: SmartFilterConfig, logger: OpenClawLogger) {
-    // Apply defaults
-    this.config = {
-      enabled: config.enabled ?? true,
-      embedding: config.embedding ?? "auto",
-      topServers: config.topServers ?? 5,
-      hardCap: config.hardCap ?? 8,
-      topTools: config.topTools ?? 10,
-      serverThreshold: config.serverThreshold ?? 0.01, // Very low threshold for maximum recall
-      toolThreshold: config.toolThreshold ?? 0.05, // Much lower threshold for better recall  
-      fallback: config.fallback ?? "keyword",
-      alwaysInclude: config.alwaysInclude ?? [],
-      timeoutMs: config.timeoutMs ?? 500,
-      telemetry: config.telemetry ?? false,
-    };
-    this.logger = logger;
+/** Tokenize text into lowercase words, stripping punctuation. */
+export function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter(word => word.length > 0);
+}
+
+function extractMeaningfulContent(content: string): string {
+  const cleaned = content
+    .replace(/\[.*?\]/g, "")
+    .replace(/^\s*[>]*\s*/gm, "")
+    .replace(/^\s*[-*•]\s*/gm, "")
+    .trim();
+
+  const noisePatterns = [
+    /^(yes|no|ok|okay|sure|thanks?|thank you)\.?$/i,
+    /^(do it|go ahead|proceed)\.?$/i,
+    /^(yes,?\s+(do it|go ahead|proceed))\.?$/i,
+    /^\?+$/,
+    /^\.+$/,
+    /^!+$/,
+  ];
+
+  if (noisePatterns.some(pattern => pattern.test(cleaned))) {
+    return "";
   }
 
-  /**
-   * Main filter entry point
-   */
-  async filter(
-    servers: Record<string, PluginServerConfig>,
-    allTools: Map<string, McpTool[]>,
-    userTurns: UserTurn[]
-  ): Promise<FilterResult> {
-    if (!this.config.enabled) {
-      return this.createUnfilteredResult(servers, allTools, "disabled");
-    }
+  return cleaned
+    .replace(/\s+please\.?$/i, "")
+    .replace(/\s+thanks?\.?$/i, "")
+    .trim();
+}
 
-    const startTime = Date.now();
-    let timeoutOccurred = false;
+/** Extract meaningful intent from last 1-3 user turns. */
+export function synthesizeQuery(userTurns: UserTurn[]): string {
+  if (!userTurns || userTurns.length === 0) {
+    return "";
+  }
 
-    try {
-      // Set up timeout
-      let timeoutId: ReturnType<typeof setTimeout>;
-      const timeoutPromise = new Promise<FilterResult>((resolve) => {
-        timeoutId = setTimeout(() => {
-          timeoutOccurred = true;
-          this.logger.warn(`[smart-filter] Filter timeout after ${this.config.timeoutMs}ms, falling back to show all`);
-          resolve(this.createUnfilteredResult(servers, allTools, "keyword"));
-        }, this.config.timeoutMs);
-      });
+  const recentTurns = userTurns
+    .slice(-3)
+    .reverse()
+    .map(turn => turn.content.trim());
 
-      const filterPromise = this.performFilter(servers, allTools, userTurns);
-
-      let result: FilterResult;
-      try {
-        result = await Promise.race([filterPromise, timeoutPromise]);
-      } finally {
-        clearTimeout(timeoutId!);
-      }
-      result.metadata.timeoutOccurred = timeoutOccurred;
-      
-      const duration = Date.now() - startTime;
-      if (this.config.telemetry) {
-        this.logTelemetry(result, duration);
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.warn(`[smart-filter] Filter failed: ${error instanceof Error ? error.message : String(error)}, falling back to show all`);
-      const result = this.createUnfilteredResult(servers, allTools, "keyword");
-      result.metadata.timeoutOccurred = timeoutOccurred;
-      return result;
+  for (const content of recentTurns) {
+    const cleanedQuery = extractMeaningfulContent(content);
+    if (cleanedQuery.length >= 3) {
+      return cleanedQuery;
     }
   }
 
-  private async performFilter(
-    servers: Record<string, PluginServerConfig>,
-    allTools: Map<string, McpTool[]>,
-    userTurns: UserTurn[]
-  ): Promise<FilterResult> {
-    // Step 1: Query synthesis
-    const query = SmartFilter.synthesizeQuery(userTurns);
-    
-    if (!query) {
-      this.logger.debug("[smart-filter] No meaningful query found, showing all servers");
-      return this.createUnfilteredResult(servers, allTools, "keyword", "");
-    }
+  const combined = recentTurns
+    .map(content => extractMeaningfulContent(content))
+    .filter(content => content.length > 0)
+    .join(" ")
+    .trim();
 
-    // Step 2: Prepare filterable servers
-    const filterableServers = this.prepareFilterableServers(servers, allTools);
-    
-    // Step 3: Level 1 - Server filtering
-    const serverScores = this.scoreServers(query, filterableServers);
-    const selectedServers = this.selectServers(serverScores, filterableServers);
-
-    // Step 4: Level 2 - Tool filtering
-    const toolResults = this.filterTools(query, selectedServers);
-
-    return {
-      servers: selectedServers.map(s => s.server),
-      tools: toolResults,
-      metadata: {
-        queryUsed: query,
-        totalServersBeforeFilter: Object.keys(servers).length,
-        totalToolsBeforeFilter: Array.from(allTools.values()).flat().length,
-        filterMode: "keyword",
-        timeoutOccurred: false,
-        confidenceScore: this.calculateConfidenceScore(serverScores),
-      },
-    };
-  }
-
-  /**
-   * Extract meaningful intent from last 1-3 user turns
-   */
-  static synthesizeQuery(userTurns: UserTurn[]): string {
-    if (!userTurns || userTurns.length === 0) {
-      return "";
-    }
-
-    // Take last 1-3 turns, newest first
-    const recentTurns = userTurns
-      .slice(-3)
-      .reverse()
-      .map(turn => turn.content.trim());
-
-    for (const content of recentTurns) {
-      const cleanedQuery = SmartFilter.extractMeaningfulContent(content);
-      if (cleanedQuery.length >= 3) {
-        return cleanedQuery;
-      }
-    }
-
-    // If all recent turns are too short, try combining them
-    const combined = recentTurns
-      .map(content => SmartFilter.extractMeaningfulContent(content))
-      .filter(content => content.length > 0)
-      .join(" ")
-      .trim();
-
-    return combined.length >= 3 ? combined : "";
-  }
-
-  private static extractMeaningfulContent(content: string): string {
-    // Remove metadata patterns
-    const cleaned = content
-      .replace(/\[.*?\]/g, "") // [timestamps], [commands]
-      .replace(/^\s*[>]*\s*/gm, "") // quote markers
-      .replace(/^\s*[-*•]\s*/gm, "") // list markers
-      .trim();
-
-    // Filter out noise words/confirmations
-    const noisePatterns = [
-      /^(yes|no|ok|okay|sure|thanks?|thank you)\.?$/i,
-      /^(do it|go ahead|proceed)\.?$/i,
-      /^(yes,?\s+(do it|go ahead|proceed))\.?$/i,
-      /^\?+$/,
-      /^\.+$/,
-      /^!+$/,
-    ];
-
-    if (noisePatterns.some(pattern => pattern.test(cleaned))) {
-      return "";
-    }
-
-    // Remove trailing "please" and other politeness words
-    const withoutPoliteness = cleaned
-      .replace(/\s+please\.?$/i, "")
-      .replace(/\s+thanks?\.?$/i, "")
-      .trim();
-
-    return withoutPoliteness;
-  }
-
-  private prepareFilterableServers(
-    servers: Record<string, PluginServerConfig>,
-    allTools: Map<string, McpTool[]>
-  ): FilterableServer[] {
-    return Object.entries(servers).map(([name, config]) => ({
-      name,
-      description: config.description || "",
-      keywords: this.normalizeKeywords(config.keywords || []),
-      tools: allTools.get(name) || [],
-    }));
-  }
-
-  private normalizeKeywords(keywords: string[]): string[] {
-    return keywords
-      .slice(0, 30) // Max 30 keywords
-      .map(kw => kw.toLowerCase().trim())
-      .filter(kw => kw.length > 0)
-      .filter((kw, index, arr) => arr.indexOf(kw) === index); // Deduplicate
-  }
-
-  /**
-   * Score servers using weighted overlap scoring
-   */
-  private scoreServers(query: string, servers: FilterableServer[]): Array<{ server: FilterableServer; score: number }> {
-    const queryWords = SmartFilter.tokenize(query.toLowerCase());
-    
-    return servers.map(server => ({
-      server,
-      score: this.calculateServerScore(queryWords, server),
-    }));
-  }
-
-  static tokenize(text: string): string[] {
-    return text
-      .toLowerCase()
-      .replace(/[^\w\s]/g, " ")
-      .split(/\s+/)
-      .filter(word => word.length > 0);
-  }
-
-  private calculateServerScore(queryWords: string[], server: FilterableServer): number {
-    if (queryWords.length === 0) return 0;
-
-    const descriptionWords = SmartFilter.tokenize(server.description);
-    const keywordWords = server.keywords;
-    const allServerWords = [...descriptionWords, ...keywordWords];
-
-    // Calculate overlaps
-    const descMatches = this.countOverlap(queryWords, descriptionWords);
-    // Count keyword matches that are NOT already counted in description
-    const keywordOnlyWords = keywordWords.filter(kw => !descriptionWords.includes(kw));
-    const keywordOnlyMatches = this.countOverlap(queryWords, keywordOnlyWords);
-
-    // Add basic synonym matching for common terms
-    let semanticMatches = 0;
-    for (const queryWord of queryWords) {
-      semanticMatches += this.getSemanticScore(queryWord, allServerWords);
-    }
-
-    // Also check for partial/substring matches for better recall
-    let partialMatches = 0;
-    for (const queryWord of queryWords) {
-      for (const serverWord of allServerWords) {
-        if (queryWord.length > 3 && serverWord.includes(queryWord)) {
-          partialMatches += 0.3; // Partial match gets partial credit
-        }
-      }
-    }
-
-    // Weighted scoring: description 1.0x, keywords 0.7x, semantic 0.5x, partial matches 0.3x
-    const score = (descMatches * 1.0 + keywordOnlyMatches * 0.7 + semanticMatches * 0.5 + partialMatches) / queryWords.length;
-
-    return score;
-  }
-
-  private getSemanticScore(queryWord: string, serverWords: string[]): number {
-    // Comprehensive synonym/semantic matching
-    const synonymMap: Record<string, string[]> = {
-      // Finance/payment terms
-      money: ["payment", "transfer", "currency", "invoice", "billing", "charge", "account", "balance"],
-      payment: ["money", "transfer", "invoice", "billing", "charge", "process"],
-      send: ["transfer", "payment", "international"],
-      transfer: ["send", "payment", "money", "international"],
-      invoice: ["bill", "charge", "payment", "billing", "customer"],
-      account: ["balance", "money", "payment"],
-      balance: ["account", "money"],
-      international: ["transfer", "money", "payment"],
-      
-      // Task/productivity terms  
-      task: ["todo", "reminder", "project", "management", "productivity"],
-      todo: ["task", "reminder", "management"],
-      create: ["add", "new", "task", "issue"],
-      project: ["task", "management", "board", "productivity"],
-      manage: ["task", "project", "productivity"],
-      schedule: ["meeting", "calendar", "appointment"],
-      meeting: ["schedule", "calendar"],
-      
-      // Development terms
-      code: ["repo", "repository", "commit", "branch", "github"],
-      issue: ["bug", "ticket", "github", "repository"],
-      bug: ["issue", "github"],
-      repository: ["repo", "code", "github"],
-      commit: ["code", "repository", "github"],
-      
-      // Location/maps terms
-      location: ["map", "address", "directions", "geocode", "places"],
-      directions: ["map", "route", "location"],
-      address: ["location", "geocode"],
-      geocode: ["address", "location"],
-      restaurant: ["location", "places", "map"],
-      nearby: ["location", "map"],
-      
-      // Storage/document terms
-      upload: ["store", "save", "file", "document"],
-      document: ["file", "note", "upload", "storage"],
-      store: ["save", "upload", "note"],
-      notes: ["document", "store"],
-      
-      // Infrastructure terms
-      deploy: ["infrastructure", "cloud", "server"],
-      cloud: ["infrastructure", "deploy"],
-      server: ["infrastructure", "monitoring"],
-      infrastructure: ["cloud", "server", "deploy"],
-      monitoring: ["server", "infrastructure"],
-      
-      // Collaboration terms
-      whiteboard: ["collaboration", "brainstorming"],
-      brainstorming: ["whiteboard", "collaboration"],
-      collaboration: ["whiteboard", "design"],
-      
-      // Search terms
-      search: ["find", "information", "papers"],
-      find: ["search", "information"],
-      information: ["search", "find"],
-      
-      // Web scraping terms
-      analyze: ["data", "extract", "website"],
-      extract: ["data", "scraping", "website"],
-      website: ["scraping", "analyze", "extract"],
-      data: ["extract", "analyze", "scraping"],
-      traffic: ["website", "analyze"],
-    };
-
-    const synonyms = synonymMap[queryWord.toLowerCase()] || [];
-    let matches = 0;
-    
-    for (const synonym of synonyms) {
-      if (serverWords.includes(synonym)) {
-        matches += 1;
-      }
-    }
-    
-    return matches;
-  }
-
-  private countOverlap(words1: string[], words2: string[]): number {
-    const set2 = new Set(words2);
-    return words1.filter(word => set2.has(word)).length;
-  }
-
-  /**
-   * Select servers using dynamic topServers with confidence-based expansion
-   */
-  private selectServers(
-    serverScores: Array<{ server: FilterableServer; score: number }>,
-    allServers: FilterableServer[]
-  ): Array<{ server: FilterableServer; score: number }> {
-    // Include always-included servers first
-    const alwaysIncluded = allServers
-      .filter(s => this.config.alwaysInclude.includes(s.name))
-      .map(server => ({ server, score: 1.0 }));
-
-    // Sort all servers by score
-    const allScoredServers = serverScores
-      .filter(({ server }) => !this.config.alwaysInclude.includes(server.name))
-      .sort((a, b) => b.score - a.score);
-
-    // Primary filter: servers that meet threshold
-    const thresholdServers = allScoredServers.filter(({ score }) => score >= this.config.serverThreshold);
-    
-    // Fallback: if too few servers pass threshold, include more based on ranking
-    let scoredServers = thresholdServers;
-    if (thresholdServers.length < 2) {
-      // Take at least top 3 servers regardless of threshold for better recall
-      scoredServers = allScoredServers.slice(0, Math.max(3, this.config.topServers));
-      this.logger.debug(`[smart-filter] Only ${thresholdServers.length} servers met threshold, expanding to top ${scoredServers.length}`);
-    }
-
-    // Dynamic topServers based on confidence
-    let numServers = this.config.topServers;
-    if (scoredServers.length >= 2) {
-      const topScore = scoredServers[0].score;
-      const cutoffScore = scoredServers[Math.min(this.config.topServers - 1, scoredServers.length - 1)].score;
-      const gap = topScore - cutoffScore;
-
-      // If gap is small (uncertain), expand toward hard cap
-      if (gap < 0.1 && scoredServers.length > numServers) {
-        numServers = Math.min(this.config.hardCap, scoredServers.length);
-        this.logger.debug(`[smart-filter] Low confidence (gap: ${gap.toFixed(3)}), expanding to ${numServers} servers`);
-      }
-    }
-
-    const selectedScored = scoredServers.slice(0, numServers);
-    return [...alwaysIncluded, ...selectedScored];
-  }
-
-  /**
-   * Filter tools within selected servers
-   */
-  private filterTools(
-    query: string,
-    selectedServers: Array<{ server: FilterableServer; score: number }>
-  ): Array<{ serverId: string; tool: McpTool }> {
-    const queryWords = SmartFilter.tokenize(query);
-    const allTools: Array<{ serverId: string; tool: McpTool; score: number }> = [];
-
-    for (const { server } of selectedServers) {
-      for (const tool of server.tools) {
-        const score = this.calculateToolScore(queryWords, tool);
-        if (score >= this.config.toolThreshold) {
-          allTools.push({ serverId: server.name, tool, score });
-        }
-      }
-    }
-
-    // Sort by score and take top N
-    return allTools
-      .sort((a, b) => b.score - a.score)
-      .slice(0, this.config.topTools)
-      .map(({ serverId, tool }) => ({ serverId, tool }));
-  }
-
-  private calculateToolScore(queryWords: string[], tool: McpTool): number {
-    if (queryWords.length === 0) return 0;
-
-    const nameWords = SmartFilter.tokenize(tool.name);
-    const descWords = SmartFilter.tokenize(tool.description || "");
-
-    const nameMatches = this.countOverlap(queryWords, nameWords);
-    const descMatches = this.countOverlap(queryWords, descWords) - this.countOverlap(queryWords, nameWords);
-
-    // Weighted: description 1.0x, name 0.5x (name is less descriptive usually)
-    const score = (descMatches * 1.0 + nameMatches * 0.5) / queryWords.length;
-
-    return score;
-  }
-
-  private calculateConfidenceScore(serverScores: Array<{ server: FilterableServer; score: number }>): number {
-    if (serverScores.length < 2) return 1.0;
-
-    const scores = serverScores.map(s => s.score).sort((a, b) => b - a);
-    const topScore = scores[0];
-    const secondScore = scores[1];
-
-    // Confidence based on gap between top scores
-    if (topScore === 0) return 0;
-    return Math.min(1.0, (topScore - secondScore) / topScore);
-  }
-
-  private createUnfilteredResult(
-    servers: Record<string, PluginServerConfig>,
-    allTools: Map<string, McpTool[]>,
-    filterMode: "keyword" | "disabled",
-    queryUsed = ""
-  ): FilterResult {
-    const filterableServers = this.prepareFilterableServers(servers, allTools);
-    const tools = Array.from(allTools.entries()).flatMap(([serverId, tools]) =>
-      tools.map(tool => ({ serverId, tool }))
-    );
-
-    return {
-      servers: filterableServers,
-      tools,
-      metadata: {
-        queryUsed,
-        totalServersBeforeFilter: Object.keys(servers).length,
-        totalToolsBeforeFilter: tools.length,
-        filterMode,
-        timeoutOccurred: false,
-      },
-    };
-  }
-
-  private logTelemetry(result: FilterResult, durationMs: number): void {
-    const telemetry = {
-      timestamp: new Date().toISOString(),
-      query: result.metadata.queryUsed,
-      serversReturned: result.servers.length,
-      toolsReturned: result.tools.length,
-      totalServersBefore: result.metadata.totalServersBeforeFilter,
-      totalToolsBefore: result.metadata.totalToolsBeforeFilter,
-      filterMode: result.metadata.filterMode,
-      durationMs,
-      confidenceScore: result.metadata.confidenceScore,
-      timeoutOccurred: result.metadata.timeoutOccurred,
-    };
-
-    this.logger.debug("[smart-filter] Telemetry:", JSON.stringify(telemetry));
-  }
+  return combined.length >= 3 ? combined : "";
 }
 
 // ── Standalone utility exports (for testing and external use) ────────────────
@@ -576,9 +165,9 @@ export function scoreServer(
 ): number {
   if (queryTokens.length === 0) return 0;
 
-  const descTokens = new Set(SmartFilter.tokenize(description));
-  for (const t of SmartFilter.tokenize(serverName)) descTokens.add(t);
-  const kwTokens = new Set(validateKeywords(keywords).flatMap(kw => SmartFilter.tokenize(kw)));
+  const descTokens = new Set(tokenize(description));
+  for (const t of tokenize(serverName)) descTokens.add(t);
+  const kwTokens = new Set(validateKeywords(keywords).flatMap(kw => tokenize(kw)));
 
   let descMatches = 0;
   let kwOnlyMatches = 0;
@@ -689,7 +278,7 @@ export function filterServers(
     const startTime = Date.now();
 
     const userTurnObjects: UserTurn[] = userTurns.map(content => ({ content, timestamp: Date.now() }));
-    const query = SmartFilter.synthesizeQuery(userTurnObjects) || null;
+    const query = synthesizeQuery(userTurnObjects) || null;
     if (!query) return showAll("no-query");
 
     if (Date.now() - startTime > merged.timeoutMs) {
@@ -697,7 +286,7 @@ export function filterServers(
       return showAll("timeout", query);
     }
 
-    const queryTokens = SmartFilter.tokenize(query);
+    const queryTokens = tokenize(query);
     if (queryTokens.length === 0) return showAll("no-query");
 
     const scores = scoreAllServers(queryTokens, servers);

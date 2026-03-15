@@ -1,4 +1,5 @@
 import type { EmbeddingProvider } from "./embeddings.js";
+import { KeywordEmbedding } from "./embeddings.js";
 import type { Logger } from "./types.js";
 import type { McpTool } from "./types.js";
 import { VectorStore } from "./vector-store.js";
@@ -58,6 +59,11 @@ export class IntentRouter {
         tool: entries[i].tool,
         description: entries[i].text
       });
+    }
+
+    // Freeze keyword vocabulary so query vectors use the same dimensions
+    if (this.embeddingProvider instanceof KeywordEmbedding) {
+      this.embeddingProvider.freeze();
     }
 
     this.indexed = true;

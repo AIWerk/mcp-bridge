@@ -7,6 +7,9 @@ export interface EmbeddingProvider {
 
 export class GeminiEmbedding implements EmbeddingProvider {
   private readonly apiKey: string;
+  private readonly model = "gemini-embedding-001";
+  private readonly baseUrl = "https://generativelanguage.googleapis.com/v1beta";
+  private static readonly BATCH_LIMIT = 100;
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -14,24 +17,61 @@ export class GeminiEmbedding implements EmbeddingProvider {
 
   async embed(texts: string[]): Promise<number[][]> {
     const results: number[][] = [];
-    for (const text of texts) {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${this.apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: { parts: [{ text }] }
-          })
+
+    // Process in chunks of BATCH_LIMIT
+    for (let i = 0; i < texts.length; i += GeminiEmbedding.BATCH_LIMIT) {
+      const chunk = texts.slice(i, i + GeminiEmbedding.BATCH_LIMIT);
+      try {
+        const chunkResults = await this.batchEmbed(chunk);
+        results.push(...chunkResults);
+      } catch {
+        // Fallback: sequential embedding if batch fails
+        for (const text of chunk) {
+          results.push(await this.singleEmbed(text));
         }
-      );
-      if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
       }
-      const data = await response.json();
-      results.push(data.embedding.values);
     }
+
     return results;
+  }
+
+  private async batchEmbed(texts: string[]): Promise<number[][]> {
+    const response = await fetch(
+      `${this.baseUrl}/models/${this.model}:batchEmbedContents?key=${this.apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requests: texts.map(text => ({
+            model: `models/${this.model}`,
+            content: { parts: [{ text }] },
+          })),
+        }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.embeddings.map((e: any) => e.values);
+  }
+
+  private async singleEmbed(text: string): Promise<number[]> {
+    const response = await fetch(
+      `${this.baseUrl}/models/${this.model}:embedContent?key=${this.apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: { parts: [{ text }] }
+        })
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data.embedding.values;
   }
 
   dimensions(): number {
@@ -100,65 +140,60 @@ export class OllamaEmbedding implements EmbeddingProvider {
 
 export class KeywordEmbedding implements EmbeddingProvider {
   private vocabulary: Map<string, number> = new Map();
-  private vocabSize: number = 0;
+  private frozen = false;
 
-  async embed(texts: string[]): Promise<number[][]> {
-    // Build vocabulary from all texts
-    this.vocabulary.clear();
-    this.vocabSize = 0;
-
-    const tokenizedTexts = texts.map((text) => this.tokenize(text));
-
-    for (const tokens of tokenizedTexts) {
-      for (const token of tokens) {
-        if (!this.vocabulary.has(token)) {
-          this.vocabulary.set(token, this.vocabSize++);
+  /**
+   * Add texts to the vocabulary (call during indexing phase).
+   * After freeze(), new words are silently ignored.
+   */
+  buildVocabulary(texts: string[]): void {
+    if (this.frozen) return;
+    for (const text of texts) {
+      for (const word of this.tokenize(text)) {
+        if (!this.vocabulary.has(word)) {
+          this.vocabulary.set(word, this.vocabulary.size);
         }
       }
     }
+  }
 
-    if (this.vocabSize === 0) {
+  /** Freeze vocabulary — no new words added after this. */
+  freeze(): void {
+    this.frozen = true;
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    // If not frozen yet, add these texts to vocabulary first
+    if (!this.frozen) {
+      this.buildVocabulary(texts);
+    }
+
+    const vocabSize = this.vocabulary.size;
+    if (vocabSize === 0) {
       return texts.map(() => [0]);
     }
 
-    // Create TF vectors
-    const vectors: number[][] = [];
-    for (const tokens of tokenizedTexts) {
-      const vector = new Array(this.vocabSize).fill(0);
-      for (const token of tokens) {
-        const idx = this.vocabulary.get(token)!;
-        vector[idx] += 1;
+    // Create TF vectors using the FIXED vocabulary
+    return texts.map((text) => {
+      const vector = new Array(vocabSize).fill(0);
+      const words = this.tokenize(text);
+      for (const word of words) {
+        const idx = this.vocabulary.get(word);
+        if (idx !== undefined) {
+          vector[idx] += 1;
+        }
       }
       // Normalize by document length
-      const len = tokens.length || 1;
+      const len = words.length || 1;
       for (let i = 0; i < vector.length; i++) {
         vector[i] /= len;
       }
-      vectors.push(vector);
-    }
-
-    // Apply IDF weighting
-    const docCount = texts.length;
-    const idf = new Array(this.vocabSize).fill(0);
-    for (let i = 0; i < this.vocabSize; i++) {
-      let df = 0;
-      for (const vec of vectors) {
-        if (vec[i] > 0) df++;
-      }
-      idf[i] = Math.log((docCount + 1) / (df + 1)) + 1;
-    }
-
-    for (const vec of vectors) {
-      for (let i = 0; i < vec.length; i++) {
-        vec[i] *= idf[i];
-      }
-    }
-
-    return vectors;
+      return vector;
+    });
   }
 
   dimensions(): number {
-    return this.vocabSize || 1;
+    return this.vocabulary.size || 1;
   }
 
   private tokenize(text: string): string[] {

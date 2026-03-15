@@ -4,7 +4,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { SmartFilter, type UserTurn } from "../src/smart-filter.ts";
+import { filterServers, tokenize, synthesizeQuery, validateKeywords, type UserTurn } from "../src/smart-filter.ts";
 import type { SmartFilterConfig, PluginServerConfig } from "../src/smart-filter.ts";
 import type { McpTool } from "../src/types.ts";
 import * as fs from "fs";
@@ -154,190 +154,90 @@ function createDefaultConfig(): SmartFilterConfig {
   };
 }
 
-describe("SmartFilter", () => {
-  
-  test("should extract meaningful content from user turns", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
-    const userTurns: UserTurn[] = [
-      { content: "send 100 CHF to mom", timestamp: Date.now() },
-    ];
+describe("filterServers (standalone)", () => {
 
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-    assert.strictEqual(result.metadata.queryUsed, "send 100 CHF to mom");
+  test("should extract meaningful content from user turns", () => {
+    const result = filterServers(testServers, ["send 100 CHF to mom"], createDefaultConfig(), mockLogger);
+    assert.strictEqual(result.query, "send 100 CHF to mom");
   });
 
-  test("should handle confirmations by looking at previous turns", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
-    const userTurns: UserTurn[] = [
-      { content: "create a task", timestamp: Date.now() - 1000 },
-      { content: "yes, do it", timestamp: Date.now() },
-    ];
-
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-    assert.strictEqual(result.metadata.queryUsed, "create a task");
+  test("should handle confirmations by looking at previous turns", () => {
+    const result = filterServers(testServers, ["create a task", "yes, do it"], createDefaultConfig(), mockLogger);
+    assert.strictEqual(result.query, "create a task");
   });
 
-  test("should strip noise words and metadata", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
-    const userTurns: UserTurn[] = [
-      { content: "[2024-01-01] > send money please", timestamp: Date.now() },
-    ];
-
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-    assert.strictEqual(result.metadata.queryUsed, "send money");
+  test("should strip noise words and metadata", () => {
+    const result = filterServers(testServers, ["[2024-01-01] > send money please"], createDefaultConfig(), mockLogger);
+    assert.strictEqual(result.query, "send money");
   });
 
-  test("should return empty query for pure noise", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
-    const userTurns: UserTurn[] = [
-      { content: "ok", timestamp: Date.now() },
-    ];
-
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-    assert.strictEqual(result.metadata.queryUsed, "");
-    assert.strictEqual(result.servers.length, Object.keys(testServers).length);
+  test("should return null query for pure noise", () => {
+    const result = filterServers(testServers, ["ok"], createDefaultConfig(), mockLogger);
+    assert.strictEqual(result.query, null);
+    assert.strictEqual(result.filteredServers.length, Object.keys(testServers).length);
   });
 
-  test("should score servers based on description matches", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
-    const userTurns: UserTurn[] = [
-      { content: "international money transfer", timestamp: Date.now() },
-    ];
-
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-    
-    // Wise should be in results due to description overlap
-    const serverNames = result.servers.map(s => s.name);
-    assert.ok(serverNames.includes("wise"), "Wise should be included for money transfer query");
+  test("should score servers based on description matches", () => {
+    const result = filterServers(testServers, ["international money transfer"], createDefaultConfig(), mockLogger);
+    assert.ok(result.filteredServers.includes("wise"), "Wise should be included for money transfer query");
   });
 
-  test("should include keyword matches", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
-    const userTurns: UserTurn[] = [
-      { content: "payment processing", timestamp: Date.now() },
-    ];
-
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-    
-    const serverNames = result.servers.map(s => s.name);
-    assert.ok(serverNames.includes("stripe"), "Stripe should be included for payment query");
+  test("should include keyword matches", () => {
+    const result = filterServers(testServers, ["payment processing"], createDefaultConfig(), mockLogger);
+    assert.ok(result.filteredServers.includes("stripe"), "Stripe should be included for payment query");
   });
 
-  test("should respect alwaysInclude servers", async () => {
+  test("should respect alwaysInclude servers", () => {
     const config = createDefaultConfig();
     config.alwaysInclude = ["github"];
-    const filter = new SmartFilter(config, mockLogger);
-
-    const userTurns: UserTurn[] = [
-      { content: "money transfer", timestamp: Date.now() },
-    ];
-
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-    
-    const serverNames = result.servers.map(s => s.name);
-    assert.ok(serverNames.includes("github"), "GitHub should be included via alwaysInclude");
+    const result = filterServers(testServers, ["money transfer"], config, mockLogger);
+    assert.ok(result.filteredServers.includes("github"), "GitHub should be included via alwaysInclude");
   });
 
-  test("should show all servers when disabled", async () => {
+  test("should show all servers when disabled", () => {
     const config = createDefaultConfig();
     config.enabled = false;
-    const filter = new SmartFilter(config, mockLogger);
-
-    const userTurns: UserTurn[] = [
-      { content: "send money", timestamp: Date.now() },
-    ];
-
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-    
-    assert.strictEqual(result.servers.length, Object.keys(testServers).length);
-    assert.strictEqual(result.metadata.filterMode, "disabled");
+    const result = filterServers(testServers, ["send money"], config, mockLogger);
+    assert.strictEqual(result.filteredServers.length, Object.keys(testServers).length);
+    assert.strictEqual(result.reason, "disabled");
   });
 
-  test("should timeout gracefully", async () => {
+  test("should timeout gracefully", () => {
     const config = createDefaultConfig();
     config.timeoutMs = 1; // Very short timeout
-    const filter = new SmartFilter(config, mockLogger);
-
-    const userTurns: UserTurn[] = [
-      { content: "send money", timestamp: Date.now() },
-    ];
-
-    const result = await filter.filter(testServers, testTools as any, userTurns);
-
-    // Should either filter normally (if fast enough) or fall back to all servers
-    assert.ok(result.servers.length > 0, "should return at least some servers");
+    const result = filterServers(testServers, ["send money"], config, mockLogger);
+    assert.ok(result.filteredServers.length > 0, "should return at least some servers");
   });
 
-  test("should limit keywords to 30 per server", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
-    const manyKeywords = Array.from({ length: 50 }, (_, i) => `keyword${i}`);
-    const serverWithManyKeywords: PluginServerConfig = {
-      transport: "stdio",
-      command: "test-server",
-      description: "test server",
-      keywords: manyKeywords,
-    };
-
-    const testServersWithMany = {
-      test: serverWithManyKeywords,
-    };
-
-    const filterableServers = (filter as any).prepareFilterableServers(
-      testServersWithMany,
-      new Map([["test", []]])
-    );
-
-    assert.ok(filterableServers[0].keywords.length <= 30, "Keywords should be limited to 30");
+  test("should limit keywords to 30 per server via validateKeywords", () => {
+    const manyKeywords = Array.from({ length: 50 }, (_: unknown, i: number) => `keyword${i}`);
+    const validated = validateKeywords(manyKeywords);
+    assert.ok(validated.length <= 30, "Keywords should be limited to 30");
   });
 
-  test("should deduplicate keywords", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
+  test("should deduplicate keywords via validateKeywords", () => {
     const duplicateKeywords = ["payment", "money", "payment", "transfer", "money"];
-    const serverWithDuplicates: PluginServerConfig = {
-      transport: "stdio",
-      command: "test-server", 
-      description: "test server",
-      keywords: duplicateKeywords,
-    };
-
-    const testServersWithDupes = {
-      test: serverWithDuplicates,
-    };
-
-    const filterableServers = (filter as any).prepareFilterableServers(
-      testServersWithDupes,
-      new Map([["test", []]])
-    );
-
-    const uniqueKeywords = new Set(filterableServers[0].keywords);
-    assert.strictEqual(filterableServers[0].keywords.length, uniqueKeywords.size, "Keywords should be deduplicated");
+    const validated = validateKeywords(duplicateKeywords);
+    const uniqueKeywords = new Set(validated);
+    assert.strictEqual(validated.length, uniqueKeywords.size, "Keywords should be deduplicated");
   });
 
-  test("routing recall should be >= 95%", async () => {
-    const filter = new SmartFilter(createDefaultConfig(), mockLogger);
-    
-    // Load eval queries
+  test("routing recall should be >= 95%", () => {
     const evalPath = path.join(__dirname, "fixtures", "eval-queries.json");
     const evalData = JSON.parse(fs.readFileSync(evalPath, "utf8"));
-    
+
     let correctPredictions = 0;
     let totalQueries = 0;
 
     for (const testCase of evalData) {
       if (testCase.expected_servers.length === 0) {
-        continue; // Skip empty/ambiguous cases
+        continue;
       }
 
-      const userTurns: UserTurn[] = [
-        { content: testCase.query, timestamp: Date.now() },
-      ];
+      const result = filterServers(testServers, [testCase.query], createDefaultConfig(), mockLogger);
 
-      const result = await filter.filter(testServers, testTools as any, userTurns);
-      const resultServerNames = result.servers.map(s => s.name);
-      
-      // Check if at least one expected server is in results
       const hasCorrectServer = testCase.expected_servers.some((expected: string) =>
-        resultServerNames.includes(expected)
+        result.filteredServers.includes(expected)
       );
 
       if (hasCorrectServer) {
@@ -348,35 +248,35 @@ describe("SmartFilter", () => {
 
     const recall = correctPredictions / totalQueries;
     console.log(`Routing recall: ${(recall * 100).toFixed(1)}% (${correctPredictions}/${totalQueries})`);
-    
+
     assert.ok(recall >= 0.95, `Routing recall should be >= 95%, got ${(recall * 100).toFixed(1)}%`);
   });
 });
 
 // ─── Static method tests ────────────────────────────────────────────────────
 
-describe("SmartFilter.tokenize (static)", () => {
+describe("tokenize", () => {
   test("splits text into lowercase tokens", () => {
-    const tokens = SmartFilter.tokenize("Hello World");
+    const tokens = tokenize("Hello World");
     assert.deepStrictEqual(tokens, ["hello", "world"]);
   });
 
   test("strips punctuation and splits", () => {
-    const tokens = SmartFilter.tokenize("send $100 to mom!");
+    const tokens = tokenize("send $100 to mom!");
     assert.deepStrictEqual(tokens, ["send", "100", "to", "mom"]);
   });
 
   test("returns empty array for empty string", () => {
-    assert.deepStrictEqual(SmartFilter.tokenize(""), []);
+    assert.deepStrictEqual(tokenize(""), []);
   });
 });
 
-describe("SmartFilter.synthesizeQuery (static)", () => {
+describe("synthesizeQuery", () => {
   test("extracts meaningful content from user turns", () => {
     const turns: UserTurn[] = [
       { content: "send money to mom", timestamp: Date.now() },
     ];
-    const query = SmartFilter.synthesizeQuery(turns);
+    const query = synthesizeQuery(turns);
     assert.strictEqual(query, "send money to mom");
   });
 
@@ -385,7 +285,7 @@ describe("SmartFilter.synthesizeQuery (static)", () => {
       { content: "create a task for tomorrow", timestamp: Date.now() - 1000 },
       { content: "yes", timestamp: Date.now() },
     ];
-    const query = SmartFilter.synthesizeQuery(turns);
+    const query = synthesizeQuery(turns);
     assert.strictEqual(query, "create a task for tomorrow");
   });
 
@@ -393,6 +293,6 @@ describe("SmartFilter.synthesizeQuery (static)", () => {
     const turns: UserTurn[] = [
       { content: "ok", timestamp: Date.now() },
     ];
-    assert.strictEqual(SmartFilter.synthesizeQuery(turns), "");
+    assert.strictEqual(synthesizeQuery(turns), "");
   });
 });
