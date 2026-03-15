@@ -335,7 +335,72 @@ The local bridge sees the upstream's tools as `cloud_todoist_find-tasks`, `cloud
 
 ---
 
-## 8. Deployment
+## 8. Observability
+
+### 8.1 Why
+
+Audit logging tells you **what** happened. Observability tells you **how well** it's working: latency, throughput, error rates, resource usage. Essential for diagnosing slowdowns, capacity planning, and SLA monitoring.
+
+### 8.2 Metrics (Phase 2)
+
+Export via **OpenTelemetry (OTel)** protocol + **Prometheus** `/metrics` endpoint.
+
+**Core metrics:**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `bridge_requests_total` | counter | user, server, tool, action, status |
+| `bridge_request_duration_ms` | histogram | user, server, tool |
+| `bridge_errors_total` | counter | user, server, error_type |
+| `bridge_cache_hits_total` | counter | user, server |
+| `bridge_cache_misses_total` | counter | user, server |
+| `bridge_active_connections` | gauge | transport_type |
+| `bridge_rate_limit_hits_total` | counter | user, tier |
+| `bridge_server_health` | gauge (0/1) | server |
+| `bridge_oauth2_token_refreshes` | counter | server |
+
+**Derived dashboards (Grafana):**
+- Request rate (req/sec) per server
+- p50/p95/p99 latency per tool
+- Error rate % (5xx vs total)
+- Cache hit ratio
+- Rate limit rejection rate
+- Server health status map
+
+### 8.3 Distributed Tracing (Phase 2)
+
+Each tool call gets a trace ID propagated through the chain:
+
+```
+Client request (trace-id: abc123)
+  → Router dispatch (span: route, 2ms)
+    → Transport send (span: transport, 140ms)
+      → MCP server (span: tool_call, 135ms)
+    → Result cache check (span: cache, 1ms)
+  → Response (total: 145ms)
+```
+
+OTel trace export to Jaeger/Grafana Tempo for visualization.
+
+### 8.4 Alerting
+
+Built on top of metrics:
+- **Error spike:** error rate > 10% for 5 minutes → alert
+- **Latency spike:** p95 > 5s for 10 minutes → alert
+- **Server down:** health check unhealthy for 3+ probes → alert
+- **Rate limit surge:** > 50% of requests rate-limited → alert
+
+Delivery: email (Phase 2), webhook (Phase 2), Slack/Discord (Phase 3).
+
+### 8.5 Phase Rollout
+
+- **Phase 1:** Basic request counting + latency in audit log (no OTel)
+- **Phase 2:** Full Prometheus `/metrics` endpoint + OTel export + Grafana dashboards
+- **Phase 3:** Distributed tracing + alerting
+
+---
+
+## 9. Deployment
 
 ### 8.1 Phase 1 (MVP)
 
@@ -355,7 +420,7 @@ The local bridge sees the upstream's tools as `cloud_todoist_find-tasks`, `cloud
 
 ---
 
-## 9. Pricing Model
+## 10. Pricing Model
 
 | Feature | Free | Pro ($9/mo) | Business ($29/mo) |
 |---------|------|-------------|-------------------|
@@ -369,7 +434,7 @@ The local bridge sees the upstream's tools as `cloud_todoist_find-tasks`, `cloud
 
 ---
 
-## 10. API Reference
+## 11. API Reference
 
 ### 10.1 User Management
 
@@ -416,7 +481,7 @@ POST   /admin/users/:id/limit  — override rate limits
 
 ---
 
-## 11. Security Checklist
+## 12. Security Checklist
 
 - [ ] TLS everywhere (Caddy auto-cert)
 - [ ] API keys hashed at rest (SHA-256)
@@ -431,7 +496,7 @@ POST   /admin/users/:id/limit  — override rate limits
 
 ---
 
-## 12. Migration Path
+## 13. Migration Path
 
 ### From local bridge to hosted
 
@@ -450,7 +515,7 @@ POST   /admin/users/:id/limit  — override rate limits
 
 ---
 
-## 13. Future Work
+## 14. Future Work
 
 - **PII redaction** — auto-detect and mask PII in request/response (opt-in)
 - **Webhook notifications** — alert on errors, rate limits, security events
