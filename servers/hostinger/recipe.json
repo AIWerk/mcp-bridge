@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "id": "hostinger",
+  "name": "Hostinger",
+  "description": "Web hosting management via Hostinger API — manage domains, hosting plans, email accounts, and website settings",
+
+  "transports": [
+    {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic-pb/hostinger-mcp-server"],
+      "env": {
+        "HOSTINGER_API_TOKEN": "${HOSTINGER_API_TOKEN}"
+      }
+    }
+  ],
+
+  "auth": {
+    "required": true,
+    "type": "api-key",
+    "envVars": ["HOSTINGER_API_TOKEN"],
+    "credentialsUrl": "https://hpanel.hostinger.com/api",
+    "instructions": "Generate an API token in the Hostinger hPanel under API section."
+  },
+
+  "install": {
+    "method": "npx",
+    "package": "@anthropic-pb/hostinger-mcp-server",
+    "version": "latest"
+  },
+
+  "metadata": {
+    "homepage": "https://www.hostinger.com/",
+    "author": "Anthropic / Hostinger",
+    "tags": ["hosting", "domains", "web-hosting", "email", "dns"],
+    "category": "infrastructure",
+    "pricing": "byok",
+    "maturity": "stable"
+  },
+
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false,
+    "sampling": false
+  }
+}

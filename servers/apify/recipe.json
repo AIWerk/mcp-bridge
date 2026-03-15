@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "id": "apify",
+  "name": "Apify",
+  "description": "Web scraping and automation platform with 3000+ ready-made actors for data extraction, browser automation, and crawling",
+  "repository": "https://github.com/apify/apify-mcp-server",
+
+  "transports": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.apify.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${APIFY_TOKEN}"
+      }
+    }
+  ],
+
+  "auth": {
+    "required": true,
+    "type": "bearer",
+    "envVars": ["APIFY_TOKEN"],
+    "credentialsUrl": "https://console.apify.com/settings/integrations",
+    "instructions": "Copy your API token from Apify Console > Settings > Integrations."
+  },
+
+  "metadata": {
+    "homepage": "https://apify.com/",
+    "author": "Apify",
+    "tags": ["scraping", "automation", "web", "crawling", "actors"],
+    "category": "automation",
+    "pricing": "byok",
+    "maturity": "stable"
+  },
+
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false,
+    "sampling": false
+  }
+}

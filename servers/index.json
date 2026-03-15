@@ -1,149 +1,159 @@
 {
-  "schemaVersion": 1,
-  "servers": {
-    "chrome-devtools": {
-      "description": "Control and inspect a live Chrome browser",
-      "transport": "stdio",
-      "authRequired": false,
-      "homepage": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
-      "installMethod": "npx",
-      "envVars": [],
-      "notes": "Requires Chrome >= 144 with chrome://inspect/#remote-debugging enabled"
-    },
+  "schemaVersion": 2,
+  "generatedAt": "2026-03-15T12:37:00Z",
+  "recipes": {
     "apify": {
-      "description": "web scraping & automation",
-      "transport": "streamable-http",
-      "authRequired": true,
-      "homepage": "https://apify.com/",
-      "installMethod": "npx",
-      "envVars": [
-        "APIFY_TOKEN"
-      ]
+      "name": "Apify",
+      "description": "Web scraping and automation platform with 3000+ ready-made actors for data extraction, browser automation, and crawling",
+      "category": "automation",
+      "tags": ["scraping", "automation", "web", "crawling", "actors"],
+      "auth": { "required": true, "type": "bearer" },
+      "transports": ["streamable-http"],
+      "maturity": "stable",
+      "verified": false
     },
     "atlassian": {
-      "description": "Confluence wiki & Jira project management",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://github.com/sooperset/mcp-atlassian",
-      "installMethod": "uvx",
-      "envVars": [
-        "CONFLUENCE_URL",
-        "CONFLUENCE_USERNAME",
-        "CONFLUENCE_API_TOKEN",
-        "JIRA_URL",
-        "JIRA_USERNAME",
-        "JIRA_API_TOKEN"
-      ]
+      "name": "Atlassian (Confluence + Jira)",
+      "description": "Confluence wiki and Jira project management — search, create, and update pages and issues",
+      "category": "productivity",
+      "tags": ["wiki", "project-management", "confluence", "jira", "atlassian"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "uvx" },
+      "maturity": "stable",
+      "verified": false
+    },
+    "chrome-devtools": {
+      "name": "Chrome DevTools",
+      "description": "Control and inspect a live Chrome browser for automation, debugging, and performance analysis via the Chrome DevTools Protocol",
+      "category": "development",
+      "tags": ["browser", "debugging", "automation", "devtools", "chrome"],
+      "auth": { "required": false, "type": "none" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "stable",
+      "verified": false
     },
     "github": {
-      "description": "repos, issues, PRs",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://github.com/github/github-mcp-server",
-      "installMethod": "npx",
-      "envVars": [
-        "GITHUB_MCP_TOKEN"
-      ]
+      "name": "GitHub",
+      "description": "GitHub repository management — repos, issues, PRs, code search, and more via the official GitHub MCP server",
+      "category": "development",
+      "tags": ["git", "repos", "issues", "pull-requests", "code-review"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "docker" },
+      "maturity": "stable",
+      "verified": false
     },
     "google-maps": {
-      "description": "places, geocoding, directions",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://developers.google.com/maps",
-      "installMethod": "npx",
-      "envVars": [
-        "GOOGLE_MAPS_API_KEY"
-      ]
+      "name": "Google Maps",
+      "description": "Google Maps integration for places search, geocoding, directions, and distance matrix via the official MCP server",
+      "category": "other",
+      "tags": ["maps", "geocoding", "places", "directions", "navigation"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "stable",
+      "verified": false
     },
     "hetzner": {
-      "description": "cloud infrastructure",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://www.hetzner.com/cloud",
-      "installMethod": "npx",
-      "envVars": [
-        "HETZNER_API_TOKEN"
-      ]
+      "name": "Hetzner Cloud",
+      "description": "Manage Hetzner Cloud infrastructure — servers, networks, load balancers, volumes, firewalls, and more via the Hetzner Cloud API",
+      "category": "infrastructure",
+      "tags": ["cloud", "infrastructure", "servers", "vps", "hetzner"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "git" },
+      "maturity": "stable",
+      "verified": false
     },
     "hostinger": {
-      "description": "web hosting management",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://www.hostinger.com/",
-      "installMethod": "npx",
-      "envVars": [
-        "HOSTINGER_API_TOKEN"
-      ]
+      "name": "Hostinger",
+      "description": "Web hosting management via Hostinger API — manage domains, hosting plans, email accounts, and website settings",
+      "category": "infrastructure",
+      "tags": ["hosting", "domains", "web-hosting", "email", "dns"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "stable",
+      "verified": false
     },
     "linear": {
-      "description": "project management",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://linear.app/",
-      "installMethod": "npx",
-      "envVars": [
-        "LINEAR_API_KEY"
-      ]
+      "name": "Linear",
+      "description": "Linear project management — create, update, and search issues, projects, and teams via the Linear API",
+      "category": "productivity",
+      "tags": ["project-management", "issues", "tasks", "teams", "agile"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "git" },
+      "maturity": "stable",
+      "verified": false
     },
     "miro": {
-      "description": "collaborative whiteboard",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://miro.com/",
-      "installMethod": "npx",
-      "envVars": [
-        "MIRO_API_TOKEN"
-      ]
+      "name": "Miro",
+      "description": "Collaborative whiteboard — create and manipulate Miro boards, sticky notes, cards, connectors, and shapes via the Miro API",
+      "category": "productivity",
+      "tags": ["whiteboard", "collaboration", "diagrams", "brainstorming", "visual"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "stable",
+      "verified": false
     },
     "notion": {
-      "description": "notes & databases",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://www.notion.so/",
-      "installMethod": "npx",
-      "envVars": [
-        "NOTION_API_KEY"
-      ]
+      "name": "Notion",
+      "description": "Notion workspace integration — read, create, and update pages, databases, blocks, and comments via the official Notion MCP server",
+      "category": "productivity",
+      "tags": ["notes", "databases", "wiki", "knowledge-base", "productivity"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "stable",
+      "verified": false
     },
     "stripe": {
-      "description": "payments & billing",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://stripe.com/",
-      "installMethod": "npx",
-      "envVars": [
-        "STRIPE_API_KEY"
-      ]
+      "name": "Stripe",
+      "description": "Stripe payments and billing — manage customers, subscriptions, payment intents, invoices, and more via the official Stripe MCP server",
+      "category": "finance",
+      "tags": ["payments", "billing", "subscriptions", "invoices", "fintech"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "stable",
+      "verified": false
     },
     "tavily": {
-      "description": "AI-optimized web search",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://tavily.com/",
-      "installMethod": "npx",
-      "envVars": [
-        "TAVILY_API_KEY"
-      ]
+      "name": "Tavily",
+      "description": "AI-optimized web search — retrieve accurate, real-time search results and extract content from URLs tailored for AI agents",
+      "category": "search",
+      "tags": ["search", "web", "ai-search", "research", "rag"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "stable",
+      "verified": false
     },
     "todoist": {
-      "description": "task management",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://todoist.com/",
-      "installMethod": "npx",
-      "envVars": [
-        "TODOIST_API_TOKEN"
-      ]
+      "name": "Todoist",
+      "description": "Task management with natural language — create, update, complete, and search tasks and projects in Todoist",
+      "category": "productivity",
+      "tags": ["tasks", "todo", "productivity", "project-management", "gtd"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "stable",
+      "verified": false
     },
     "wise": {
-      "description": "international payments",
-      "transport": "stdio",
-      "authRequired": true,
-      "homepage": "https://wise.com/",
-      "installMethod": "npx",
-      "envVars": [
-        "WISE_API_TOKEN"
-      ]
+      "name": "Wise",
+      "description": "International money transfers and multi-currency account management via the Wise (TransferWise) API",
+      "category": "finance",
+      "tags": ["payments", "transfers", "international", "currency", "fintech"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "git" },
+      "maturity": "stable",
+      "verified": false
     }
   }
 }

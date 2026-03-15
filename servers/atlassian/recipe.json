@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "id": "atlassian",
+  "name": "Atlassian (Confluence + Jira)",
+  "description": "Confluence wiki and Jira project management — search, create, and update pages and issues",
+  "repository": "https://github.com/sooperset/mcp-atlassian",
+
+  "transports": [
+    {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-atlassian"],
+      "env": {
+        "CONFLUENCE_URL": "${CONFLUENCE_URL}",
+        "CONFLUENCE_USERNAME": "${CONFLUENCE_USERNAME}",
+        "CONFLUENCE_API_TOKEN": "${CONFLUENCE_API_TOKEN}",
+        "JIRA_URL": "${JIRA_URL}",
+        "JIRA_USERNAME": "${JIRA_USERNAME}",
+        "JIRA_API_TOKEN": "${JIRA_API_TOKEN}"
+      }
+    }
+  ],
+
+  "auth": {
+    "required": true,
+    "type": "api-key",
+    "envVars": [
+      "CONFLUENCE_URL",
+      "CONFLUENCE_USERNAME",
+      "CONFLUENCE_API_TOKEN",
+      "JIRA_URL",
+      "JIRA_USERNAME",
+      "JIRA_API_TOKEN"
+    ],
+    "credentialsUrl": "https://id.atlassian.com/manage-profile/security/api-tokens",
+    "instructions": "Create an API token at Atlassian account settings. Set CONFLUENCE_URL and JIRA_URL to your instance URLs (e.g., https://yourcompany.atlassian.net/wiki and https://yourcompany.atlassian.net)."
+  },
+
+  "install": {
+    "method": "uvx",
+    "package": "mcp-atlassian",
+    "version": "latest"
+  },
+
+  "metadata": {
+    "homepage": "https://github.com/sooperset/mcp-atlassian",
+    "author": "sooperset",
+    "tags": ["wiki", "project-management", "confluence", "jira", "atlassian"],
+    "category": "productivity",
+    "pricing": "byok",
+    "maturity": "stable"
+  },
+
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false,
+    "sampling": false
+  }
+}
