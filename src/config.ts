@@ -183,6 +183,7 @@ export function initConfigDir(logger: Logger): void {
       requestTimeoutMs: 60000,
       routerIdleTimeoutMs: 600000,
       routerMaxConcurrent: 5,
+      maxBatchSize: 10,
       http: {
         auth: {
           type: "bearer",

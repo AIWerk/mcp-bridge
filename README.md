@@ -139,6 +139,7 @@ Config: `~/.mcp-bridge/config.json` | Secrets: `~/.mcp-bridge/.env`
   "toolPrefix": true,
   "connectionTimeoutMs": 5000,
   "requestTimeoutMs": 60000,
+  "maxBatchSize": 10,
   "schemaCompression": {
     "enabled": true,
     "maxDescriptionLength": 80
@@ -199,6 +200,20 @@ The bridge uses vector embeddings to match your intent to the right server and t
 - `auto` (default): tries gemini, openai, ollama, then keyword - in order of availability
 - `minScore`: minimum confidence to return a match (0-1, default: 0.3)
 - Index is built lazily on first `action=intent` call
+
+### Batch Calls
+
+Run multiple tool calls in one round-trip with `action="batch"` (parallel execution):
+
+```json
+{"action":"batch","calls":[{"server":"todoist","tool":"find-tasks","params":{"query":"today"}},{"server":"github","tool":"list_repos","params":{}}]}
+```
+
+```json
+{"action":"batch","results":[{"server":"todoist","tool":"find-tasks","result":{"tasks":[]}}, {"server":"github","tool":"list_repos","error":{"error":"mcp_error","message":"..."}}]}
+```
+
+Use `maxBatchSize` in config to cap requests (default: `10`). Failed calls return per-slot `error` while successful calls still return `result`.
 
 ### Security
 
