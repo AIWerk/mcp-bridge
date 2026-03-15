@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.1] - 2026-03-15
+
+### Fixed
+- `types.ts`: `nextRequestId()` overflow protection (modulo `MAX_SAFE_INTEGER`)
+- `security.ts`: `processResult()` flattens metadata when both truncated and untrusted (was double-nesting `_truncated` inside `result`)
+- `transport-sse.ts`: SSE data parsing removes exactly one leading space per spec (was `trimStart()` stripping all whitespace)
+- `transport-sse.ts`: SSE endpoint URL validation requires `http://` or `https://` prefix (was accepting any `http`-prefixed string)
+- `smart-filter.ts`: `clearTimeout` in `finally` block prevents timer memory leak on early `Promise.race` resolution
+- `smart-filter.ts`: deduplicated `tokenize()`/`synthesizeQuery()` - now static methods on `SmartFilter` class (removed standalone duplicates with divergent Unicode logic)
+
 ## [1.6.0] - 2026-03-15
 
 ### Added
