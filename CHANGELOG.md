@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.0] - 2026-03-15
+
+### Fixed
+- **CRITICAL**: `embeddings.ts` — `KeywordEmbedding` vocabulary now builds incrementally and freezes after indexing; query vectors share the same dimensions as indexed vectors (was rebuilding vocabulary on every call, making cosine similarity meaningless)
+- `bin/mcp-bridge.ts`: Windows install support — OS detection, runs PowerShell script on win32
+- `scripts/install-server.sh`: shell injection fix — server name passed via `sys.argv` instead of shell interpolation
+- `update-checker.ts`: `runUpdate` uses command array instead of string split; `npmViewVersion` uses `execFile` timeout option (race condition fix)
+- `bin/mcp-bridge.ts`: `cmdSearch` type cast removed (`as any` -> `forEach`)
+
+### Changed
+- `smart-filter.ts`: removed `SmartFilter` class entirely — kept standalone exported functions only (-455 lines)
+- `embeddings.ts`: `GeminiEmbedding` uses `batchEmbedContents` API with chunking at 100 (was sequential per-text)
+- `TODO.md`: updated to reflect completed features
+
 ## [1.6.2] - 2026-03-15
 
 ### Fixed
