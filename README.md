@@ -228,6 +228,24 @@ Control which tools are visible and callable per server:
 - If both: allowed tools minus denied ones
 - Applied in both tool listing and execution (defense in depth)
 
+#### Max Result Size
+
+Prevent oversized responses from consuming your context:
+
+```json
+{
+  "maxResultChars": 50000,
+  "servers": {
+    "verbose-server": {
+      "maxResultChars": 10000
+    }
+  }
+}
+```
+
+- Global default + per-server override
+- Truncated results include `_truncated: true` and `_originalLength`
+
 ### Adaptive Promotion
 
 Frequently used tools can be automatically "promoted" to standalone tools alongside the `mcp` meta-tool. The promotion system tracks usage and reports which tools qualify — the host environment (e.g., OpenClaw plugin) decides how to register them.
@@ -256,24 +274,6 @@ mcp(action="promotions")
 ```
 
 Returns promoted tools (sorted by frequency) and full usage stats. All tracking is in-memory — promotion rebuilds naturally from usage after restart.
-
-#### Max Result Size
-
-Prevent oversized responses from consuming your context:
-
-```json
-{
-  "maxResultChars": 50000,
-  "servers": {
-    "verbose-server": {
-      "maxResultChars": 10000
-    }
-  }
-}
-```
-
-- Global default + per-server override
-- Truncated results include `_truncated: true` and `_originalLength`
 
 ### Modes
 
