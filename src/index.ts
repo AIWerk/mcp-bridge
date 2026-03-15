@@ -1,10 +1,23 @@
 // Core exports for @aiwerk/mcp-bridge
 
 // Transport classes
-export { BaseTransport, resolveEnvVars, resolveEnvRecord, resolveArgs, resolveAuthHeaders, resolveServerHeaders, warnIfNonTlsRemoteUrl } from "./transport-base.js";
+export {
+  BaseTransport,
+  resolveEnvVars,
+  resolveEnvRecord,
+  resolveArgs,
+  resolveAuthHeaders,
+  resolveAuthHeadersAsync,
+  resolveOAuth2Config,
+  resolveServerHeaders,
+  resolveServerHeadersAsync,
+  warnIfNonTlsRemoteUrl,
+} from "./transport-base.js";
 export { StdioTransport } from "./transport-stdio.js";
 export { SseTransport } from "./transport-sse.js";
 export { StreamableHttpTransport } from "./transport-streamable-http.js";
+export { OAuth2TokenManager } from "./oauth2-token-manager.js";
+export type { OAuth2Config } from "./oauth2-token-manager.js";
 
 // Router
 export { McpRouter } from "./mcp-router.js";

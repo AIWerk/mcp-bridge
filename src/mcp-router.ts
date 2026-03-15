@@ -16,6 +16,7 @@ import { isToolAllowed, processResult } from "./security.js";
 import { AdaptivePromotion } from "./adaptive-promotion.js";
 import { ResultCache, createResultCacheKey } from "./result-cache.js";
 import { ToolResolver } from "./tool-resolution.js";
+import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -83,9 +84,26 @@ export type RouterDispatchResponse =
     };
 
 export interface RouterTransportRefs {
-  sse: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: Logger, onReconnected?: () => Promise<void>) => McpTransport;
-  stdio: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: Logger, onReconnected?: () => Promise<void>) => McpTransport;
-  streamableHttp: new (config: McpServerConfig, clientConfig: McpClientConfig, logger: Logger, onReconnected?: () => Promise<void>) => McpTransport;
+  sse: new (
+    config: McpServerConfig,
+    clientConfig: McpClientConfig,
+    logger: Logger,
+    onReconnected?: () => Promise<void>,
+    tokenManager?: OAuth2TokenManager
+  ) => McpTransport;
+  stdio: new (
+    config: McpServerConfig,
+    clientConfig: McpClientConfig,
+    logger: Logger,
+    onReconnected?: () => Promise<void>
+  ) => McpTransport;
+  streamableHttp: new (
+    config: McpServerConfig,
+    clientConfig: McpClientConfig,
+    logger: Logger,
+    onReconnected?: () => Promise<void>,
+    tokenManager?: OAuth2TokenManager
+  ) => McpTransport;
 }
 
 interface RouterServerState {
@@ -123,6 +141,7 @@ export class McpRouter {
   private readonly maxBatchSize: number;
   private readonly states = new Map<string, RouterServerState>();
   private readonly toolResolver: ToolResolver;
+  private readonly tokenManager: OAuth2TokenManager;
   private intentRouter: IntentRouter | null = null;
   private promotion: AdaptivePromotion | null = null;
 
@@ -151,6 +170,7 @@ export class McpRouter {
       : null;
     this.maxBatchSize = clientConfig.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;
     this.toolResolver = new ToolResolver(Object.keys(servers));
+    this.tokenManager = new OAuth2TokenManager(logger);
 
     if (clientConfig.adaptivePromotion?.enabled) {
       this.promotion = new AdaptivePromotion(clientConfig.adaptivePromotion, logger);
@@ -668,6 +688,7 @@ export class McpRouter {
       this.intentRouter.clearIndex();
     }
     this.resultCache?.invalidate();
+    this.tokenManager.clear();
   }
 
   private async ensureConnected(server: string): Promise<RouterServerState> {
@@ -784,13 +805,13 @@ export class McpRouter {
     };
 
     if (serverConfig.transport === "sse") {
-      return new this.transportRefs.sse(serverConfig, this.clientConfig, this.logger, onReconnected);
+      return new this.transportRefs.sse(serverConfig, this.clientConfig, this.logger, onReconnected, this.tokenManager);
     }
     if (serverConfig.transport === "stdio") {
       return new this.transportRefs.stdio(serverConfig, this.clientConfig, this.logger, onReconnected);
     }
     if (serverConfig.transport === "streamable-http") {
-      return new this.transportRefs.streamableHttp(serverConfig, this.clientConfig, this.logger, onReconnected);
+      return new this.transportRefs.streamableHttp(serverConfig, this.clientConfig, this.logger, onReconnected, this.tokenManager);
     }
 
     throw new Error(`Unsupported transport: ${serverConfig.transport}`);

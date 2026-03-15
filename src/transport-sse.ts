@@ -1,13 +1,32 @@
-import { McpRequest, McpResponse, McpServerConfig, nextRequestId } from "./types.js";
-import { BaseTransport, resolveServerHeaders, warnIfNonTlsRemoteUrl } from "./transport-base.js";
+import { Logger, McpClientConfig, McpRequest, McpResponse, McpServerConfig, nextRequestId } from "./types.js";
+import { OAuth2TokenManager } from "./oauth2-token-manager.js";
+import {
+  BaseTransport,
+  resolveOAuth2Config,
+  resolveServerHeaders,
+  resolveServerHeadersAsync,
+  warnIfNonTlsRemoteUrl,
+} from "./transport-base.js";
 
 export class SseTransport extends BaseTransport {
   private endpointUrl: string | null = null;
   private sseAbortController: AbortController | null = null;
   private resolvedHeaders: Record<string, string> | null = null;
   private pendingRequestControllers = new Map<number, AbortController>();
+  private readonly tokenManager: OAuth2TokenManager;
 
   protected get transportName(): string { return "SSE"; }
+
+  constructor(
+    config: McpServerConfig,
+    clientConfig: McpClientConfig,
+    logger: Logger,
+    onReconnected?: () => Promise<void>,
+    tokenManager?: OAuth2TokenManager
+  ) {
+    super(config, clientConfig, logger, onReconnected);
+    this.tokenManager = tokenManager ?? new OAuth2TokenManager(logger);
+  }
 
   async connect(): Promise<void> {
     if (!this.config.url) {
@@ -15,8 +34,7 @@ export class SseTransport extends BaseTransport {
     }
 
     warnIfNonTlsRemoteUrl(this.config.url, this.logger);
-    // Resolve headers once and cache for all subsequent requests
-    this.resolvedHeaders = resolveServerHeaders(this.config);
+    await this.refreshResolvedHeaders();
 
     if (this.sseAbortController) {
       this.sseAbortController.abort();
@@ -31,7 +49,7 @@ export class SseTransport extends BaseTransport {
 
     // Fire and forget the stream reader
     this.startEventStream().catch((error) => {
-      if (error instanceof Error && error.name !== 'AbortError') {
+      if (error instanceof Error && error.name !== "AbortError") {
         this.logger.error("[mcp-bridge] SSE stream error:", error.message);
         this.scheduleReconnect();
       }
@@ -44,17 +62,66 @@ export class SseTransport extends BaseTransport {
 
   private _onEndpointReceived: (() => void) | null = null;
 
+  private async getBaseHeaders(forceRefresh = false): Promise<Record<string, string>> {
+    if (this.config.auth?.type === "oauth2") {
+      if (forceRefresh) {
+        this.invalidateOAuth2Token();
+      }
+      return this.refreshResolvedHeaders();
+    }
+
+    if (!this.resolvedHeaders) {
+      this.resolvedHeaders = resolveServerHeaders(this.config, undefined, this.clientConfig.envFallback);
+    }
+    return this.resolvedHeaders;
+  }
+
+  private async refreshResolvedHeaders(): Promise<Record<string, string>> {
+    if (this.config.auth?.type === "oauth2") {
+      this.resolvedHeaders = await resolveServerHeadersAsync(this.config, this.tokenManager, undefined, this.clientConfig.envFallback);
+    } else {
+      this.resolvedHeaders = resolveServerHeaders(this.config, undefined, this.clientConfig.envFallback);
+    }
+    return this.resolvedHeaders;
+  }
+
+  private invalidateOAuth2Token(): void {
+    if (this.config.auth?.type !== "oauth2") {
+      return;
+    }
+
+    const oauth2Config = resolveOAuth2Config(this.config, undefined, this.clientConfig.envFallback);
+    this.tokenManager.invalidate(oauth2Config.tokenUrl, oauth2Config.clientId);
+  }
+
+  private async fetchWithOAuthRetry(url: string, init: RequestInit): Promise<Response> {
+    const response = await fetch(url, init);
+    if (response.status !== 401 || this.config.auth?.type !== "oauth2") {
+      return response;
+    }
+
+    this.logger.warn("[mcp-bridge] SSE request returned 401, invalidating OAuth2 token and retrying once");
+    const refreshedBase = await this.getBaseHeaders(true);
+    const retryHeaders = {
+      ...refreshedBase,
+      ...Object.fromEntries(Array.from(new Headers(init.headers).entries()).filter(([key]) => key.toLowerCase() !== "authorization")),
+      Authorization: refreshedBase.Authorization,
+    };
+
+    return fetch(url, { ...init, headers: retryHeaders });
+  }
+
   private async startEventStream(): Promise<void> {
     if (!this.config.url) return;
 
-    const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
-    const headers = { ...base, "Accept": "text/event-stream" };
+    const base = await this.getBaseHeaders();
+    const headers = { ...base, Accept: "text/event-stream" };
 
     try {
-      const response = await fetch(this.config.url, {
+      const response = await this.fetchWithOAuthRetry(this.config.url, {
         method: "GET",
         headers,
-        signal: this.sseAbortController?.signal
+        signal: this.sseAbortController?.signal,
       });
 
       if (!response.ok) {
@@ -76,7 +143,7 @@ export class SseTransport extends BaseTransport {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
+        const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
         for (const line of lines) {
@@ -87,7 +154,7 @@ export class SseTransport extends BaseTransport {
       this.logger.warn("[mcp-bridge] SSE stream ended, scheduling reconnect");
       this.scheduleReconnect();
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === "AbortError") return;
       this.logger.error("SSE stream error:", error);
       this.scheduleReconnect();
     }
@@ -149,12 +216,12 @@ export class SseTransport extends BaseTransport {
     if (!this.connected || !this.endpointUrl) {
       throw new Error("SSE transport not connected or no endpoint URL");
     }
-    const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
+    const base = await this.getBaseHeaders();
     const headers = { ...base, "Content-Type": "application/json" };
-    const response = await fetch(this.endpointUrl!, {
+    const response = await this.fetchWithOAuthRetry(this.endpointUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(notification)
+      body: JSON.stringify(notification),
     });
     if (!response.ok) {
       this.logger.warn(`[mcp-bridge] SSE notification got HTTP ${response.status}`);
@@ -180,34 +247,36 @@ export class SseTransport extends BaseTransport {
 
       this.pendingRequests.set(id, { resolve, reject, timeout });
 
-      const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
-      const headers = { ...base, "Content-Type": "application/json" };
       const abortController = new AbortController();
       this.pendingRequestControllers.set(id, abortController);
 
       // The response arrives via the SSE stream (handleMessage), not from this fetch.
       // The fetch only confirms the server accepted the request (HTTP 200).
       // If the fetch fails, we reject immediately; otherwise we wait for the SSE stream.
-      fetch(this.endpointUrl!, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestWithId),
-        signal: abortController.signal
-      })
-        .then((response) => {
+      (async () => {
+        try {
+          const base = await this.getBaseHeaders();
+          const headers = { ...base, "Content-Type": "application/json" };
+          const response = await this.fetchWithOAuthRetry(this.endpointUrl!, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(requestWithId),
+            signal: abortController.signal,
+          });
+
           this.pendingRequestControllers.delete(id);
           if (!response.ok) {
             clearTimeout(timeout);
             this.pendingRequests.delete(id);
             reject(new Error(`HTTP ${response.status}`));
           }
-        })
-        .catch((error) => {
+        } catch (error) {
           this.pendingRequestControllers.delete(id);
           clearTimeout(timeout);
           this.pendingRequests.delete(id);
-          reject(error);
-        });
+          reject(error as Error);
+        }
+      })();
     });
   }
 

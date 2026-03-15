@@ -274,7 +274,7 @@ async function cmdServe(args: CliArgs, logger: Logger): Promise<void> {
   }
 
   // HTTP modes: require auth
-  if ((args.sse || args.http) && !config.http?.auth?.token) {
+  if ((args.sse || args.http) && !config.http?.auth) {
     logger.error("HTTP auth not configured. Set http.auth in config or use stdio mode.");
     process.exit(1);
   }

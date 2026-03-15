@@ -7,7 +7,15 @@ export interface Logger {
 
 export type HttpAuthConfig =
   | { type: "bearer"; token: string }
-  | { type: "header"; headers: Record<string, string> };
+  | { type: "header"; headers: Record<string, string> }
+  | {
+      type: "oauth2";
+      clientId: string;
+      clientSecret: string;
+      tokenUrl: string;
+      scopes?: string[];
+      audience?: string;
+    };
 
 export interface RetryConfig {
   maxAttempts?: number;
@@ -156,9 +164,6 @@ export interface McpServerConnection {
 /** Bridge-level config loaded from ~/.mcp-bridge/config.json */
 export interface BridgeConfig extends McpClientConfig {
   http?: {
-    auth?: {
-      type: "bearer";
-      token: string;
-    };
+    auth?: HttpAuthConfig;
   };
 }

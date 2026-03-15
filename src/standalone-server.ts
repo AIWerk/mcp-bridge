@@ -13,6 +13,7 @@ import {
 import { SseTransport } from "./transport-sse.js";
 import { StdioTransport } from "./transport-stdio.js";
 import { StreamableHttpTransport } from "./transport-streamable-http.js";
+import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 
 interface DirectToolEntry {
   serverName: string;
@@ -33,6 +34,7 @@ export class StandaloneServer {
   private router: McpRouter | null = null;
   private initialized = false;
   private lspMode = false;
+  private readonly tokenManager: OAuth2TokenManager;
 
   // Direct mode state
   private directTools: DirectToolEntry[] = [];
@@ -41,6 +43,7 @@ export class StandaloneServer {
   constructor(config: BridgeConfig, logger: Logger) {
     this.config = config;
     this.logger = logger;
+    this.tokenManager = new OAuth2TokenManager(logger);
 
     if (this.isRouterMode()) {
       this.router = new McpRouter(config.servers || {}, config, logger);
@@ -478,11 +481,11 @@ export class StandaloneServer {
 
     switch (serverConfig.transport) {
       case "sse":
-        return new SseTransport(serverConfig, this.config, this.logger, onReconnected);
+        return new SseTransport(serverConfig, this.config, this.logger, onReconnected, this.tokenManager);
       case "stdio":
         return new StdioTransport(serverConfig, this.config, this.logger, onReconnected);
       case "streamable-http":
-        return new StreamableHttpTransport(serverConfig, this.config, this.logger, onReconnected);
+        return new StreamableHttpTransport(serverConfig, this.config, this.logger, onReconnected, this.tokenManager);
       default:
         throw new Error(`Unsupported transport: ${serverConfig.transport}`);
     }
@@ -504,6 +507,7 @@ export class StandaloneServer {
       }
     }
     this.directConnections.clear();
+    this.tokenManager.clear();
 
     this.logger.info("[mcp-bridge] Shutdown complete");
   }

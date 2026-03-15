@@ -1,4 +1,5 @@
 import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, JsonRpcMessage } from "./types.js";
+import type { OAuth2Config, OAuth2TokenManager } from "./oauth2-token-manager.js";
 import { loadOpenClawDotEnvFallback } from "./config.js";
 
 export type PendingRequest = { resolve: (value: McpResponse) => void; reject: (reason: Error) => void; timeout: NodeJS.Timeout };
@@ -217,7 +218,52 @@ export function resolveAuthHeaders(
     return { Authorization: `Bearer ${token}` };
   }
 
-  return resolveEnvRecord(config.auth.headers, "auth header", extraEnv, envFallback);
+  if (config.auth.type === "header") {
+    return resolveEnvRecord(config.auth.headers, "auth header", extraEnv, envFallback);
+  }
+
+  throw new Error("[mcp-bridge] OAuth2 auth requires async header resolution via resolveAuthHeadersAsync");
+}
+
+export function resolveOAuth2Config(
+  config: McpServerConfig,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
+): OAuth2Config {
+  if (!config.auth || config.auth.type !== "oauth2") {
+    throw new Error("[mcp-bridge] resolveOAuth2Config called for non-oauth2 auth config");
+  }
+
+  const scopes = config.auth.scopes?.map((scope, index) =>
+    resolveEnvVars(scope, `oauth2 scope[${index}]`, extraEnv, envFallback)
+  );
+
+  return {
+    clientId: resolveEnvVars(config.auth.clientId, "oauth2 clientId", extraEnv, envFallback),
+    clientSecret: resolveEnvVars(config.auth.clientSecret, "oauth2 clientSecret", extraEnv, envFallback),
+    tokenUrl: resolveEnvVars(config.auth.tokenUrl, "oauth2 tokenUrl", extraEnv, envFallback),
+    ...(scopes && scopes.length > 0 ? { scopes } : {}),
+    ...(config.auth.audience
+      ? { audience: resolveEnvVars(config.auth.audience, "oauth2 audience", extraEnv, envFallback) }
+      : {}),
+  };
+}
+
+export async function resolveAuthHeadersAsync(
+  config: McpServerConfig,
+  tokenManager: OAuth2TokenManager,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
+): Promise<Record<string, string>> {
+  if (!config.auth) return {};
+
+  if (config.auth.type === "oauth2") {
+    const oauth2Config = resolveOAuth2Config(config, extraEnv, envFallback);
+    const token = await tokenManager.getToken(oauth2Config);
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  return resolveAuthHeaders(config, extraEnv, envFallback);
 }
 
 /**
@@ -230,6 +276,17 @@ export function resolveServerHeaders(
 ): Record<string, string> {
   const base = resolveEnvRecord(config.headers || {}, "header", extraEnv, envFallback);
   const auth = resolveAuthHeaders(config, extraEnv, envFallback);
+  return { ...base, ...auth };
+}
+
+export async function resolveServerHeadersAsync(
+  config: McpServerConfig,
+  tokenManager: OAuth2TokenManager,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
+): Promise<Record<string, string>> {
+  const base = resolveEnvRecord(config.headers || {}, "header", extraEnv, envFallback);
+  const auth = await resolveAuthHeadersAsync(config, tokenManager, extraEnv, envFallback);
   return { ...base, ...auth };
 }
 
