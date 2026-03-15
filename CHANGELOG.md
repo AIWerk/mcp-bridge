@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1] - 2026-03-15
+
+### Added
+- `tests/standalone-server.test.ts`: 18 unit tests for StandaloneServer (router/direct mode, tools/list, tools/call, error handling, LSP framing, shutdown)
+- `tests/transport-stdio.test.ts`: 5 E2E tests with real child process (connect, tool call round-trip, disconnect, crash handling, timeout)
+- Total: 158 tests
+
 ## [1.7.0] - 2026-03-15
 
 ### Fixed
