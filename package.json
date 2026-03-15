@@ -44,7 +44,8 @@
     "build": "tsc",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "validate-recipe": "npx tsx bin/validate-recipe.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.0"
