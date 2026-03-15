@@ -352,3 +352,47 @@ describe("SmartFilter", () => {
     assert.ok(recall >= 0.95, `Routing recall should be >= 95%, got ${(recall * 100).toFixed(1)}%`);
   });
 });
+
+// ─── Static method tests ────────────────────────────────────────────────────
+
+describe("SmartFilter.tokenize (static)", () => {
+  test("splits text into lowercase tokens", () => {
+    const tokens = SmartFilter.tokenize("Hello World");
+    assert.deepStrictEqual(tokens, ["hello", "world"]);
+  });
+
+  test("strips punctuation and splits", () => {
+    const tokens = SmartFilter.tokenize("send $100 to mom!");
+    assert.deepStrictEqual(tokens, ["send", "100", "to", "mom"]);
+  });
+
+  test("returns empty array for empty string", () => {
+    assert.deepStrictEqual(SmartFilter.tokenize(""), []);
+  });
+});
+
+describe("SmartFilter.synthesizeQuery (static)", () => {
+  test("extracts meaningful content from user turns", () => {
+    const turns: UserTurn[] = [
+      { content: "send money to mom", timestamp: Date.now() },
+    ];
+    const query = SmartFilter.synthesizeQuery(turns);
+    assert.strictEqual(query, "send money to mom");
+  });
+
+  test("skips noise turns and uses earlier meaningful turn", () => {
+    const turns: UserTurn[] = [
+      { content: "create a task for tomorrow", timestamp: Date.now() - 1000 },
+      { content: "yes", timestamp: Date.now() },
+    ];
+    const query = SmartFilter.synthesizeQuery(turns);
+    assert.strictEqual(query, "create a task for tomorrow");
+  });
+
+  test("returns empty string when all turns are noise", () => {
+    const turns: UserTurn[] = [
+      { content: "ok", timestamp: Date.now() },
+    ];
+    assert.strictEqual(SmartFilter.synthesizeQuery(turns), "");
+  });
+});

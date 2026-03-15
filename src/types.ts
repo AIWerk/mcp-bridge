@@ -90,7 +90,8 @@ export interface McpCallRequest extends McpRequest {
 let globalRequestId = 1;
 
 export function nextRequestId(): number {
-  return globalRequestId++;
+  globalRequestId = (globalRequestId + 1) % Number.MAX_SAFE_INTEGER;
+  return globalRequestId;
 }
 
 export interface McpResponse {

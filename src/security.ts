@@ -154,7 +154,20 @@ export function processResult(
   clientConfig: McpClientConfig
 ): any {
   let processed = applyMaxResultSize(result, serverConfig, clientConfig);
+  const wasTruncated = processed !== null && typeof processed === "object" && processed._truncated === true;
   // Sanitize step (only for trust=sanitize, handled inside applyTrustLevel)
   processed = applyTrustLevel(processed, serverName, serverConfig);
+
+  // If both truncated and untrusted, flatten the metadata to top level
+  const trust = serverConfig.trust ?? "trusted";
+  if (wasTruncated && trust === "untrusted") {
+    return {
+      _trust: "untrusted",
+      _server: serverName,
+      _truncated: true,
+      _originalLength: processed.result?._originalLength,
+      result: processed.result?.result,
+    };
+  }
   return processed;
 }

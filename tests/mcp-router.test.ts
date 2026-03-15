@@ -559,10 +559,10 @@ test("security: pipeline order - truncate then trust-tag", async () => {
   const result = await router.dispatch("pipe", "call", "tool");
   assert.equal("error" in result, false);
   if (!("error" in result) && result.action === "call") {
-    // Outer: trust wrapper
+    // Flat metadata: trust + truncation at top level (no nesting)
     assert.equal(result.result._trust, "untrusted");
-    // Inner: truncation wrapper
-    assert.equal(result.result.result._truncated, true);
+    assert.equal(result.result._truncated, true);
+    assert.equal(typeof result.result.result, "string");
   }
 });
 

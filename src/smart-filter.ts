@@ -94,8 +94,9 @@ export class SmartFilter {
 
     try {
       // Set up timeout
+      let timeoutId: ReturnType<typeof setTimeout>;
       const timeoutPromise = new Promise<FilterResult>((resolve) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           timeoutOccurred = true;
           this.logger.warn(`[smart-filter] Filter timeout after ${this.config.timeoutMs}ms, falling back to show all`);
           resolve(this.createUnfilteredResult(servers, allTools, "keyword"));
@@ -104,7 +105,12 @@ export class SmartFilter {
 
       const filterPromise = this.performFilter(servers, allTools, userTurns);
 
-      const result = await Promise.race([filterPromise, timeoutPromise]);
+      let result: FilterResult;
+      try {
+        result = await Promise.race([filterPromise, timeoutPromise]);
+      } finally {
+        clearTimeout(timeoutId!);
+      }
       result.metadata.timeoutOccurred = timeoutOccurred;
       
       const duration = Date.now() - startTime;
@@ -127,7 +133,7 @@ export class SmartFilter {
     userTurns: UserTurn[]
   ): Promise<FilterResult> {
     // Step 1: Query synthesis
-    const query = this.synthesizeQuery(userTurns);
+    const query = SmartFilter.synthesizeQuery(userTurns);
     
     if (!query) {
       this.logger.debug("[smart-filter] No meaningful query found, showing all servers");
@@ -161,7 +167,7 @@ export class SmartFilter {
   /**
    * Extract meaningful intent from last 1-3 user turns
    */
-  private synthesizeQuery(userTurns: UserTurn[]): string {
+  static synthesizeQuery(userTurns: UserTurn[]): string {
     if (!userTurns || userTurns.length === 0) {
       return "";
     }
@@ -173,7 +179,7 @@ export class SmartFilter {
       .map(turn => turn.content.trim());
 
     for (const content of recentTurns) {
-      const cleanedQuery = this.extractMeaningfulContent(content);
+      const cleanedQuery = SmartFilter.extractMeaningfulContent(content);
       if (cleanedQuery.length >= 3) {
         return cleanedQuery;
       }
@@ -181,7 +187,7 @@ export class SmartFilter {
 
     // If all recent turns are too short, try combining them
     const combined = recentTurns
-      .map(content => this.extractMeaningfulContent(content))
+      .map(content => SmartFilter.extractMeaningfulContent(content))
       .filter(content => content.length > 0)
       .join(" ")
       .trim();
@@ -189,7 +195,7 @@ export class SmartFilter {
     return combined.length >= 3 ? combined : "";
   }
 
-  private extractMeaningfulContent(content: string): string {
+  private static extractMeaningfulContent(content: string): string {
     // Remove metadata patterns
     const cleaned = content
       .replace(/\[.*?\]/g, "") // [timestamps], [commands]
@@ -244,7 +250,7 @@ export class SmartFilter {
    * Score servers using weighted overlap scoring
    */
   private scoreServers(query: string, servers: FilterableServer[]): Array<{ server: FilterableServer; score: number }> {
-    const queryWords = this.tokenize(query.toLowerCase());
+    const queryWords = SmartFilter.tokenize(query.toLowerCase());
     
     return servers.map(server => ({
       server,
@@ -252,7 +258,7 @@ export class SmartFilter {
     }));
   }
 
-  private tokenize(text: string): string[] {
+  static tokenize(text: string): string[] {
     return text
       .toLowerCase()
       .replace(/[^\w\s]/g, " ")
@@ -263,7 +269,7 @@ export class SmartFilter {
   private calculateServerScore(queryWords: string[], server: FilterableServer): number {
     if (queryWords.length === 0) return 0;
 
-    const descriptionWords = this.tokenize(server.description);
+    const descriptionWords = SmartFilter.tokenize(server.description);
     const keywordWords = server.keywords;
     const allServerWords = [...descriptionWords, ...keywordWords];
 
@@ -433,7 +439,7 @@ export class SmartFilter {
     query: string,
     selectedServers: Array<{ server: FilterableServer; score: number }>
   ): Array<{ serverId: string; tool: McpTool }> {
-    const queryWords = this.tokenize(query);
+    const queryWords = SmartFilter.tokenize(query);
     const allTools: Array<{ serverId: string; tool: McpTool; score: number }> = [];
 
     for (const { server } of selectedServers) {
@@ -455,8 +461,8 @@ export class SmartFilter {
   private calculateToolScore(queryWords: string[], tool: McpTool): number {
     if (queryWords.length === 0) return 0;
 
-    const nameWords = this.tokenize(tool.name);
-    const descWords = this.tokenize(tool.description || "");
+    const nameWords = SmartFilter.tokenize(tool.name);
+    const descWords = SmartFilter.tokenize(tool.description || "");
 
     const nameMatches = this.countOverlap(queryWords, nameWords);
     const descMatches = this.countOverlap(queryWords, descWords) - this.countOverlap(queryWords, nameWords);
@@ -525,12 +531,6 @@ export class SmartFilter {
 
 const MAX_KEYWORDS = 30;
 
-const NOISE_WORDS = new Set([
-  "yes", "no", "ok", "okay", "sure", "yep", "nope", "yeah", "nah",
-  "do", "it", "please", "thanks", "thank", "you", "hi", "hello",
-  "hey", "right", "alright", "fine", "got", "hmm", "hm",
-]);
-
 export const DEFAULTS: Required<SmartFilterConfig> = {
   enabled: true,
   embedding: "keyword",
@@ -545,14 +545,6 @@ export const DEFAULTS: Required<SmartFilterConfig> = {
   telemetry: false,
 };
 
-/** Lowercase, split on whitespace + punctuation, preserve numbers, drop empties. */
-export function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[\s\p{P}]+/u)
-    .filter(t => t.length > 0);
-}
-
 /** Normalize keywords: lowercase, trim, dedup, strip empties, cap at MAX_KEYWORDS. */
 export function validateKeywords(raw: string[]): string[] {
   const seen = new Set<string>();
@@ -565,21 +557,6 @@ export function validateKeywords(raw: string[]): string[] {
     if (out.length >= MAX_KEYWORDS) break;
   }
   return out;
-}
-
-/**
- * Extract a meaningful intent string from the last 1-3 user turns.
- * Returns null if no meaningful query can be extracted.
- */
-export function synthesizeQuery(userTurns: string[]): string | null {
-  const recent = userTurns.slice(-3).reverse();
-  for (const turn of recent) {
-    const tokens = tokenize(turn).filter(t => !NOISE_WORDS.has(t));
-    if (tokens.length >= 2) {
-      return tokens.join(" ");
-    }
-  }
-  return null;
 }
 
 export interface ServerScore {
@@ -599,9 +576,9 @@ export function scoreServer(
 ): number {
   if (queryTokens.length === 0) return 0;
 
-  const descTokens = new Set(tokenize(description));
-  for (const t of tokenize(serverName)) descTokens.add(t);
-  const kwTokens = new Set(validateKeywords(keywords).flatMap(kw => tokenize(kw)));
+  const descTokens = new Set(SmartFilter.tokenize(description));
+  for (const t of SmartFilter.tokenize(serverName)) descTokens.add(t);
+  const kwTokens = new Set(validateKeywords(keywords).flatMap(kw => SmartFilter.tokenize(kw)));
 
   let descMatches = 0;
   let kwOnlyMatches = 0;
@@ -711,7 +688,8 @@ export function filterServers(
     const merged = { ...DEFAULTS, ...config };
     const startTime = Date.now();
 
-    const query = synthesizeQuery(userTurns);
+    const userTurnObjects: UserTurn[] = userTurns.map(content => ({ content, timestamp: Date.now() }));
+    const query = SmartFilter.synthesizeQuery(userTurnObjects) || null;
     if (!query) return showAll("no-query");
 
     if (Date.now() - startTime > merged.timeoutMs) {
@@ -719,7 +697,7 @@ export function filterServers(
       return showAll("timeout", query);
     }
 
-    const queryTokens = tokenize(query);
+    const queryTokens = SmartFilter.tokenize(query);
     if (queryTokens.length === 0) return showAll("no-query");
 
     const scores = scoreAllServers(queryTokens, servers);

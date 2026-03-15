@@ -102,7 +102,8 @@ export class SseTransport extends BaseTransport {
     }
 
     if (trimmed.startsWith("data:")) {
-      state.dataBuffer.push(trimmed.substring(5).trimStart());
+      const rawData = trimmed.substring(5);
+      state.dataBuffer.push(rawData.startsWith(" ") ? rawData.substring(1) : rawData);
       return;
     }
 
@@ -118,7 +119,7 @@ export class SseTransport extends BaseTransport {
         if (data.startsWith("/")) {
           const base = new URL(this.config.url!);
           this.endpointUrl = `${base.origin}${data}`;
-        } else if (data.startsWith("http")) {
+        } else if (data.startsWith("http://") || data.startsWith("https://")) {
           if (!this.isSameOrigin(data)) {
             this.logger.warn(`[mcp-bridge] Rejected SSE endpoint with mismatched origin: ${data}`);
             return;

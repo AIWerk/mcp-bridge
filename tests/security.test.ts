@@ -7,6 +7,7 @@ import {
   applyTrustLevel,
   processResult,
 } from "../src/security.ts";
+import { nextRequestId } from "../src/types.ts";
 import type { McpServerConfig, McpClientConfig } from "../src/types.ts";
 
 function serverConfig(overrides: Partial<McpServerConfig> = {}): McpServerConfig {
@@ -184,7 +185,7 @@ test("processResult applies truncate → sanitize → trust-tag", () => {
   assert.ok(typeof out === "object");
 });
 
-test("processResult with untrusted wraps truncated result", () => {
+test("processResult with untrusted + truncated produces flat metadata (not nested)", () => {
   const result = { data: "x".repeat(200) };
   const out = processResult(
     result,
@@ -194,5 +195,25 @@ test("processResult with untrusted wraps truncated result", () => {
   );
   assert.equal(out._trust, "untrusted");
   assert.equal(out._server, "srv");
-  assert.equal(out.result._truncated, true);
+  assert.equal(out._truncated, true);
+  assert.equal(typeof out._originalLength, "number");
+  // result should be the truncated string, not a nested object
+  assert.equal(typeof out.result, "string");
+  assert.equal(out.result.length, 30);
+});
+
+// ─── nextRequestId overflow protection ──────────────────────────────────────
+
+test("nextRequestId returns incrementing numbers", () => {
+  const a = nextRequestId();
+  const b = nextRequestId();
+  assert.ok(b > a, "IDs should increment");
+});
+
+test("nextRequestId never exceeds MAX_SAFE_INTEGER", () => {
+  // Just verify it returns a safe integer after many calls
+  for (let i = 0; i < 100; i++) {
+    const id = nextRequestId();
+    assert.ok(Number.isSafeInteger(id), `ID ${id} should be a safe integer`);
+  }
 });
