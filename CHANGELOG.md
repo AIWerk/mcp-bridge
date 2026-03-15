@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.9.0] - 2026-03-15
+
+### Added
+- **Multi-Server Tool Resolution** — when multiple servers provide the same tool name, the router scores candidates using config priority, recency boost, and parameter matching. Auto-dispatches when one candidate clearly wins; returns disambiguation response with `suggested: true` when scores are close.
+- **Tool Call Result Caching** — LRU cache for tool call results with configurable `maxEntries`, `defaultTtlMs`, and per-tool TTL overrides. Error responses are never cached. Cache cleared on `action=refresh`.
+- **Batch Calls** — `action=batch` executes multiple tool calls in parallel. Per-call error isolation (one failure doesn't abort the batch). Configurable `maxBatchSize` (default: 10).
+- New source files: `src/tool-resolution.ts`, `src/result-cache.ts`
+- 16 new tests (226 total)
+
+## [1.8.0] - 2026-03-15
+
+### Added
+- **Recipe Spec v2 support** — `install-server.sh` now prefers `recipe.json` (schemaVersion 2) over legacy `config.json` with full backwards compatibility
+- **Recipe Validator CLI** — `npx @aiwerk/mcp-bridge validate-recipe ./recipe.json`
+- 14 bundled server recipes migrated to Universal Recipe Spec v2.0 format
+- README section on Recipe Spec v2 for third-party recipe authors
+- 47 new validator tests (205 total)
+
 ## [1.7.2] - 2026-03-15
 
 ### Fixed
