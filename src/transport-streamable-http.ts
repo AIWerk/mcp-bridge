@@ -1,8 +1,10 @@
 import { McpRequest, McpResponse, McpServerConfig, nextRequestId } from "./types.js";
-import { BaseTransport, resolveEnvRecord, warnIfNonTlsRemoteUrl } from "./transport-base.js";
+import { BaseTransport, resolveServerHeaders, warnIfNonTlsRemoteUrl } from "./transport-base.js";
 
 export class StreamableHttpTransport extends BaseTransport {
   private sessionId?: string;
+  private resolvedHeaders: Record<string, string> | null = null;
+  private pendingRequestControllers = new Map<number, AbortController>();
 
   protected get transportName(): string { return "streamable-http"; }
 
@@ -12,8 +14,8 @@ export class StreamableHttpTransport extends BaseTransport {
     }
 
     warnIfNonTlsRemoteUrl(this.config.url, this.logger);
-    // Validate that all header env vars resolve (fail fast)
-    resolveEnvRecord(this.config.headers || {}, "header");
+    // Validate that all header/auth env vars resolve (fail fast)
+    this.resolvedHeaders = resolveServerHeaders(this.config);
     await this.probeServer();
 
     this.connected = true;
@@ -31,18 +33,23 @@ export class StreamableHttpTransport extends BaseTransport {
 
     return new Promise((resolve, reject) => {
       const requestTimeout = this.clientConfig.requestTimeoutMs || 60000;
+      const abortController = new AbortController();
       const timeout = setTimeout(() => {
+        abortController.abort();
+        this.pendingRequestControllers.delete(id);
         this.pendingRequests.delete(id);
         reject(new Error(`Request timeout after ${requestTimeout}ms`));
       }, requestTimeout);
 
       this.pendingRequests.set(id, { resolve, reject, timeout });
+      this.pendingRequestControllers.set(id, abortController);
 
-      const headers = resolveEnvRecord({
+      const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
+      const headers: Record<string, string> = {
+        ...base,
         "Accept": "application/json, text/event-stream",
-        ...this.config.headers,
         "Content-Type": "application/json"
-      }, "header");
+      };
 
       if (this.sessionId) {
         headers["mcp-session-id"] = this.sessionId;
@@ -51,9 +58,11 @@ export class StreamableHttpTransport extends BaseTransport {
       fetch(this.config.url!, {
         method: "POST",
         headers,
-        body: JSON.stringify(requestWithId)
+        body: JSON.stringify(requestWithId),
+        signal: abortController.signal
       })
         .then(async response => {
+          this.pendingRequestControllers.delete(id);
           const responseSessionId = response.headers.get("mcp-session-id");
           if (responseSessionId) {
             this.sessionId = responseSessionId;
@@ -108,6 +117,7 @@ export class StreamableHttpTransport extends BaseTransport {
           }
         })
         .catch(error => {
+          this.pendingRequestControllers.delete(id);
           clearTimeout(timeout);
           this.pendingRequests.delete(id);
 
@@ -126,11 +136,12 @@ export class StreamableHttpTransport extends BaseTransport {
       throw new Error("Streamable HTTP transport not connected");
     }
 
-    const headers = resolveEnvRecord({
+    const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
+    const headers: Record<string, string> = {
+      ...base,
       "Accept": "application/json, text/event-stream",
-      ...this.config.headers,
       "Content-Type": "application/json"
-    }, "header");
+    };
 
     if (this.sessionId) {
       headers["mcp-session-id"] = this.sessionId;
@@ -164,10 +175,10 @@ export class StreamableHttpTransport extends BaseTransport {
     if (!this.config.url) return;
 
     try {
-      const optionsResponse = await fetch(this.config.url, { method: "OPTIONS" });
+      const headers = this.resolvedHeaders ?? resolveServerHeaders(this.config);
+      const optionsResponse = await fetch(this.config.url, { method: "OPTIONS", headers });
       if (optionsResponse.ok) return;
 
-      const headers = resolveEnvRecord(this.config.headers || {}, "header");
       const headResponse = await fetch(this.config.url, { method: "HEAD", headers });
       if (!headResponse.ok) {
         this.logger.warn(`[mcp-bridge] Streamable HTTP server probe: OPTIONS ${optionsResponse.status}, HEAD ${headResponse.status} (non-blocking, connection continues)`);
@@ -181,11 +192,16 @@ export class StreamableHttpTransport extends BaseTransport {
     this.connected = false;
     this.cleanupReconnectTimer();
 
+    for (const [, controller] of this.pendingRequestControllers) {
+      controller.abort();
+    }
+    this.pendingRequestControllers.clear();
+
     // Send DELETE request if we have a session to clean up
     if (this.sessionId && this.config.url) {
       try {
-        const headers = resolveEnvRecord(this.config.headers || {}, "header");
-        headers["mcp-session-id"] = this.sessionId;
+        const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
+        const headers = { ...base, "mcp-session-id": this.sessionId };
 
         await fetch(this.config.url, {
           method: "DELETE",
@@ -200,5 +216,9 @@ export class StreamableHttpTransport extends BaseTransport {
     }
 
     this.rejectAllPending("Connection closed");
+  }
+
+  async shutdown(): Promise<void> {
+    await this.disconnect();
   }
 }

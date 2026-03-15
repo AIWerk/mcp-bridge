@@ -493,7 +493,7 @@ export class StandaloneServer {
     this.logger.info("[mcp-bridge] Shutting down...");
 
     if (this.router) {
-      await this.router.disconnectAll();
+      await this.router.shutdown(this.config.shutdownTimeoutMs);
     }
 
     for (const [name, conn] of this.directConnections) {

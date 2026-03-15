@@ -136,6 +136,12 @@ export class ToolResolver {
     return [...this.toolsByName.keys()];
   }
 
+  clear(): void {
+    this.toolsByName.clear();
+    this.toolNamesByServer.clear();
+    this.recentCalls.length = 0;
+  }
+
   private scoreCandidate(server: string, inputSchema: any, params?: Record<string, unknown>): number {
     const base = this.basePriority.get(server) ?? BASE_PRIORITY_MIN;
     const recency = this.wasUsedRecently(server) ? RECENCY_BOOST : 0;

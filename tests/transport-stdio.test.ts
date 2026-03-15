@@ -121,6 +121,16 @@ test("stdio transport: disconnect cleans up", async () => {
   assert.equal(transport.isConnected(), false);
 });
 
+test("stdio transport: shutdown terminates process", async () => {
+  const transport = makeEchoTransport();
+
+  await transport.connect();
+  assert.ok(transport.isConnected());
+
+  await transport.shutdown?.(200);
+  assert.equal(transport.isConnected(), false);
+});
+
 test("stdio transport: process crash triggers disconnect", async () => {
   // Server that exits immediately after first message
   const crashScript = `

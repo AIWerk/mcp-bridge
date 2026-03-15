@@ -299,7 +299,23 @@ export class StdioTransport extends BaseTransport {
         }
       }
 
-      await this.terminateProcessGracefully(activeProcess);
+      await this.terminateProcessGracefully(activeProcess, this.clientConfig.shutdownTimeoutMs ?? 5000);
+      if (this.process === activeProcess) {
+        this.process = null;
+      }
+    }
+
+    this.rejectAllPending("Connection closed");
+  }
+
+  async shutdown(timeoutMs: number = this.clientConfig.shutdownTimeoutMs ?? 5000): Promise<void> {
+    this.isShuttingDown = true;
+    this.connected = false;
+    this.cleanupReconnectTimer();
+
+    const activeProcess = this.process;
+    if (activeProcess) {
+      await this.terminateProcessGracefully(activeProcess, timeoutMs);
       if (this.process === activeProcess) {
         this.process = null;
       }
@@ -312,8 +328,8 @@ export class StdioTransport extends BaseTransport {
     return this.connected && this.process !== null;
   }
 
-  private async terminateProcessGracefully(proc: ChildProcess): Promise<void> {
-    if (proc.exitCode !== null || proc.killed) return;
+  private async terminateProcessGracefully(proc: ChildProcess, timeoutMs: number): Promise<void> {
+    if (proc.exitCode !== null) return;
 
     await new Promise<void>((resolve) => {
       let done = false;
@@ -331,18 +347,17 @@ export class StdioTransport extends BaseTransport {
       proc.once("exit", onExit);
 
       try {
-        proc.kill("SIGINT");
+        proc.kill("SIGTERM");
       } catch {
         finish();
         return;
       }
 
       forceKillTimer = setTimeout(() => {
-        if (proc.exitCode === null && !proc.killed) {
-          try { proc.kill("SIGTERM"); } catch { /* ignore */ }
+        if (proc.exitCode === null) {
+          try { proc.kill("SIGKILL"); } catch { /* ignore */ }
         }
-        setTimeout(finish, 200);
-      }, 2000);
+      }, Math.max(0, timeoutMs));
     });
   }
 }

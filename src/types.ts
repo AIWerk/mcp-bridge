@@ -5,13 +5,25 @@ export interface Logger {
   debug: (...args: unknown[]) => void;
 }
 
+export type HttpAuthConfig =
+  | { type: "bearer"; token: string }
+  | { type: "header"; headers: Record<string, string> };
+
+export interface RetryConfig {
+  maxAttempts?: number;
+  delayMs?: number;
+  backoffMultiplier?: number;
+  retryOn?: Array<"timeout" | "connection_error">;
+}
+
 export interface McpServerConfig {
   transport: "sse" | "stdio" | "streamable-http";
   /** Human-readable description for router tool description generation */
   description?: string;
-  // SSE transport
+  // SSE / streamable-http transport
   url?: string;
   headers?: Record<string, string>;
+  auth?: HttpAuthConfig;
   // Stdio transport
   command?: string;
   args?: string[];
@@ -27,6 +39,8 @@ export interface McpServerConfig {
   };
   // Security: max result size (overrides global)
   maxResultChars?: number;
+  // Per-server tool call retry policy (action=call only)
+  retry?: RetryConfig;
 }
 
 export interface McpClientConfig {
@@ -36,6 +50,7 @@ export interface McpClientConfig {
   reconnectIntervalMs?: number;
   connectionTimeoutMs?: number;
   requestTimeoutMs?: number;
+  shutdownTimeoutMs?: number;
   routerIdleTimeoutMs?: number;
   routerMaxConcurrent?: number;
   maxBatchSize?: number;
@@ -60,6 +75,8 @@ export interface McpClientConfig {
     minCalls?: number;
     decayMs?: number;
   };
+  // Global tool call retry policy (can be overridden per server)
+  retry?: RetryConfig;
   // Tool call result cache (in-memory LRU)
   resultCache?: {
     enabled?: boolean;
@@ -122,6 +139,7 @@ export interface McpResponse {
 export interface McpTransport {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+  shutdown?(timeoutMs?: number): Promise<void>;
   sendRequest(request: McpRequest): Promise<McpResponse>;
   sendNotification(notification: any): Promise<void>;
   isConnected(): boolean;

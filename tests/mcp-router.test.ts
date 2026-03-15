@@ -7,6 +7,7 @@ type Behavior = {
   tools: McpTool[];
   callResult?: any;
   callError?: { code: number; message: string };
+  callThrowSequence?: Error[];
   connectError?: Error;
 };
 
@@ -23,6 +24,7 @@ class MockTransport implements McpTransport {
   requests: McpRequest[] = [];
   connectCount = 0;
   disconnectCount = 0;
+  shutdownCount = 0;
   private readonly key: string;
 
   constructor(config: McpServerConfig, _clientConfig?: any, _logger?: any, _onReconnected?: () => Promise<void>) {
@@ -44,6 +46,11 @@ class MockTransport implements McpTransport {
     this.connected = false;
   }
 
+  async shutdown(): Promise<void> {
+    this.shutdownCount += 1;
+    this.connected = false;
+  }
+
   async sendRequest(request: McpRequest): Promise<McpResponse> {
     this.requests.push(request);
     const behavior = MockTransport.behaviors.get(this.key);
@@ -57,6 +64,10 @@ class MockTransport implements McpTransport {
     }
 
     if (request.method === "tools/call") {
+      if (behavior?.callThrowSequence?.length) {
+        const nextError = behavior.callThrowSequence.shift();
+        if (nextError) throw nextError;
+      }
       if (behavior?.callError) {
         return {
           jsonrpc: "2.0",
@@ -100,6 +111,9 @@ function makeRouter(
     intentRouting?: McpClientConfig["intentRouting"];
     maxResultChars?: number;
     adaptivePromotion?: McpClientConfig["adaptivePromotion"];
+    retry?: McpClientConfig["retry"];
+    shutdownTimeoutMs?: number;
+    resultCache?: McpClientConfig["resultCache"];
   } = {}
 ): McpRouter {
   return new McpRouter(
@@ -111,7 +125,10 @@ function makeRouter(
       schemaCompression: overrides.schemaCompression,
       intentRouting: overrides.intentRouting,
       maxResultChars: overrides.maxResultChars,
-      adaptivePromotion: overrides.adaptivePromotion
+      adaptivePromotion: overrides.adaptivePromotion,
+      retry: overrides.retry,
+      shutdownTimeoutMs: overrides.shutdownTimeoutMs,
+      resultCache: overrides.resultCache
     },
     makeLogger(),
     {
@@ -446,6 +463,124 @@ test("action=intent returns error for unknown intent gracefully", async () => {
     assert.equal(result.error, "invalid_params");
     assert.ok(result.message.includes("No tool found"));
   }
+});
+
+test("action=call retries transient transport errors and reports retries count", async () => {
+  MockTransport.behaviors.set("mock://retry", {
+    tools: [{ name: "ping", description: "Ping", inputSchema: { type: "object" } }],
+    callResult: { ok: true },
+    callThrowSequence: [
+      new Error("Request timeout after 1000ms"),
+      new Error("fetch failed: socket hang up")
+    ]
+  });
+
+  const router = makeRouter(
+    { retry: { transport: "sse", url: "mock://retry" } },
+    { retry: { maxAttempts: 3, delayMs: 1, backoffMultiplier: 1, retryOn: ["timeout", "connection_error"] } }
+  );
+
+  const result = await router.dispatch("retry", "call", "ping", {});
+  assert.equal("error" in result, false);
+  if (!('error' in result) && result.action === "call") {
+    assert.deepEqual(result.result, { ok: true });
+    assert.equal(result.retries, 2);
+  }
+
+  const instance = MockTransport.instances.get("mock://retry");
+  assert.ok(instance);
+  const callCount = instance!.requests.filter((req) => req.method === "tools/call").length;
+  assert.equal(callCount, 3);
+});
+
+test("action=call does not retry on non-transient transport errors", async () => {
+  MockTransport.behaviors.set("mock://noretry", {
+    tools: [{ name: "ping", description: "Ping", inputSchema: { type: "object" } }],
+    callThrowSequence: [new Error("invalid params from client")]
+  });
+
+  const router = makeRouter(
+    { noretry: { transport: "sse", url: "mock://noretry" } },
+    { retry: { maxAttempts: 3, delayMs: 1, backoffMultiplier: 1, retryOn: ["timeout", "connection_error"] } }
+  );
+
+  const result = await router.dispatch("noretry", "call", "ping", {});
+  assert.ok("error" in result);
+
+  const instance = MockTransport.instances.get("mock://noretry");
+  assert.ok(instance);
+  const callCount = instance!.requests.filter((req) => req.method === "tools/call").length;
+  assert.equal(callCount, 1);
+});
+
+test("server retry config overrides global retry config", async () => {
+  MockTransport.behaviors.set("mock://override", {
+    tools: [{ name: "ping", description: "Ping", inputSchema: { type: "object" } }],
+    callThrowSequence: [new Error("Request timeout after 1000ms"), new Error("Request timeout after 1000ms")]
+  });
+
+  const router = makeRouter(
+    {
+      override: {
+        transport: "sse",
+        url: "mock://override",
+        retry: { maxAttempts: 1, delayMs: 1, backoffMultiplier: 1, retryOn: ["timeout"] }
+      }
+    },
+    { retry: { maxAttempts: 3, delayMs: 1, backoffMultiplier: 1, retryOn: ["timeout"] } }
+  );
+
+  const result = await router.dispatch("override", "call", "ping", {});
+  assert.ok("error" in result);
+
+  const instance = MockTransport.instances.get("mock://override");
+  assert.ok(instance);
+  const callCount = instance!.requests.filter((req) => req.method === "tools/call").length;
+  assert.equal(callCount, 1);
+});
+
+test("shutdown closes transports via shutdown()", async () => {
+  MockTransport.behaviors.set("mock://shutdown", {
+    tools: [{ name: "ping", description: "Ping", inputSchema: { type: "object" } }]
+  });
+
+  const router = makeRouter({ s: { transport: "sse", url: "mock://shutdown" } });
+  await router.dispatch("s", "list");
+
+  await router.shutdown(10);
+
+  const instance = MockTransport.instances.get("mock://shutdown");
+  assert.ok(instance);
+  assert.equal(instance!.shutdownCount, 1);
+  assert.equal(instance!.isConnected(), false);
+});
+
+test("shutdown clears result cache", async () => {
+  MockTransport.behaviors.set("mock://cache-shutdown", {
+    tools: [{ name: "ping", description: "Ping", inputSchema: { type: "object" } }],
+    callResult: { ok: true }
+  });
+
+  const router = makeRouter(
+    { s: { transport: "sse", url: "mock://cache-shutdown" } },
+    { resultCache: { enabled: true } }
+  );
+
+  await router.dispatch("s", "call", "ping", { a: 1 });
+  await router.dispatch("s", "call", "ping", { a: 1 });
+
+  let instance = MockTransport.instances.get("mock://cache-shutdown");
+  assert.ok(instance);
+  let callCount = instance!.requests.filter((req) => req.method === "tools/call").length;
+  assert.equal(callCount, 1);
+
+  await router.shutdown();
+
+  await router.dispatch("s", "call", "ping", { a: 1 });
+  instance = MockTransport.instances.get("mock://cache-shutdown");
+  assert.ok(instance);
+  callCount = instance!.requests.filter((req) => req.method === "tools/call").length;
+  assert.equal(callCount, 1);
 });
 
 // ─── Security integration tests ──────────────────────────────────────────────

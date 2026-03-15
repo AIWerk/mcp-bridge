@@ -1,7 +1,7 @@
 // Core exports for @aiwerk/mcp-bridge
 
 // Transport classes
-export { BaseTransport, resolveEnvVars, resolveEnvRecord, resolveArgs, warnIfNonTlsRemoteUrl } from "./transport-base.js";
+export { BaseTransport, resolveEnvVars, resolveEnvRecord, resolveArgs, resolveAuthHeaders, resolveServerHeaders, warnIfNonTlsRemoteUrl } from "./transport-base.js";
 export { StdioTransport } from "./transport-stdio.js";
 export { SseTransport } from "./transport-sse.js";
 export { StreamableHttpTransport } from "./transport-streamable-http.js";
@@ -30,6 +30,8 @@ export type {
   Logger,
   McpServerConfig,
   McpClientConfig,
+  HttpAuthConfig,
+  RetryConfig,
   McpTool,
   McpRequest,
   McpCallRequest,

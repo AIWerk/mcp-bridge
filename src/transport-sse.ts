@@ -1,10 +1,11 @@
 import { McpRequest, McpResponse, McpServerConfig, nextRequestId } from "./types.js";
-import { BaseTransport, resolveEnvRecord, warnIfNonTlsRemoteUrl } from "./transport-base.js";
+import { BaseTransport, resolveServerHeaders, warnIfNonTlsRemoteUrl } from "./transport-base.js";
 
 export class SseTransport extends BaseTransport {
   private endpointUrl: string | null = null;
   private sseAbortController: AbortController | null = null;
   private resolvedHeaders: Record<string, string> | null = null;
+  private pendingRequestControllers = new Map<number, AbortController>();
 
   protected get transportName(): string { return "SSE"; }
 
@@ -15,7 +16,7 @@ export class SseTransport extends BaseTransport {
 
     warnIfNonTlsRemoteUrl(this.config.url, this.logger);
     // Resolve headers once and cache for all subsequent requests
-    this.resolvedHeaders = resolveEnvRecord(this.config.headers || {}, "header");
+    this.resolvedHeaders = resolveServerHeaders(this.config);
 
     if (this.sseAbortController) {
       this.sseAbortController.abort();
@@ -46,7 +47,7 @@ export class SseTransport extends BaseTransport {
   private async startEventStream(): Promise<void> {
     if (!this.config.url) return;
 
-    const base = this.resolvedHeaders ?? resolveEnvRecord(this.config.headers || {}, "header");
+    const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
     const headers = { ...base, "Accept": "text/event-stream" };
 
     try {
@@ -148,7 +149,7 @@ export class SseTransport extends BaseTransport {
     if (!this.connected || !this.endpointUrl) {
       throw new Error("SSE transport not connected or no endpoint URL");
     }
-    const base = this.resolvedHeaders ?? resolveEnvRecord(this.config.headers || {}, "header");
+    const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
     const headers = { ...base, "Content-Type": "application/json" };
     const response = await fetch(this.endpointUrl!, {
       method: "POST",
@@ -171,14 +172,18 @@ export class SseTransport extends BaseTransport {
     return new Promise((resolve, reject) => {
       const requestTimeout = this.clientConfig.requestTimeoutMs || 60000;
       const timeout = setTimeout(() => {
+        this.pendingRequestControllers.get(id)?.abort();
+        this.pendingRequestControllers.delete(id);
         this.pendingRequests.delete(id);
         reject(new Error(`Request timeout after ${requestTimeout}ms`));
       }, requestTimeout);
 
       this.pendingRequests.set(id, { resolve, reject, timeout });
 
-      const base = this.resolvedHeaders ?? resolveEnvRecord(this.config.headers || {}, "header");
+      const base = this.resolvedHeaders ?? resolveServerHeaders(this.config);
       const headers = { ...base, "Content-Type": "application/json" };
+      const abortController = new AbortController();
+      this.pendingRequestControllers.set(id, abortController);
 
       // The response arrives via the SSE stream (handleMessage), not from this fetch.
       // The fetch only confirms the server accepted the request (HTTP 200).
@@ -186,9 +191,11 @@ export class SseTransport extends BaseTransport {
       fetch(this.endpointUrl!, {
         method: "POST",
         headers,
-        body: JSON.stringify(requestWithId)
+        body: JSON.stringify(requestWithId),
+        signal: abortController.signal
       })
         .then((response) => {
+          this.pendingRequestControllers.delete(id);
           if (!response.ok) {
             clearTimeout(timeout);
             this.pendingRequests.delete(id);
@@ -196,6 +203,7 @@ export class SseTransport extends BaseTransport {
           }
         })
         .catch((error) => {
+          this.pendingRequestControllers.delete(id);
           clearTimeout(timeout);
           this.pendingRequests.delete(id);
           reject(error);
@@ -223,6 +231,15 @@ export class SseTransport extends BaseTransport {
       this.sseAbortController = null;
     }
 
+    for (const [, controller] of this.pendingRequestControllers) {
+      controller.abort();
+    }
+    this.pendingRequestControllers.clear();
+
     this.rejectAllPending("Connection closed");
+  }
+
+  async shutdown(): Promise<void> {
+    await this.disconnect();
   }
 }

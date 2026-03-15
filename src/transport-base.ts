@@ -203,6 +203,37 @@ export function resolveArgs(
 }
 
 /**
+ * Resolve auth config into HTTP headers.
+ */
+export function resolveAuthHeaders(
+  config: McpServerConfig,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
+): Record<string, string> {
+  if (!config.auth) return {};
+
+  if (config.auth.type === "bearer") {
+    const token = resolveEnvVars(config.auth.token, "auth token", extraEnv, envFallback);
+    return { Authorization: `Bearer ${token}` };
+  }
+
+  return resolveEnvRecord(config.auth.headers, "auth header", extraEnv, envFallback);
+}
+
+/**
+ * Resolve server headers and merge auth headers (auth takes precedence).
+ */
+export function resolveServerHeaders(
+  config: McpServerConfig,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
+): Record<string, string> {
+  const base = resolveEnvRecord(config.headers || {}, "header", extraEnv, envFallback);
+  const auth = resolveAuthHeaders(config, extraEnv, envFallback);
+  return { ...base, ...auth };
+}
+
+/**
  * Warn if a URL uses non-TLS HTTP to a remote (non-localhost) host.
  */
 export function warnIfNonTlsRemoteUrl(rawUrl: string, logger: Logger): void {

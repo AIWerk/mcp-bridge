@@ -59,7 +59,7 @@ export interface RouterServerStatus {
 export type RouterDispatchResponse =
   | { server: string; action: "list"; tools: RouterToolHint[] }
   | { server: string; action: "refresh"; refreshed: true; tools: RouterToolHint[] }
-  | { server: string; action: "call"; tool: string; result: any }
+  | { server: string; action: "call"; tool: string; result: any; retries?: number }
   | { server: string; action: "schema"; tool: string; schema: any; description: string }
   | { action: "status"; servers: RouterServerStatus[] }
   | { action: "batch"; results: RouterBatchResult[] }
@@ -103,6 +103,14 @@ interface RouterServerState {
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_CONCURRENT = 5;
 const DEFAULT_MAX_BATCH_SIZE = 10;
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5000;
+
+interface NormalizedRetryPolicy {
+  maxAttempts: number;
+  delayMs: number;
+  backoffMultiplier: number;
+  retryOn: Set<"timeout" | "connection_error">;
+}
 
 export class McpRouter {
   private readonly servers: Record<string, McpServerConfig>;
@@ -348,14 +356,8 @@ export class McpRouter {
       }
 
       this.markUsed(server);
-      const response = await state.transport.sendRequest({
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: {
-          name: tool,
-          arguments: params ?? {}
-        }
-      });
+      const callOutcome = await this.callToolWithRetry(server, tool, params ?? {}, state.transport);
+      const response = callOutcome.response;
 
       if (response.error) {
         return this.error("mcp_error", response.error.message, undefined, response.error.code);
@@ -372,7 +374,13 @@ export class McpRouter {
       if (this.resultCache && cacheKey) {
         this.resultCache.set(cacheKey, result);
       }
-      return { server, action: "call", tool, result };
+      return {
+        server,
+        action: "call",
+        tool,
+        result,
+        ...(callOutcome.retries > 0 ? { retries: callOutcome.retries } : {})
+      };
     } catch (error) {
       return this.error("mcp_error", error instanceof Error ? error.message : String(error));
     }
@@ -541,10 +549,125 @@ export class McpRouter {
     return { action: "promotions", promoted, stats };
   }
 
+  private getRetryPolicy(server: string): NormalizedRetryPolicy {
+    const globalRetry = this.clientConfig.retry ?? {};
+    const serverRetry = this.servers[server].retry ?? {};
+
+    const maxAttemptsRaw = serverRetry.maxAttempts ?? globalRetry.maxAttempts ?? 1;
+    const delayMsRaw = serverRetry.delayMs ?? globalRetry.delayMs ?? 1000;
+    const backoffMultiplierRaw = serverRetry.backoffMultiplier ?? globalRetry.backoffMultiplier ?? 2;
+    const retryOn = serverRetry.retryOn ?? globalRetry.retryOn ?? ["timeout", "connection_error"];
+
+    return {
+      maxAttempts: Math.max(1, Math.floor(maxAttemptsRaw)),
+      delayMs: Math.max(0, Math.floor(delayMsRaw)),
+      backoffMultiplier: Math.max(1, backoffMultiplierRaw),
+      retryOn: new Set(retryOn)
+    };
+  }
+
+  private classifyTransientError(error: unknown): "timeout" | "connection_error" | null {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+
+    if (
+      message.includes("timeout") ||
+      message.includes("timed out") ||
+      message.includes("abort")
+    ) {
+      return "timeout";
+    }
+
+    if (
+      message.includes("connection") ||
+      message.includes("econnreset") ||
+      message.includes("socket hang up") ||
+      message.includes("network") ||
+      message.includes("fetch failed") ||
+      message.includes("econnrefused") ||
+      message.includes("enotfound")
+    ) {
+      return "connection_error";
+    }
+
+    return null;
+  }
+
+  private async callToolWithRetry(
+    server: string,
+    tool: string,
+    args: any,
+    transport: McpTransport
+  ): Promise<{ response: any; retries: number }> {
+    const retryPolicy = this.getRetryPolicy(server);
+    let retries = 0;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < retryPolicy.maxAttempts; attempt++) {
+      try {
+        const response = await transport.sendRequest({
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: {
+            name: tool,
+            arguments: args
+          }
+        });
+        return { response, retries };
+      } catch (error) {
+        lastError = error;
+        const category = this.classifyTransientError(error);
+        const shouldRetry =
+          category !== null &&
+          retryPolicy.retryOn.has(category) &&
+          attempt < retryPolicy.maxAttempts - 1;
+
+        if (!shouldRetry) {
+          throw error;
+        }
+
+        retries += 1;
+        const delay = retryPolicy.delayMs * Math.pow(retryPolicy.backoffMultiplier, attempt);
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
   async disconnectAll(): Promise<void> {
     for (const serverName of Object.keys(this.servers)) {
       await this.disconnectServer(serverName);
     }
+  }
+
+  async shutdown(timeoutMs: number = this.clientConfig.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS): Promise<void> {
+    const effectiveTimeout = Math.max(0, timeoutMs);
+
+    for (const [serverName, state] of this.states) {
+      if (state.idleTimer) {
+        clearTimeout(state.idleTimer);
+        state.idleTimer = null;
+      }
+
+      try {
+        if (state.transport.shutdown) {
+          await state.transport.shutdown(effectiveTimeout);
+        } else {
+          await state.transport.disconnect();
+        }
+      } catch (error) {
+        this.logger.warn(`[mcp-bridge] Router shutdown: failed to close ${serverName}:`, error);
+      }
+    }
+
+    this.states.clear();
+    this.toolResolver.clear();
+    if (this.intentRouter) {
+      this.intentRouter.clearIndex();
+    }
+    this.resultCache?.invalidate();
   }
 
   private async ensureConnected(server: string): Promise<RouterServerState> {
