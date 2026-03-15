@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.1.0] - 2026-03-15
+
+### Added
+- **OAuth2 Client Credentials auth** for SSE and streamable-HTTP transports. Automatic token acquisition, caching (with 60s expiry buffer), refresh, and single-attempt 401 retry. Env var substitution in clientId/clientSecret.
+- New `src/oauth2-token-manager.ts` — shared token lifecycle manager
+- Async auth header resolution (`resolveAuthHeadersAsync`, `resolveServerHeadersAsync`)
+- Recipe Spec §2.3 updated: transport-level `auth` field (bearer, header, oauth2)
+- Recipe Spec §2.5.1 expanded: full OAuth2 runtime config schema
+- Hosted Bridge Spec v1.0 added (`docs/hosted-bridge-spec.md`)
+- 6 new tests (241 total)
+
 ## [2.0.0] - 2026-03-15
 
 ### Added
