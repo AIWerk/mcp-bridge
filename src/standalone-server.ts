@@ -50,22 +50,82 @@ export class StandaloneServer {
     return (this.config.mode ?? "router") === "router";
   }
 
-  /** Start stdio mode: read JSON-RPC from stdin, write responses to stdout. */
+  /** Start stdio mode: read JSON-RPC from stdin, write responses to stdout.
+   *  Supports both newline-delimited JSON and LSP Content-Length framing. */
   async startStdio(): Promise<void> {
     const stdin = process.stdin;
     const stdout = process.stdout;
 
     stdin.setEncoding("utf8");
     let buffer = "";
+    // LSP framing state
+    let lspContentLength = -1; // -1 means not in LSP mode for current message
+    let lspHeadersDone = false;
 
     stdin.on("data", (chunk: string) => {
       buffer += chunk;
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
 
-      for (const line of lines) {
+      // Process buffer in a loop — it may contain multiple messages
+      let progress = true;
+      while (progress) {
+        progress = false;
+
+        // If we're reading an LSP body, check if we have enough bytes
+        if (lspContentLength >= 0 && lspHeadersDone) {
+          if (buffer.length >= lspContentLength) {
+            const body = buffer.slice(0, lspContentLength);
+            buffer = buffer.slice(lspContentLength);
+            lspContentLength = -1;
+            lspHeadersDone = false;
+            const trimmed = body.trim();
+            if (trimmed) {
+              this.processLine(trimmed, stdout);
+            }
+            progress = true;
+            continue;
+          }
+          // Not enough data yet — wait for more
+          break;
+        }
+
+        // Look for complete lines to detect framing
+        const newlineIdx = buffer.indexOf("\n");
+        if (newlineIdx === -1) break;
+
+        const line = buffer.slice(0, newlineIdx);
         const trimmed = line.trim();
-        if (!trimmed) continue;
+
+        // LSP header detection
+        if (lspContentLength >= 0 && !lspHeadersDone) {
+          // We're reading LSP headers — consume until empty line
+          buffer = buffer.slice(newlineIdx + 1);
+          progress = true;
+          if (trimmed === "") {
+            // End of headers — next read the body
+            lspHeadersDone = true;
+          }
+          // Ignore other headers (Content-Type, etc.)
+          continue;
+        }
+
+        if (trimmed.startsWith("Content-Length:")) {
+          // Start of LSP-framed message
+          const lengthStr = trimmed.slice("Content-Length:".length).trim();
+          const length = parseInt(lengthStr, 10);
+          if (!isNaN(length) && length > 0) {
+            lspContentLength = length;
+            lspHeadersDone = false;
+            buffer = buffer.slice(newlineIdx + 1);
+            progress = true;
+            continue;
+          }
+        }
+
+        // Newline-delimited JSON: consume the line
+        buffer = buffer.slice(newlineIdx + 1);
+        progress = true;
+
+        if (!trimmed || !trimmed.startsWith("{")) continue;
         this.processLine(trimmed, stdout);
       }
     });
@@ -236,7 +296,8 @@ export class StandaloneServer {
           jsonrpc: "2.0",
           id,
           result: {
-            content: [{ type: "text", text: JSON.stringify(result) }]
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            isError: true
           }
         };
       }

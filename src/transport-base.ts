@@ -144,17 +144,19 @@ export abstract class BaseTransport implements McpTransport {
 export function resolveEnvVars(
   value: string,
   contextDescription: string,
-  extraEnv?: Record<string, string | undefined>
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
 ): string {
   return value.replace(/\$\{(\w+)\}/g, (_, varName) => {
     const resolved = extraEnv?.[varName] ?? process.env[varName];
-    // If resolved is undefined or empty string, try the OpenClaw .env fallback.
-    // This handles the case where dotenv(override:false) didn't overwrite a
-    // pre-existing empty env var in process.env.
+    // If resolved is undefined or empty string, try the env fallback.
+    // Default fallback is loadOpenClawDotEnvFallback (handles the case where
+    // dotenv(override:false) didn't overwrite a pre-existing empty env var).
     if (resolved === undefined || resolved === "") {
-      const fallback = loadOpenClawDotEnvFallback()[varName];
-      if (fallback !== undefined && fallback !== "") {
-        return fallback;
+      const fallbackFn = envFallback ?? loadOpenClawDotEnvFallback;
+      const fallbackVal = fallbackFn()[varName];
+      if (fallbackVal !== undefined && fallbackVal !== "") {
+        return fallbackVal;
       }
     }
     if (resolved === undefined) {
@@ -174,11 +176,12 @@ export function resolveEnvVars(
 export function resolveEnvRecord(
   record: Record<string, string>,
   contextPrefix: string,
-  extraEnv?: Record<string, string | undefined>
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
 ): Record<string, string> {
   const resolved: Record<string, string> = {};
   for (const [key, value] of Object.entries(record)) {
-    resolved[key] = resolveEnvVars(value, `${contextPrefix} "${key}"`, extraEnv);
+    resolved[key] = resolveEnvVars(value, `${contextPrefix} "${key}"`, extraEnv, envFallback);
   }
   return resolved;
 }
@@ -191,10 +194,11 @@ export function resolveEnvRecord(
  */
 export function resolveArgs(
   args: string[],
-  extraEnv?: Record<string, string | undefined>
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
 ): string[] {
   return args.map(arg =>
-    resolveEnvVars(arg, `arg "${arg}"`, extraEnv)
+    resolveEnvVars(arg, `arg "${arg}"`, extraEnv, envFallback)
   );
 }
 

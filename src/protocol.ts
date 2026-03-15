@@ -6,13 +6,22 @@ import { McpRequest, McpResponse, McpTool, McpTransport } from "./types.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export const PACKAGE_VERSION: string = (() => {
-  try {
-    return JSON.parse(readFileSync(join(__dirname, "..", "..", "package.json"), "utf-8")).version;
-  } catch {
-    return "0.0.0";
+function loadPackageVersion(): string {
+  const candidates = [
+    join(__dirname, "..", "package.json"),
+    join(__dirname, "..", "..", "package.json"),
+    join(__dirname, "..", "..", "..", "package.json"),
+  ];
+  for (const p of candidates) {
+    try {
+      const pkg = JSON.parse(readFileSync(p, "utf-8"));
+      if (pkg.version) return pkg.version;
+    } catch { /* try next candidate */ }
   }
-})();
+  return "0.0.0";
+}
+
+export const PACKAGE_VERSION: string = loadPackageVersion();
 
 export async function initializeProtocol(transport: McpTransport, version: string): Promise<void> {
   const initRequest: McpRequest = {

@@ -49,6 +49,8 @@ export interface McpClientConfig {
   };
   // Security: global max result size in chars
   maxResultChars?: number;
+  // Dependency injection: custom env fallback for resolveEnvVars
+  envFallback?: () => Record<string, string>;
   // Adaptive promotion: frequently used tools get promoted to standalone
   adaptivePromotion?: {
     enabled?: boolean;
