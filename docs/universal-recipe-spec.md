@@ -179,7 +179,16 @@ Each transport in the `transports` array follows this schema:
 | `env` | `Record<string, string>` | — | Environment variables (supports `${VAR}` substitution) |
 | `url` | `string` | sse/http only | Server endpoint URL |
 | `headers` | `Record<string, string>` | — | HTTP headers (supports `${VAR}` substitution) |
+| `auth` | `object` | — | Transport-level auth config (see §2.5.1 for OAuth2 details) |
 | `framing` | `"auto" \| "lsp" \| "newline"` | — | stdio framing mode (default: auto) |
+
+**Transport auth types** (for `auth` field):
+
+| Auth config | Description |
+|-------------|-------------|
+| `{ type: "bearer", token: "..." }` | Static bearer token (supports `${VAR}`) |
+| `{ type: "header", headers: { ... } }` | Custom auth headers (supports `${VAR}`) |
+| `{ type: "oauth2", clientId, clientSecret, tokenUrl, scopes?, audience? }` | OAuth2 Client Credentials (see §2.5.1) |
 
 #### 2.3.1 Transport Selection vs. Failover
 
@@ -284,17 +293,61 @@ If `bootstrap` is omitted, adapters and catalog UIs SHOULD assume `env-only` whe
 | `custom` | Non-standard (see `instructions`) |
 | `none` | No auth needed |
 
-#### 2.5.1 OAuth2 Considerations
+#### 2.5.1 OAuth2 Details
 
-OAuth2 is the most complex auth type. This spec intentionally limits its scope to **declaring requirements** (scopes, credentials URL, instructions). The actual OAuth2 flow — authorization redirect, token exchange, refresh token storage — is **adapter-specific** and varies significantly between clients.
+OAuth2 is the most complex auth type. Recipes declare both **high-level requirements** (in `auth`) and **runtime configuration** (in transport `auth`).
 
-Adapters implementing OAuth2 support SHOULD:
-- Handle the authorization code flow (PKCE recommended)
-- Store refresh tokens securely in their native secrets store
-- Auto-refresh expired access tokens
-- Document their OAuth2 implementation in the adapter spec
+**Recipe-level** (§2.5 `auth`): declares what the user needs — `type: "oauth2"`, `envVars`, `scopes`, `credentialsUrl`, `bootstrap` level. This is for install-time UX.
 
-A full OAuth2 integration spec may be published separately as demand arises.
+**Transport-level** (§2.3 `transports[].auth`): declares runtime OAuth2 config for the bridge/adapter. This enables **automatic token management** without adapter-specific code.
+
+Transport-level OAuth2 config:
+
+```json
+{
+  "transports": [{
+    "type": "streamable-http",
+    "url": "https://provider.com/mcp",
+    "auth": {
+      "type": "oauth2",
+      "clientId": "${CLIENT_ID}",
+      "clientSecret": "${CLIENT_SECRET}",
+      "tokenUrl": "https://provider.com/oauth/token",
+      "scopes": ["read", "write"],
+      "audience": "https://api.provider.com"
+    }
+  }]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `"oauth2"` | yes | Auth mechanism |
+| `clientId` | `string` | yes | OAuth2 client ID (may use `${VAR}` env substitution) |
+| `clientSecret` | `string` | yes | OAuth2 client secret (may use `${VAR}` env substitution) |
+| `tokenUrl` | `string` | yes | Token endpoint URL |
+| `scopes` | `string[]` | no | Requested scopes (space-joined in token request) |
+| `audience` | `string` | no | Audience parameter (some providers require it) |
+
+**Runtime behavior** (bridge/adapter):
+1. On first tool call: POST `tokenUrl` with `grant_type=client_credentials`, `client_id`, `client_secret`, optional `scope` and `audience`
+2. Cache the `access_token` (keyed by `tokenUrl + clientId`)
+3. Include `Authorization: Bearer <token>` on all MCP requests
+4. If `expires_in` is returned, refresh token before expiry (with 60s buffer)
+5. On HTTP 401: invalidate cached token, re-acquire, retry the request **once**
+6. If `refresh_token` is returned, use it for renewal before falling back to full client_credentials grant
+
+**Relationship between recipe-level and transport-level auth:**
+- Recipe-level `auth` tells the installer/user **what credentials to obtain**
+- Transport-level `auth` tells the bridge **how to use those credentials at runtime**
+- Both may coexist in the same recipe — they serve different audiences
+
+Adapters and bridges SHOULD support at minimum:
+- Client Credentials grant (`grant_type=client_credentials`)
+- Token caching with expiry-aware refresh
+- Automatic 401 retry (single attempt)
+
+Authorization Code flow (PKCE) is adapter-specific and outside the scope of this spec. Adapters implementing it SHOULD document their flow in the adapter spec.
 
 ### 2.6 Environment Variable Substitution
 
