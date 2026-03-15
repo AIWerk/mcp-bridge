@@ -17,6 +17,12 @@ Most AI agents connect to MCP servers one-by-one. With 10+ servers, that's 10+ c
 - **Intent routing**: say what you need in plain language, the bridge finds the right tool
 - **Schema compression**: tool descriptions compressed ~57%, full schema on demand
 - **Security layer**: trust levels, tool deny/allow lists, result size limits
+- **HTTP auth**: bearer token, custom headers, and **OAuth2 Client Credentials** with automatic token management
+- **Result caching**: LRU cache with per-tool TTL overrides
+- **Batch calls**: parallel multi-tool execution via `action=batch`
+- **Multi-server resolution**: automatic tool disambiguation when multiple servers provide the same tool
+- **Configurable retries**: exponential backoff for transient errors
+- **Graceful shutdown**: clean process termination and connection cleanup
 - **Direct mode**: all tools registered individually with automatic prefixing
 - **3 transports**: stdio, SSE, streamable-http
 - **Built-in catalog**: 14 pre-configured servers, install with one command
@@ -362,6 +368,35 @@ When `action="call"` is used without `server=`, mcp-bridge can resolve collision
 | `stdio` | `command`, `args` | Local CLI servers (most common) |
 | `sse` | `url`, `headers` | Remote SSE servers |
 | `streamable-http` | `url`, `headers` | Modern HTTP-based servers |
+
+### Authentication
+
+SSE and streamable-HTTP transports support three auth methods:
+
+**Bearer token:**
+```json
+{ "auth": { "type": "bearer", "token": "${MY_API_TOKEN}" } }
+```
+
+**Custom headers:**
+```json
+{ "auth": { "type": "header", "headers": { "X-API-Key": "${MY_KEY}" } } }
+```
+
+**OAuth2 Client Credentials** (automatic token management):
+```json
+{
+  "auth": {
+    "type": "oauth2",
+    "clientId": "${CLIENT_ID}",
+    "clientSecret": "${CLIENT_SECRET}",
+    "tokenUrl": "https://provider.com/oauth/token",
+    "scopes": ["read", "write"]
+  }
+}
+```
+
+OAuth2 features: automatic token acquisition, caching with expiry-aware refresh, single-attempt 401 retry, env var substitution in credentials.
 
 ### Environment variables
 
