@@ -45,13 +45,21 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
-    "validate-recipe": "npx tsx bin/validate-recipe.ts"
+    "validate-recipe": "npx tsx bin/validate-recipe.ts",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.0",
+    "@typescript-eslint/parser": "^8.57.0",
+    "eslint": "^10.0.3",
+    "prettier": "^3.8.1",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0"
   }

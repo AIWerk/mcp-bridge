@@ -1,6 +1,6 @@
 # @aiwerk/mcp-bridge
 
-[![Tests](https://github.com/AIWerk/mcp-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/AIWerk/mcp-bridge/actions/workflows/test.yml)
+[![CI](https://github.com/AIWerk/mcp-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/AIWerk/mcp-bridge/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@aiwerk/mcp-bridge.svg)](https://www.npmjs.com/package/@aiwerk/mcp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -493,6 +493,36 @@ const result = await router.dispatch("todoist", "call", "find-tasks", { query: "
                         │                            └────────────┘  │
                         └──────────────────────────────────────────────┘
 ```
+
+## Security Limitations
+
+The built-in security layer (trust levels, tool filters, result sanitization) provides **baseline protection** for common threats:
+
+- Prompt injection patterns (known strings)
+- Oversized responses
+- Unauthorized tool access
+
+**What it does NOT cover:**
+- Unicode obfuscation / homoglyph attacks
+- Sophisticated multi-step injection chains
+- Content-level PII detection
+
+For production deployments with high security requirements, consider adding an external content filtering layer (e.g., guardrails, PII redaction service) between the bridge and your application.
+
+## Roadmap
+
+| Status | Feature | Version |
+|--------|---------|---------|
+| ✅ | Smart Router v2 (intent, cache, batch, resolution) | 1.9.0 |
+| ✅ | HTTP auth (bearer, headers) | 2.0.0 |
+| ✅ | Configurable retries + graceful shutdown | 2.0.0 |
+| ✅ | OAuth2 Client Credentials | 2.1.0 |
+| 🔜 | Hosted bridge (bridge.aiwerk.ch) | planned |
+| 🔜 | Remote catalog integration | planned |
+| 🔜 | OpenTelemetry / Prometheus metrics | planned |
+| 🔜 | PII redaction | planned |
+
+See [docs/hosted-bridge-spec.md](docs/hosted-bridge-spec.md) for the hosted bridge architecture.
 
 ## Related
 
