@@ -4,7 +4,7 @@
  * Usage: npx tsx bin/validate-recipe.ts <path-to-recipe.json>
  */
 
-import { validateRecipeFile, formatValidationResult } from "../src/validate-recipe.ts";
+import { validateRecipeFile, formatValidationResult } from "../src/validate-recipe.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
