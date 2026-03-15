@@ -54,8 +54,8 @@ The universal recipe lives in the **mcp-bridge core** and **mcp-catalog**. These
 ┌─────────────────────────────────────────────────────────┐
 │                   mcp-catalog (hosted)                    │
 │  Uses the same universal recipe format                   │
-│  Exposes: catalog.search / catalog.info / catalog.install│
-│  catalog.install returns recipe + optional adapter hints  │
+│  Exposes: catalog.search / catalog.info / catalog.download│
+│  catalog.download returns raw recipe for local install    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -555,9 +555,9 @@ The catalog exposes itself as an MCP server with these tools:
 |------|-------------|
 | `catalog.search` | Full-text + tag search across recipes |
 | `catalog.info` | Detailed recipe info by id (includes catalog overlay) |
-| `catalog.install` | Generate native config for a given client adapter |
-| `catalog.list` | List recipes by category/tag |
-| `catalog.adapters` | List supported client adapters |
+| `catalog.download` | Download raw Universal Recipe for local installation |
+| `catalog.list` | List/browse recipes by category/tag |
+| `catalog.submit` | Submit or update a recipe (authenticated) |
 
 ### 6.3 Monetization Fields (Future — Phase 4)
 
