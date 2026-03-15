@@ -10,6 +10,12 @@ export { StreamableHttpTransport } from "./transport-streamable-http.js";
 export { McpRouter } from "./mcp-router.js";
 export type { RouterToolHint, RouterServerStatus, RouterDispatchResponse, RouterTransportRefs } from "./mcp-router.js";
 
+// Result cache
+export { ResultCache, createResultCacheKey, stableStringify } from "./result-cache.js";
+export type { ResultCacheConfig, ResultCacheStats } from "./result-cache.js";
+export { ToolResolver } from "./tool-resolution.js";
+export type { ToolResolutionResult, ToolResolutionCandidate } from "./tool-resolution.js";
+
 // Schema conversion
 export { convertJsonSchemaToTypeBox, createToolParameters, setTypeBoxLoader, setSchemaLogger } from "./schema-convert.js";
 

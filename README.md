@@ -170,6 +170,27 @@ mcp(server="todoist", action="schema", tool="find-tasks")
 
 Set `"enabled": false` to disable compression and return full descriptions.
 
+### Result Caching
+
+Router mode can cache successful `action=call` tool results in memory using an LRU policy.
+
+- Disabled by default (`resultCache.enabled: false`)
+- No external dependencies (Map-based implementation)
+- Defaults: `maxEntries: 100`, `defaultTtlMs: 300000` (5 minutes)
+- Cache key: `server:tool:stableJson(params)`
+- Per-tool TTL override via `resultCache.cacheTtl` (for example `"todoist:find-tasks": 60000`)
+- `action=refresh` clears the result cache
+- Error responses are never cached
+
+```json
+"resultCache": {
+  "enabled": true,
+  "maxEntries": 100,
+  "defaultTtlMs": 300000,
+  "cacheTtl": { "todoist:find-tasks": 60000 }
+}
+```
+
 ### Intent Routing
 
 Instead of specifying the exact server and tool, describe what you need:

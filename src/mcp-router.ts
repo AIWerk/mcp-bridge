@@ -14,6 +14,8 @@ import { IntentRouter } from "./intent-router.js";
 import { createEmbeddingProvider } from "./embeddings.js";
 import { isToolAllowed, processResult } from "./security.js";
 import { AdaptivePromotion } from "./adaptive-promotion.js";
+import { ResultCache, createResultCacheKey } from "./result-cache.js";
+import { ToolResolver } from "./tool-resolution.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -50,6 +52,11 @@ export type RouterDispatchResponse =
       alternatives: Array<{ server: string; tool: string; score: number }>;
     }
   | {
+      ambiguous: true;
+      message: string;
+      candidates: Array<{ server: string; tool: string; score: number; suggested?: true }>;
+    }
+  | {
       error: RouterErrorCode;
       message: string;
       available?: string[];
@@ -84,7 +91,9 @@ export class McpRouter {
   private readonly transportRefs: RouterTransportRefs;
   private readonly idleTimeoutMs: number;
   private readonly maxConcurrent: number;
+  private readonly resultCache: ResultCache | null;
   private readonly states = new Map<string, RouterServerState>();
+  private readonly toolResolver: ToolResolver;
   private intentRouter: IntentRouter | null = null;
   private promotion: AdaptivePromotion | null = null;
 
@@ -104,6 +113,14 @@ export class McpRouter {
     };
     this.idleTimeoutMs = clientConfig.routerIdleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
     this.maxConcurrent = clientConfig.routerMaxConcurrent ?? DEFAULT_MAX_CONCURRENT;
+    this.resultCache = clientConfig.resultCache?.enabled
+      ? new ResultCache({
+          maxEntries: clientConfig.resultCache.maxEntries,
+          defaultTtlMs: clientConfig.resultCache.defaultTtlMs,
+          cacheTtl: clientConfig.resultCache.cacheTtl
+        })
+      : null;
+    this.toolResolver = new ToolResolver(Object.keys(servers));
 
     if (clientConfig.adaptivePromotion?.enabled) {
       this.promotion = new AdaptivePromotion(clientConfig.adaptivePromotion, logger);
@@ -182,6 +199,7 @@ export class McpRouter {
       }
 
       if (normalizedAction === "refresh") {
+        this.resultCache?.invalidate();
         try {
           const state = await this.ensureConnected(server);
           state.toolsCache = undefined;
@@ -223,6 +241,19 @@ export class McpRouter {
         return this.error("unknown_tool", `Tool '${tool}' is not allowed on server '${server}'`, state.toolNames);
       }
 
+      const cacheKey = this.resultCache
+        ? createResultCacheKey(server, tool, params ?? {})
+        : null;
+      if (this.resultCache && cacheKey) {
+        const cachedResult = this.resultCache.get(cacheKey);
+        if (cachedResult !== undefined) {
+          if (this.promotion) {
+            this.promotion.recordCall(server, tool);
+          }
+          return { server, action: "call", tool, result: cachedResult };
+        }
+      }
+
       this.markUsed(server);
       const response = await state.transport.sendRequest({
         jsonrpc: "2.0",
@@ -244,6 +275,9 @@ export class McpRouter {
 
       // Security pipeline: truncate → sanitize → trust-tag
       const result = processResult(response.result, server, serverConfig, this.clientConfig);
+      if (this.resultCache && cacheKey) {
+        this.resultCache.set(cacheKey, result);
+      }
       return { server, action: "call", tool, result };
     } catch (error) {
       return this.error("mcp_error", error instanceof Error ? error.message : String(error));
@@ -479,6 +513,7 @@ export class McpRouter {
     state.toolsCache = undefined;
     state.fullToolsMap = undefined;
     state.toolNames = [];
+    this.resultCache?.invalidate(`${server}:`);
   }
 
   private markUsed(server: string): void {
@@ -510,6 +545,7 @@ export class McpRouter {
       state.toolsCache = undefined;
       state.fullToolsMap = undefined;
       state.toolNames = [];
+      this.resultCache?.invalidate(`${serverName}:`);
     };
 
     if (serverConfig.transport === "sse") {

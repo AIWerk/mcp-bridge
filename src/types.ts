@@ -59,6 +59,14 @@ export interface McpClientConfig {
     minCalls?: number;
     decayMs?: number;
   };
+  // Tool call result cache (in-memory LRU)
+  resultCache?: {
+    enabled?: boolean;
+    maxEntries?: number;
+    defaultTtlMs?: number;
+    // Per-tool TTL override keyed by "server:tool"
+    cacheTtl?: Record<string, number>;
+  };
 }
 
 export interface McpTool {
