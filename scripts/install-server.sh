@@ -37,8 +37,18 @@ if [[ ! -d "$SERVER_DIR" ]]; then
 fi
 
 SERVER_TITLE="$(tr '-' ' ' <<<"$SERVER_NAME" | awk '{for(i=1;i<=NF;i++){$i=toupper(substr($i,1,1))substr($i,2)};print}')"
-SERVER_CONFIG_FILE="$SERVER_DIR/config.json"
 ENV_VARS_FILE="$SERVER_DIR/env_vars"
+
+# Prefer recipe.json (v2) over config.json (v1) when both exist
+RECIPE_FILE="$SERVER_DIR/recipe.json"
+SERVER_CONFIG_FILE="$SERVER_DIR/config.json"
+RECIPE_FORMAT="v1"
+if [[ -f "$RECIPE_FILE" ]]; then
+    RECIPE_FORMAT="v2"
+elif [[ ! -f "$SERVER_CONFIG_FILE" ]]; then
+    echo "Error: No recipe.json or config.json found in $SERVER_DIR"
+    exit 1
+fi
 
 require_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -48,6 +58,18 @@ require_cmd() {
 }
 
 get_token_url() {
+    # For v2 recipes, prefer credentialsUrl from auth block
+    if [[ "$RECIPE_FORMAT" == "v2" ]]; then
+        local url
+        url=$(python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    r = json.load(f)
+print(r.get('auth', {}).get('credentialsUrl', ''))
+" "$RECIPE_FILE" 2>/dev/null)
+        [[ -n "$url" ]] && echo "$url" && return
+    fi
+    # v1 fallback: hardcoded URLs
     case "$SERVER_NAME" in
         apify)       echo "https://console.apify.com/settings/integrations" ;;
         github)      echo "https://github.com/settings/tokens" ;;
@@ -171,11 +193,22 @@ print(f'ℹ️  Server recipe kept in servers/{server_name}/ (reinstall anytime)
 " "$SERVER_NAME" "$MCP_BRIDGE_JSON" 2>/dev/null
 
     # Remove env var from .env if exists
-    if [[ -f "$ENV_VARS_FILE" ]] && [[ -s "$ENV_VARS_FILE" ]] && [[ -f "$ENV_FILE" ]]; then
-        ENV_VAR_NAME="$(head -n 1 "$ENV_VARS_FILE" | tr -d '[:space:]')"
-        if grep -q "^${ENV_VAR_NAME}=" "$ENV_FILE" 2>/dev/null; then
-            sed -i "/^${ENV_VAR_NAME}=/d" "$ENV_FILE"
-            echo "🔑 Removed ${ENV_VAR_NAME} from ${ENV_FILE}"
+    REMOVE_ENV_VAR=""
+    if [[ "$RECIPE_FORMAT" == "v2" ]]; then
+        REMOVE_ENV_VAR=$(python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    r = json.load(f)
+env_vars = r.get('auth', {}).get('envVars', [])
+print(env_vars[0] if env_vars else '')
+" "$RECIPE_FILE" 2>/dev/null)
+    elif [[ -f "$ENV_VARS_FILE" ]] && [[ -s "$ENV_VARS_FILE" ]]; then
+        REMOVE_ENV_VAR="$(head -n 1 "$ENV_VARS_FILE" | tr -d '[:space:]')"
+    fi
+    if [[ -n "$REMOVE_ENV_VAR" ]] && [[ -f "$ENV_FILE" ]]; then
+        if grep -q "^${REMOVE_ENV_VAR}=" "$ENV_FILE" 2>/dev/null; then
+            sed -i "/^${REMOVE_ENV_VAR}=/d" "$ENV_FILE"
+            echo "🔑 Removed ${REMOVE_ENV_VAR} from ${ENV_FILE}"
         fi
     fi
 
@@ -214,8 +247,20 @@ echo "========================================"
 
 if [[ "$DRY_RUN" == "true" ]]; then
     echo "[DRY RUN] Server: $SERVER_NAME"
-    [[ -f "$ENV_VARS_FILE" ]] && echo "[DRY RUN] Env var: $(cat "$ENV_VARS_FILE")"
-    echo "[DRY RUN] Config:"; cat "$SERVER_CONFIG_FILE"
+    echo "[DRY RUN] Recipe format: $RECIPE_FORMAT"
+    if [[ "$RECIPE_FORMAT" == "v2" ]]; then
+        ENV_VAR_LIST=$(python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    r = json.load(f)
+print(', '.join(r.get('auth', {}).get('envVars', [])))
+" "$RECIPE_FILE" 2>/dev/null)
+        [[ -n "$ENV_VAR_LIST" ]] && echo "[DRY RUN] Env vars (from auth.envVars): $ENV_VAR_LIST"
+        echo "[DRY RUN] Recipe (v2):"; cat "$RECIPE_FILE"
+    else
+        [[ -f "$ENV_VARS_FILE" ]] && echo "[DRY RUN] Env var: $(cat "$ENV_VARS_FILE")"
+        echo "[DRY RUN] Config (v1):"; cat "$SERVER_CONFIG_FILE"
+    fi
     exit 0
 fi
 
@@ -226,9 +271,21 @@ check_prerequisites
 install_dependencies
 
 # 3. Get API token
-if [[ -f "$ENV_VARS_FILE" ]] && [[ -s "$ENV_VARS_FILE" ]]; then
+# Determine env var name: v2 uses auth.envVars[], v1 uses env_vars file
+ENV_VAR_NAME=""
+if [[ "$RECIPE_FORMAT" == "v2" ]]; then
+    ENV_VAR_NAME=$(python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    r = json.load(f)
+env_vars = r.get('auth', {}).get('envVars', [])
+print(env_vars[0] if env_vars else '')
+" "$RECIPE_FILE" 2>/dev/null)
+elif [[ -f "$ENV_VARS_FILE" ]] && [[ -s "$ENV_VARS_FILE" ]]; then
     ENV_VAR_NAME="$(head -n 1 "$ENV_VARS_FILE" | tr -d '[:space:]')"
+fi
 
+if [[ -n "$ENV_VAR_NAME" ]]; then
     TOKEN_URL="$(get_token_url)"
     [[ -n "$TOKEN_URL" ]] && echo "Get your API token here: ${TOKEN_URL}"
 
@@ -268,18 +325,43 @@ cp "$MCP_BRIDGE_JSON" "$BACKUP_FILE"
 echo "Backup: ${BACKUP_FILE}"
 
 PATH_OVERRIDE="$(resolve_path_override)"
+ACTIVE_RECIPE_FILE="$RECIPE_FILE"
+ACTIVE_RECIPE_FORMAT="$RECIPE_FORMAT"
 
-python3 - "$MCP_BRIDGE_JSON" "$SERVER_CONFIG_FILE" "$SERVER_NAME" "$PATH_OVERRIDE" <<'PY'
+python3 - "$MCP_BRIDGE_JSON" "$SERVER_CONFIG_FILE" "$SERVER_NAME" "$PATH_OVERRIDE" "$ACTIVE_RECIPE_FILE" "$ACTIVE_RECIPE_FORMAT" <<'PY'
 import json, sys
 
-config_path, server_cfg_path, server_name, path_override = sys.argv[1:5]
+config_path, server_cfg_path, server_name, path_override, recipe_file, recipe_format = sys.argv[1:7]
 
 with open(config_path, "r", encoding="utf-8") as f:
     raw = f.read().strip()
     cfg = json.loads(raw) if raw else {}
 
-with open(server_cfg_path, "r", encoding="utf-8") as f:
-    server_cfg = json.load(f)
+if recipe_format == "v2":
+    # Parse v2 recipe and build v1-compatible server config for runtime
+    with open(recipe_file, "r", encoding="utf-8") as f:
+        recipe = json.load(f)
+    transport = recipe["transports"][0]
+    server_cfg = {
+        "schemaVersion": 1,
+        "name": server_name,
+        "transport": transport.get("type", "stdio"),
+        "command": transport.get("command", ""),
+        "args": transport.get("args", []),
+        "env": transport.get("env", {}),
+    }
+    # Carry over optional v1-compatible fields from recipe if present
+    auth = recipe.get("auth", {})
+    if auth.get("required"):
+        server_cfg["authRequired"] = True
+    if auth.get("credentialsUrl"):
+        server_cfg["credentialsUrl"] = auth["credentialsUrl"]
+    meta = recipe.get("metadata", {})
+    if meta.get("homepage"):
+        server_cfg["homepage"] = meta["homepage"]
+else:
+    with open(server_cfg_path, "r", encoding="utf-8") as f:
+        server_cfg = json.load(f)
 
 if path_override:
     args = server_cfg.get("args")
@@ -299,7 +381,7 @@ with open(config_path, "w", encoding="utf-8") as f:
     json.dump(cfg, f, indent=2)
     f.write("\n")
 
-print(f"✅ Configuration merged for: {server_name}")
+print(f"✅ Configuration merged for: {server_name} (recipe {recipe_format})")
 PY
 
 # 5. Gateway restart
