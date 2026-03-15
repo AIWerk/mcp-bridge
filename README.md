@@ -59,6 +59,26 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
+## Recipe Spec v2
+
+Bundled servers now ship with `recipe.json` using **Universal Recipe Spec v2.0**.
+During install, MCP Bridge prefers `recipe.json` when present and falls back to legacy `config.json` (v1) for backwards compatibility.
+
+- Spec: [`docs/universal-recipe-spec.md`](docs/universal-recipe-spec.md)
+- Runtime compatibility: v1 and v2 are both supported
+- Existing v1-only servers continue to work unchanged
+
+For third-party recipe authors:
+
+1. Author `recipe.json` per the spec above.
+2. Validate your recipe before publishing:
+
+```bash
+npx @aiwerk/mcp-bridge validate-recipe ./recipe.json
+```
+
+`config.json` (v1) remains supported, but `recipe.json` (v2) is the recommended format going forward.
+
 ## Use with Cursor / Windsurf
 
 Add to your MCP config:
@@ -389,32 +409,6 @@ const result = await router.dispatch("todoist", "call", "find-tasks", { query: "
                         │                            └────────────┘  │
                         └──────────────────────────────────────────────┘
 ```
-
-## Recipe Spec v2
-
-All bundled servers now include a `recipe.json` following the **Universal Recipe Spec v2.0**. The install script automatically prefers `recipe.json` over the legacy `config.json` when both are present.
-
-Key improvements over v1:
-- **Structured transports** — `transports[]` array with explicit `type`, `command`, `args`, and `env` per transport
-- **Auth block** — `auth.envVars[]` lists required environment variables; `auth.credentialsUrl` links to the token page
-- **Rich metadata** — category, pricing model, maturity, homepage, tags
-
-### Spec reference
-
-See [`docs/universal-recipe-spec.md`](docs/universal-recipe-spec.md) for the full schema and authoring guide.
-
-### Backwards compatibility
-
-`config.json` (v1) is still fully supported. If only `config.json` exists, the install script behaves exactly as before. No migration required for existing setups.
-
-### Third-party recipe authors
-
-1. Author your `recipe.json` following the spec in `docs/universal-recipe-spec.md`
-2. Validate before publishing:
-   ```bash
-   npx @aiwerk/mcp-bridge validate-recipe ./recipe.json
-   ```
-3. Both v1 (`config.json`) and v2 (`recipe.json`) formats are accepted by the bridge
 
 ## Related
 
