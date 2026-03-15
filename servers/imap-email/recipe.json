@@ -38,8 +38,8 @@
     "bootstrap": "env-only"
   },
   "capabilities": {
-    "toolCount": 8,
-    "toolNames": ["email_list", "email_read", "email_search", "email_folders", "email_move", "email_flag", "email_delete", "email_send"],
+    "toolCount": 10,
+    "toolNames": ["email_list", "email_read", "email_search", "email_folders", "email_move", "email_flag", "email_delete", "email_send", "email_reply", "email_attachment"],
     "sideEffects": "external-write"
   }
 }
