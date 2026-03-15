@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.6.0] - 2026-03-15
+
+### Added
+- **Adaptive Promotion** — tracks tool usage, auto-promotes frequently called tools for direct access
+- `src/adaptive-promotion.ts` — `AdaptivePromotion` class with in-memory usage tracking
+- `action=promotions` — returns current promoted tools and usage stats
+- `getPromotedTools()` — host environments use this to register promoted tools as standalone
+- Config: `adaptivePromotion.enabled` (default: false), `maxPromoted`, `minCalls`, `windowMs`, `decayMs`
+- 13 new tests (126 total)
+
+## [1.5.0] - 2026-03-15
+
+### Added
+- **Security Layer** — trust levels, tool filter, max result size
+- `src/security.ts` — `sanitizeResult()`, `isToolAllowed()`, `applyMaxResultSize()`, `applyTrustLevel()`, `processResult()`
+- Trust levels per server: `trusted` (passthrough), `untrusted` (tagged with metadata), `sanitize` (HTML strip + prompt injection pattern removal)
+- Tool filter per server: `deny`/`allow` lists, applied in `getToolList()` and `dispatch()` (defense in depth)
+- Max result size: global `maxResultChars` + per-server override, truncates with `_truncated` marker
+- Security pipeline order: truncate -> sanitize -> trust-tag
+- 20 new tests (113 total)
+
+## [1.4.0] - 2026-03-15
+
+### Added
+- **Intent Routing + Vector Search** — describe what you need, the bridge finds the right tool
+- `src/embeddings.ts` — 4 providers: Gemini, OpenAI, Ollama, KeywordEmbedding (offline fallback)
+- `src/vector-store.ts` — in-memory cosine similarity brute-force search
+- `src/intent-router.ts` — indexes tool descriptions, resolves intents to server+tool
+- `action=intent` — `mcp(intent="find my tasks for today")` auto-resolves to correct server+tool
+- Config: `intentRouting.embedding` (auto|gemini|openai|ollama|keyword), `minScore` (default: 0.3)
+- Lazy initialization: IntentRouter only created on first `action=intent`
+- Zero new npm dependencies (native fetch for API calls)
+- 25 new tests (87 total)
+
+## [1.3.0] - 2026-03-15
+
+### Added
+- **Schema Compression** — tool descriptions compressed ~57% in router mode
+- `src/schema-compression.ts` — `compressDescription(desc, maxLen=80)` truncates at sentence/word boundary
+- `action=schema` — returns full uncompressed JSON Schema on demand
+- Config: `schemaCompression.enabled` (default: true), `maxDescriptionLength` (default: 80)
+
+## [1.2.3] - 2026-03-14
+
+### Added
+- `DEBUG_STDIO_ENV` diagnostic logging for stdio transport (Issue #3)
+- When enabled, logs resolved env vars (masked) to help debug env var substitution issues
+
 ## [1.2.2] - 2026-03-13
 
 ### Fixed
