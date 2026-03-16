@@ -33,9 +33,14 @@
   "auth": {
     "required": true,
     "type": "api-key",
-    "envVars": ["IMAP_HOST", "IMAP_USER", "IMAP_PASS"],
-    "instructions": "Set your IMAP server hostname, username (email), and password. For Gmail use an App Password. Set SMTP_SEND_ENABLED=true to enable email sending.",
+    "envVars": ["IMAP_HOST", "IMAP_PORT", "IMAP_USER", "IMAP_PASS", "SMTP_HOST", "SMTP_PORT", "SMTP_SEND_ENABLED"],
+    "instructions": "Set your IMAP server hostname, port, username (email), and password. For Gmail use an App Password. Set SMTP_SEND_ENABLED=true to enable email sending.",
     "bootstrap": "env-only"
+  },
+  "install": {
+    "method": "npx",
+    "package": "@aiwerk/mcp-server-imap",
+    "version": "latest"
   },
   "capabilities": {
     "toolCount": 10,

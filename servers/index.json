@@ -78,6 +78,17 @@
       "maturity": "stable",
       "verified": false
     },
+    "imap-email": {
+      "name": "IMAP Email",
+      "description": "Email tools for any IMAP/SMTP provider - list, read, search, send, manage emails",
+      "category": "communication",
+      "tags": ["email", "imap", "smtp", "inbox"],
+      "auth": { "required": true, "type": "api-key" },
+      "transports": ["stdio"],
+      "install": { "method": "npx" },
+      "maturity": "beta",
+      "verified": false
+    },
     "linear": {
       "name": "Linear",
       "description": "Linear project management — create, update, and search issues, projects, and teams via the Linear API",
