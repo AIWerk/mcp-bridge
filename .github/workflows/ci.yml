@@ -21,3 +21,5 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - name: Validate recipe URLs
+        run: bash scripts/validate-recipes.sh --ci
