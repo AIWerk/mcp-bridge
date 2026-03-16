@@ -145,7 +145,13 @@ servers/<server-id>/
     "author": "Doist",
     "tags": ["productivity", "tasks", "project-management"],
     "category": "productivity",          // Primary category (see §3.1)
+    "subcategory": "task-management",    // Optional refinement within category (see §3.1.1)
+    "origin": "official",               // "official" | "community" | "aiwerk" (see §3.3)
+    "countries": ["global"],             // ISO 3166-1 alpha-2 codes or "global" (see §3.4)
     "languages": ["en"],                 // ISO 639-1 codes
+    "audience": "business",             // "developer" | "business" | "consumer" | "general" (see §3.5)
+    "selfHosted": false,                // Can be run locally without external dependencies
+    "sideEffects": "read-write",        // "read-only" | "read-write" | "billing-impact" (see §3.6)
     "pricing": "freemium",              // "free" | "freemium" | "paid" | "byok" (bring your own key)
     "maturity": "stable",               // "experimental" | "beta" | "stable" | "deprecated"
     "firstPublished": "2025-06-15",
@@ -416,9 +422,77 @@ Categories are an **open enum with known values**. The validator accepts any low
 
 New categories MAY be added to the known list in minor spec revisions. Unknown categories are stored as-is and displayed normally — they just trigger a validator warning.
 
+#### 3.1.1 Subcategories
+
+Optional refinement within a category. Like categories, subcategories are an open enum with known values. The validator accepts any lowercase kebab-case string.
+
+**Known subcategories (by category):**
+
+| Category | Subcategories |
+|----------|---------------|
+| `productivity` | `task-management`, `notes`, `calendar`, `whiteboard`, `project-management` |
+| `development` | `version-control`, `ci-cd`, `monitoring`, `error-tracking`, `code-review` |
+| `communication` | `email`, `chat`, `sms`, `video`, `notifications` |
+| `data` | `relational`, `nosql`, `search-engine`, `file-storage`, `data-warehouse` |
+| `finance` | `payments`, `invoicing`, `banking`, `crypto`, `accounting` |
+| `infrastructure` | `cloud`, `dns`, `cdn`, `containers`, `serverless` |
+| `analytics` | `web-analytics`, `product-analytics`, `bi`, `seo` |
+| `content` | `cms`, `headless-cms`, `media`, `documents` |
+| `search` | `web-search`, `ai-search`, `site-search` |
+| `automation` | `scraping`, `workflow`, `rpa`, `iot` |
+| `security` | `auth`, `secrets`, `scanning`, `compliance` |
+| `ai` | `inference`, `training`, `embeddings`, `image-generation` |
+
 ### 3.2 Tags
 
 Free-form, lowercase, kebab-case. Used for search/filtering beyond category.
+
+### 3.3 Origin
+
+Indicates who created and maintains the MCP server:
+
+| Value | Description |
+|-------|-------------|
+| `official` | Created by the service provider themselves (e.g., Stripe's own MCP server) |
+| `community` | Created by a third-party developer, not officially endorsed |
+| `aiwerk` | Created and maintained by AIWerk |
+
+The catalog MAY display origin prominently — `official` servers carry implicit trust. The origin field is informational; trust verification is handled by the catalog's badge/verification system (see §2.8).
+
+### 3.4 Countries
+
+ISO 3166-1 alpha-2 country codes indicating where the server/service is relevant. Use `"global"` for services without geographic restrictions.
+
+**Examples:**
+- `["global"]` — Todoist, Stripe (works everywhere)
+- `["CH"]` — Bexio, PostFinance, QR-Rechnung (Swiss-specific)
+- `["CH", "DE", "AT"]` — DACH region services
+- `["EU"]` — EU-wide services (GDPR-compliant tools, EU banking)
+
+Agents and catalog search SHOULD use the user's country/region to boost relevant results. A Swiss user searching for "invoicing" should see Bexio before QuickBooks.
+
+### 3.5 Audience
+
+Who is the primary user of this server:
+
+| Value | Description |
+|-------|-------------|
+| `developer` | Requires technical knowledge (GitHub, Sentry, Docker) |
+| `business` | For business users/teams (CRM, invoicing, marketing) |
+| `consumer` | For end users (smart home, personal finance, media) |
+| `general` | No specific audience |
+
+### 3.6 Side Effects
+
+What kind of changes can this server make:
+
+| Value | Description |
+|-------|-------------|
+| `read-only` | Only reads data, never modifies anything |
+| `read-write` | Can create, update, or delete data |
+| `billing-impact` | Can trigger financial transactions (payments, subscriptions) |
+
+Agents SHOULD warn users before invoking tools from servers with `billing-impact` side effects.
 
 ## 4. Client Adapter Specification
 
