@@ -125,7 +125,9 @@ install_dependencies() {
             echo "Installing @anthropic-pb/linear-mcp-server globally..."
             npm install -g @anthropic-pb/linear-mcp-server ;;
         wise)
-            local clone_dir="$SERVER_DIR/mcp-server"
+            # Clone outside plugin tree to avoid nested node_modules TS path conflicts
+            local clone_dir="$HOME/.openclaw/mcp-servers/wise-mcp"
+            mkdir -p "$HOME/.openclaw/mcp-servers"
             if [ -d "$clone_dir/.git" ]; then
                 echo "Updating wise mcp-server..."; git -C "$clone_dir" pull --ff-only
             else
@@ -134,7 +136,9 @@ install_dependencies() {
             echo "Building wise mcp-server..."
             (cd "$clone_dir" && npm install && npm run build) ;;
         hetzner)
-            local clone_dir="$SERVER_DIR/mcp-server"
+            # Clone outside plugin tree to avoid nested node_modules TS path conflicts
+            local clone_dir="$HOME/.openclaw/mcp-servers/mcp-hetzner"
+            mkdir -p "$HOME/.openclaw/mcp-servers"
             if [ -d "$clone_dir/.git" ]; then
                 echo "Updating hetzner mcp-server..."; git -C "$clone_dir" pull --ff-only
             else
@@ -154,8 +158,8 @@ resolve_path_override() {
             else
                 echo "$npm_root/@anthropic-pb/linear-mcp-server/build/index.js"
             fi ;;
-        wise)   echo "$SERVER_DIR/mcp-server/dist/cli.js" ;;
-        hetzner) echo "$SERVER_DIR/mcp-server/dist/index.js" ;;
+        wise)   echo "$HOME/.openclaw/mcp-servers/wise-mcp/dist/cli.js" ;;
+        hetzner) echo "$HOME/.openclaw/mcp-servers/mcp-hetzner/dist/index.js" ;;
         *)      echo "" ;;
     esac
 }
