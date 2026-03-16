@@ -15,6 +15,7 @@ function makeLogger(): Logger {
 
 /** Inline MCP echo server script for child process spawning. */
 const ECHO_SERVER_SCRIPT = `
+  process.stdout.write("\\n"); // readiness signal for startup timeout gate
   const readline = require("readline");
   const rl = readline.createInterface({ input: process.stdin });
   rl.on("line", (line) => {
@@ -134,6 +135,7 @@ test("stdio transport: shutdown terminates process", async () => {
 test("stdio transport: process crash triggers disconnect", async () => {
   // Server that exits immediately after first message
   const crashScript = `
+    process.stdout.write("\\n"); // readiness signal for startup timeout gate
     const readline = require("readline");
     const rl = readline.createInterface({ input: process.stdin });
     rl.on("line", (line) => {
@@ -195,23 +197,12 @@ test("stdio transport: connection timeout on non-responsive process", async () =
   };
   const transport = new StdioTransport(config, clientConfig, makeLogger());
 
-  try {
-    // connect() should resolve even if no data (it just spawns the process)
-    // The timeout manifests on sendRequest
-    await transport.connect();
+  await assert.rejects(
+    transport.connect(),
+    (err: Error) => err instanceof Error
+      && err.message === "Stdio process startup timeout: no data received within 500ms",
+  );
 
-    await assert.rejects(
-      transport.sendRequest({
-        jsonrpc: "2.0",
-        method: "initialize",
-        params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } },
-      }),
-      (err: Error) => {
-        // Should timeout or fail since server never responds
-        return err instanceof Error;
-      },
-    );
-  } finally {
-    await transport.disconnect().catch(() => {});
-  }
+  assert.equal(transport.isConnected(), false);
+  await transport.disconnect().catch(() => {});
 });

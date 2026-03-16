@@ -152,8 +152,16 @@ export class StdioTransport extends BaseTransport {
       this.process!.once("exit", onProcessExit);
 
       timeout = setTimeout(() => {
-        this.logger.warn(`[mcp-bridge] Stdio startup stdout readiness timed out after ${connectionTimeout}ms; continuing`);
-        settleResolve();
+        const timeoutError = new Error(
+          `Stdio process startup timeout: no data received within ${connectionTimeout}ms`
+        );
+        this.logger.warn(`[mcp-bridge] ${timeoutError.message}; terminating unresponsive process`);
+        try {
+          this.process?.kill("SIGTERM");
+        } catch {
+          // Ignore kill errors and reject with timeout
+        }
+        settleReject(timeoutError);
       }, connectionTimeout);
     });
   }
