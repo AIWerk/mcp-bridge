@@ -15,6 +15,19 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
+echo "Validating recipe schema..."
+echo ""
+
+for recipe in "$SERVERS_DIR"/*/recipe.json; do
+  if ! npx tsx "$SCRIPT_DIR/../bin/validate-recipe.ts" "$recipe" >/dev/null; then
+    echo -e "${RED}❌ SCHEMA [$(basename "$(dirname "$recipe")")] $recipe${NC}"
+    ERRORS=$((ERRORS + 1))
+  else
+    echo -e "${GREEN}✓${NC} [$(basename "$(dirname "$recipe")")] schema valid"
+  fi
+done
+
+echo ""
 echo "Validating recipe URLs..."
 echo ""
 
