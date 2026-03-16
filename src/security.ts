@@ -6,19 +6,20 @@
 
 import type { McpServerConfig, McpClientConfig } from "./types.js";
 
-// Prompt injection patterns to strip (pattern source + flags)
-const INJECTION_PATTERNS: Array<{ source: string; flags: string }> = [
-  { source: "ignore\\s+(all\\s+)?previous\\s+instructions", flags: "gi" },
-  { source: "ignore\\s+(all\\s+)?prior\\s+instructions", flags: "gi" },
-  { source: "disregard\\s+(all\\s+)?previous\\s+instructions", flags: "gi" },
-  { source: "you\\s+are\\s+now\\b", flags: "gi" },
-  { source: "^system\\s*:", flags: "gim" },
-  { source: "\\bact\\s+as\\s+(a|an)\\s+", flags: "gi" },
-  { source: "pretend\\s+you\\s+are\\b", flags: "gi" },
-  { source: "from\\s+now\\s+on\\s+you\\s+are\\b", flags: "gi" },
-  { source: "new\\s+instructions\\s*:", flags: "gi" },
-  { source: "override\\s+(all\\s+)?instructions", flags: "gi" },
+// Prompt injection pattern sources to strip (compiled per call to avoid RegExp state leakage)
+const INJECTION_PATTERN_SOURCES: string[] = [
+  "ignore\\s+(all\\s+)?previous\\s+instructions",
+  "ignore\\s+(all\\s+)?prior\\s+instructions",
+  "disregard\\s+(all\\s+)?previous\\s+instructions",
+  "you\\s+are\\s+now\\b",
+  "\\bact\\s+as\\s+(a|an)\\s+",
+  "pretend\\s+you\\s+are\\b",
+  "from\\s+now\\s+on\\s+you\\s+are\\b",
+  "new\\s+instructions\\s*:",
+  "override\\s+(all\\s+)?instructions",
 ];
+
+const INJECTION_PATTERN_MULTILINE_SOURCES: string[] = ["^system\\s*:"];
 
 function stripHtmlTags(text: string): string {
   return text.replace(/<[^>]*>/g, "");
@@ -26,9 +27,15 @@ function stripHtmlTags(text: string): string {
 
 function stripInjectionPatterns(text: string): string {
   let result = text;
-  for (const { source, flags } of INJECTION_PATTERNS) {
-    result = result.replace(new RegExp(source, flags), "");
+
+  for (const source of INJECTION_PATTERN_SOURCES) {
+    result = result.replace(new RegExp(source, "gi"), "");
   }
+
+  for (const source of INJECTION_PATTERN_MULTILINE_SOURCES) {
+    result = result.replace(new RegExp(source, "gim"), "");
+  }
+
   return result;
 }
 
