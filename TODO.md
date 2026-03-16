@@ -57,9 +57,9 @@
 - [ ] Claude Desktop adapter - recipe -> claude_desktop_config.json translation
 - [ ] Cursor adapter - recipe -> .cursor/mcp.json translation
 - [ ] `adapters/` override directories per recipe (§4.5) - client-specific config patches
-- [ ] Add imap-email to servers/index.json (missing from index, recipe + dir exists)
-- [ ] Add README.md for imap-email server recipe
-- [ ] Remove leftover v1 config.json files (wise, hostinger, github, chrome-devtools, atlassian)
+- [x] Add imap-email to servers/index.json (v2.2.0)
+- [x] Add README.md for imap-email server recipe (v2.2.0)
+- [x] Remove leftover v1 config.json files (v2.3.0)
 - [ ] Server icons (§2.1) - icon.svg/png per recipe directory
 
 ## Future
