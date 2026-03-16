@@ -122,8 +122,10 @@ install_dependencies() {
             echo "Pulling GitHub MCP server Docker image..."
             docker pull ghcr.io/github/github-mcp-server ;;
         linear)
-            echo "Installing @anthropic-pb/linear-mcp-server globally..."
-            npm install -g @anthropic-pb/linear-mcp-server ;;
+            local clone_dir="$HOME/.openclaw/mcp-servers/linear-mcp"
+            mkdir -p "$HOME/.openclaw/mcp-servers"
+            echo "Installing linear MCP server..."
+            npm install --prefix "$clone_dir" @anthropic-pb/linear-mcp-server ;;
         wise)
             # Clone outside plugin tree to avoid nested node_modules TS path conflicts
             local clone_dir="$HOME/.openclaw/mcp-servers/wise-mcp"
@@ -152,11 +154,11 @@ install_dependencies() {
 resolve_path_override() {
     case "$SERVER_NAME" in
         linear)
-            local npm_root; npm_root="$(npm root -g)"
-            if [ -f "$npm_root/@anthropic-pb/linear-mcp-server/dist/index.js" ]; then
-                echo "$npm_root/@anthropic-pb/linear-mcp-server/dist/index.js"
+            local lin_dir="$HOME/.openclaw/mcp-servers/linear-mcp/node_modules/@anthropic-pb/linear-mcp-server"
+            if [ -f "$lin_dir/dist/index.js" ]; then
+                echo "$lin_dir/dist/index.js"
             else
-                echo "$npm_root/@anthropic-pb/linear-mcp-server/build/index.js"
+                echo "$lin_dir/build/index.js"
             fi ;;
         wise)   echo "$HOME/.openclaw/mcp-servers/wise-mcp/dist/cli.js" ;;
         hetzner) echo "$HOME/.openclaw/mcp-servers/mcp-hetzner/dist/index.js" ;;
