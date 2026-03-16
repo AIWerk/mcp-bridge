@@ -570,7 +570,40 @@ catalog.taxonomy() → {
 - When both are available, the catalog version wins (it may have new entries)
 - Adding a new category/subcategory = update the catalog's taxonomy, no recipe or spec changes
 
-### 3.8 Auth Summary
+### 3.8 Maintainer Contact
+
+Optional contact information for the recipe author/maintainer. Used by the catalog for security alerts, upstream update notifications, publisher verification, and community feedback.
+
+```json
+"metadata": {
+  "author": "Doist",
+  "maintainer": {
+    "name": "Doist Engineering",
+    "email": "mcp@doist.com",
+    "github": "doist",
+    "url": "https://doist.com"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `string` | no | Maintainer display name (person or organization) |
+| `email` | `string` | no | Contact email for security/update notifications |
+| `github` | `string` | no | GitHub username or org (e.g., `doist`, `AIWerk`) |
+| `url` | `string` | no | Maintainer homepage or profile URL |
+
+At least one contact field SHOULD be provided. The `github` field is preferred as a minimum — it's less privacy-sensitive than email and enables automated PR notifications.
+
+**Relationship to `repository`:** The top-level `repository` field (§2.2) points to the MCP server source code. The `maintainer` field identifies the *recipe* author, who may be different from the server author (e.g., AIWerk creates a recipe for a community server).
+
+**Catalog uses:**
+- Security vulnerability notifications
+- Upstream version update alerts
+- Publisher verification (email domain matching, GitHub org membership)
+- Community feedback routing
+
+### 3.9 Auth Summary
 
 A convenience field that summarizes the authentication requirement in a single string. Useful for quick filtering in search results and index listings.
 
