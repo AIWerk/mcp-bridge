@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.4.0] - 2026-03-16
+
+### Added
+- **Recipe Spec v2.1**: new metadata fields — `subcategory`, `origin`, `countries`, `audience`, `selfHosted`, `sideEffects` (§3.1.1–§3.6)
+- **Catalog Enrichment spec** (§3.7): dynamic metadata overlay — catalog can enrich recipes with computed/AI-extracted/curated metadata without modifying recipe files
+- **Taxonomy Registry** (§3.7.5): `catalog.taxonomy()` tool + offline snapshot for categories, subcategories, origins, countries
+- **All 15 recipes updated** with new metadata fields (subcategory, origin, countries, audience, selfHosted, sideEffects)
+- **Regenerated `servers/index.json`** with enriched metadata entries
+
 ## [2.3.0] - 2026-03-16
 
 ### Fixed

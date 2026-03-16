@@ -67,7 +67,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ## Recipe Spec v2
 
-Bundled servers now ship with `recipe.json` using **Universal Recipe Spec v2.0**.
+Bundled servers now ship with `recipe.json` using **Universal Recipe Spec v2.1** (15 servers with rich metadata: category, subcategory, origin, countries, audience, sideEffects).
 During install, MCP Bridge prefers `recipe.json` when present and falls back to legacy `config.json` (v1) for backwards compatibility.
 
 - Spec: [`docs/universal-recipe-spec.md`](docs/universal-recipe-spec.md)
