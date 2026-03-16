@@ -1,4 +1,4 @@
-import { Logger, McpClientConfig, McpRequest, McpResponse, McpServerConfig, nextRequestId } from "./types.js";
+import { Logger, McpClientConfig, McpRequest, McpResponse, McpServerConfig, RequestIdGenerator } from "./types.js";
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import {
   BaseTransport,
@@ -22,9 +22,10 @@ export class SseTransport extends BaseTransport {
     clientConfig: McpClientConfig,
     logger: Logger,
     onReconnected?: () => Promise<void>,
-    tokenManager?: OAuth2TokenManager
+    tokenManager?: OAuth2TokenManager,
+    requestIdGenerator?: RequestIdGenerator
   ) {
-    super(config, clientConfig, logger, onReconnected);
+    super(config, clientConfig, logger, onReconnected, requestIdGenerator);
     this.tokenManager = tokenManager ?? new OAuth2TokenManager(logger);
   }
 
@@ -233,7 +234,7 @@ export class SseTransport extends BaseTransport {
       throw new Error("SSE transport not connected or no endpoint URL");
     }
 
-    const id = nextRequestId();
+    const id = this.nextRequestId();
     const requestWithId = { ...request, id };
 
     return new Promise((resolve, reject) => {

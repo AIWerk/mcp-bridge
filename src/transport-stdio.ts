@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from "child_process";
-import { McpRequest, McpResponse, McpServerConfig, nextRequestId } from "./types.js";
+import { McpRequest, McpResponse } from "./types.js";
 import { BaseTransport, resolveEnvRecord, resolveArgs } from "./transport-base.js";
 
 export class StdioTransport extends BaseTransport {
@@ -189,7 +189,7 @@ export class StdioTransport extends BaseTransport {
       throw new Error("Stdio transport not connected");
     }
 
-    const id = nextRequestId();
+    const id = this.nextRequestId();
     const requestWithId = { ...request, id };
 
     return new Promise((resolve, reject) => {

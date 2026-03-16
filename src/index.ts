@@ -53,6 +53,8 @@ export type {
   McpTransport,
   McpServerConnection,
   BridgeConfig,
+  RequestIdState,
+  RequestIdGenerator,
 } from "./types.js";
 export { nextRequestId } from "./types.js";
 

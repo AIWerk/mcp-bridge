@@ -1,4 +1,4 @@
-import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, JsonRpcMessage } from "./types.js";
+import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, JsonRpcMessage, RequestIdGenerator, nextRequestId } from "./types.js";
 import type { OAuth2Config, OAuth2TokenManager } from "./oauth2-token-manager.js";
 import { loadOpenClawDotEnvFallback } from "./config.js";
 
@@ -21,12 +21,21 @@ export abstract class BaseTransport implements McpTransport {
   protected reconnectTimer: NodeJS.Timeout | null = null;
   protected onReconnected?: () => Promise<void>;
   protected backoffDelay = 0;
+  private readonly requestIdState = { value: 0 };
+  private readonly requestIdGenerator: RequestIdGenerator;
 
-  constructor(config: McpServerConfig, clientConfig: McpClientConfig, logger: Logger, onReconnected?: () => Promise<void>) {
+  constructor(
+    config: McpServerConfig,
+    clientConfig: McpClientConfig,
+    logger: Logger,
+    onReconnected?: () => Promise<void>,
+    requestIdGenerator?: RequestIdGenerator
+  ) {
     this.config = config;
     this.clientConfig = clientConfig;
     this.logger = logger;
     this.onReconnected = onReconnected;
+    this.requestIdGenerator = requestIdGenerator ?? (() => nextRequestId(this.requestIdState));
   }
 
   abstract connect(): Promise<void>;
@@ -36,6 +45,10 @@ export abstract class BaseTransport implements McpTransport {
 
   isConnected(): boolean {
     return this.connected;
+  }
+
+  protected nextRequestId(): number {
+    return this.requestIdGenerator();
   }
 
   /** Human-readable transport name for log messages (e.g. "stdio", "SSE", "streamable-http"). */

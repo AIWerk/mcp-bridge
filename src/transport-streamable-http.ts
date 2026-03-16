@@ -1,4 +1,4 @@
-import { Logger, McpClientConfig, McpRequest, McpResponse, McpServerConfig, nextRequestId } from "./types.js";
+import { Logger, McpClientConfig, McpRequest, McpResponse, McpServerConfig, RequestIdGenerator } from "./types.js";
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import {
   BaseTransport,
@@ -21,9 +21,10 @@ export class StreamableHttpTransport extends BaseTransport {
     clientConfig: McpClientConfig,
     logger: Logger,
     onReconnected?: () => Promise<void>,
-    tokenManager?: OAuth2TokenManager
+    tokenManager?: OAuth2TokenManager,
+    requestIdGenerator?: RequestIdGenerator
   ) {
-    super(config, clientConfig, logger, onReconnected);
+    super(config, clientConfig, logger, onReconnected, requestIdGenerator);
     this.tokenManager = tokenManager ?? new OAuth2TokenManager(logger);
   }
 
@@ -95,7 +96,7 @@ export class StreamableHttpTransport extends BaseTransport {
       throw new Error("Streamable HTTP transport not connected");
     }
 
-    const id = nextRequestId();
+    const id = this.nextRequestId();
     const requestWithId = { ...request, id };
 
     return new Promise((resolve, reject) => {

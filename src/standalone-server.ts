@@ -9,6 +9,8 @@ import {
   McpServerConfig,
   McpTool,
   McpTransport,
+  RequestIdState,
+  nextRequestId,
 } from "./types.js";
 import { SseTransport } from "./transport-sse.js";
 import { StdioTransport } from "./transport-stdio.js";
@@ -35,6 +37,7 @@ export class StandaloneServer {
   private initialized = false;
   private lspMode = false;
   private readonly tokenManager: OAuth2TokenManager;
+  private readonly requestIdState: RequestIdState = { value: 0 };
 
   // Direct mode state
   private directTools: DirectToolEntry[] = [];
@@ -473,6 +476,10 @@ export class StandaloneServer {
     }
   }
 
+  private nextRequestId(): number {
+    return nextRequestId(this.requestIdState);
+  }
+
   private createTransport(serverName: string, serverConfig: McpServerConfig): McpTransport {
     const onReconnected = async () => {
       this.logger.info(`[mcp-bridge] ${serverName} reconnected, refreshing tools`);
@@ -481,11 +488,18 @@ export class StandaloneServer {
 
     switch (serverConfig.transport) {
       case "sse":
-        return new SseTransport(serverConfig, this.config, this.logger, onReconnected, this.tokenManager);
+        return new SseTransport(serverConfig, this.config, this.logger, onReconnected, this.tokenManager, () => this.nextRequestId());
       case "stdio":
-        return new StdioTransport(serverConfig, this.config, this.logger, onReconnected);
+        return new StdioTransport(serverConfig, this.config, this.logger, onReconnected, () => this.nextRequestId());
       case "streamable-http":
-        return new StreamableHttpTransport(serverConfig, this.config, this.logger, onReconnected, this.tokenManager);
+        return new StreamableHttpTransport(
+          serverConfig,
+          this.config,
+          this.logger,
+          onReconnected,
+          this.tokenManager,
+          () => this.nextRequestId()
+        );
       default:
         throw new Error(`Unsupported transport: ${serverConfig.transport}`);
     }

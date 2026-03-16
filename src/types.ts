@@ -124,14 +124,18 @@ export interface McpCallRequest extends McpRequest {
   id: number;
 }
 
-let globalRequestId = 0;
+export interface RequestIdState {
+  value: number;
+}
 
-export function nextRequestId(): number {
-  globalRequestId++;
-  if (globalRequestId >= Number.MAX_SAFE_INTEGER) {
-    globalRequestId = 1;
+export type RequestIdGenerator = () => number;
+
+export function nextRequestId(state: RequestIdState): number {
+  state.value++;
+  if (state.value >= Number.MAX_SAFE_INTEGER) {
+    state.value = 1;
   }
-  return globalRequestId;
+  return state.value;
 }
 
 export interface McpResponse {

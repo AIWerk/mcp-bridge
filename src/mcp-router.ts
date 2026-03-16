@@ -3,7 +3,9 @@ import {
   McpServerConfig,
   McpTool,
   McpTransport,
-  Logger
+  Logger,
+  RequestIdState,
+  nextRequestId,
 } from "./types.js";
 import { SseTransport } from "./transport-sse.js";
 import { StdioTransport } from "./transport-stdio.js";
@@ -89,20 +91,23 @@ export interface RouterTransportRefs {
     clientConfig: McpClientConfig,
     logger: Logger,
     onReconnected?: () => Promise<void>,
-    tokenManager?: OAuth2TokenManager
+    tokenManager?: OAuth2TokenManager,
+    requestIdGenerator?: () => number
   ) => McpTransport;
   stdio: new (
     config: McpServerConfig,
     clientConfig: McpClientConfig,
     logger: Logger,
-    onReconnected?: () => Promise<void>
+    onReconnected?: () => Promise<void>,
+    requestIdGenerator?: () => number
   ) => McpTransport;
   streamableHttp: new (
     config: McpServerConfig,
     clientConfig: McpClientConfig,
     logger: Logger,
     onReconnected?: () => Promise<void>,
-    tokenManager?: OAuth2TokenManager
+    tokenManager?: OAuth2TokenManager,
+    requestIdGenerator?: () => number
   ) => McpTransport;
 }
 
@@ -148,6 +153,7 @@ export class McpRouter {
   private readonly states = new Map<string, RouterServerState>();
   private readonly toolResolver: ToolResolver;
   private readonly tokenManager: OAuth2TokenManager;
+  private readonly requestIdState: RequestIdState = { value: 0 };
   private intentRouter: IntentRouter | null = null;
   private promotion: AdaptivePromotion | null = null;
 
@@ -818,6 +824,10 @@ export class McpRouter {
     }
   }
 
+  private nextRequestId(): number {
+    return nextRequestId(this.requestIdState);
+  }
+
   private createTransport(serverName: string, serverConfig: McpServerConfig): McpTransport {
     const onReconnected = async () => {
       const state = this.states.get(serverName);
@@ -831,13 +841,27 @@ export class McpRouter {
     };
 
     if (serverConfig.transport === "sse") {
-      return new this.transportRefs.sse(serverConfig, this.clientConfig, this.logger, onReconnected, this.tokenManager);
+      return new this.transportRefs.sse(
+        serverConfig,
+        this.clientConfig,
+        this.logger,
+        onReconnected,
+        this.tokenManager,
+        () => this.nextRequestId()
+      );
     }
     if (serverConfig.transport === "stdio") {
-      return new this.transportRefs.stdio(serverConfig, this.clientConfig, this.logger, onReconnected);
+      return new this.transportRefs.stdio(serverConfig, this.clientConfig, this.logger, onReconnected, () => this.nextRequestId());
     }
     if (serverConfig.transport === "streamable-http") {
-      return new this.transportRefs.streamableHttp(serverConfig, this.clientConfig, this.logger, onReconnected, this.tokenManager);
+      return new this.transportRefs.streamableHttp(
+        serverConfig,
+        this.clientConfig,
+        this.logger,
+        onReconnected,
+        this.tokenManager,
+        () => this.nextRequestId()
+      );
     }
 
     throw new Error(`Unsupported transport: ${serverConfig.transport}`);

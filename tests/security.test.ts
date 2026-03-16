@@ -205,15 +205,17 @@ test("processResult with untrusted + truncated produces flat metadata (not neste
 // ─── nextRequestId overflow protection ──────────────────────────────────────
 
 test("nextRequestId returns incrementing numbers", () => {
-  const a = nextRequestId();
-  const b = nextRequestId();
+  const state = { value: 0 };
+  const a = nextRequestId(state);
+  const b = nextRequestId(state);
   assert.ok(b > a, "IDs should increment");
 });
 
 test("nextRequestId never exceeds MAX_SAFE_INTEGER", () => {
+  const state = { value: 0 };
   // Just verify it returns a safe integer after many calls
   for (let i = 0; i < 100; i++) {
-    const id = nextRequestId();
+    const id = nextRequestId(state);
     assert.ok(Number.isSafeInteger(id), `ID ${id} should be a safe integer`);
   }
 });
