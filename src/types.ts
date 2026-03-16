@@ -60,6 +60,7 @@ export interface McpClientConfig {
   requestTimeoutMs?: number;
   shutdownTimeoutMs?: number;
   routerIdleTimeoutMs?: number;
+  routerConnectErrorCooldownMs?: number;
   routerMaxConcurrent?: number;
   maxBatchSize?: number;
   schemaCompression?: {

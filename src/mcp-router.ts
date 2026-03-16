@@ -116,9 +116,14 @@ interface RouterServerState {
   lastUsedAt: number;
   idleTimer: NodeJS.Timeout | null;
   initPromise?: Promise<void>;
+  lastConnectError?: {
+    error: Error;
+    timestamp: number;
+  };
 }
 
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_CONNECT_ERROR_COOLDOWN_MS = 10 * 1000;
 const DEFAULT_MAX_CONCURRENT = 5;
 const DEFAULT_MAX_BATCH_SIZE = 10;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5000;
@@ -136,6 +141,7 @@ export class McpRouter {
   private readonly logger: Logger;
   private readonly transportRefs: RouterTransportRefs;
   private readonly idleTimeoutMs: number;
+  private readonly connectErrorCooldownMs: number;
   private readonly maxConcurrent: number;
   private readonly resultCache: ResultCache | null;
   private readonly maxBatchSize: number;
@@ -160,6 +166,7 @@ export class McpRouter {
       streamableHttp: transportRefs?.streamableHttp ?? StreamableHttpTransport
     };
     this.idleTimeoutMs = clientConfig.routerIdleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+    this.connectErrorCooldownMs = clientConfig.routerConnectErrorCooldownMs ?? DEFAULT_CONNECT_ERROR_COOLDOWN_MS;
     this.maxConcurrent = clientConfig.routerMaxConcurrent ?? DEFAULT_MAX_CONCURRENT;
     this.resultCache = clientConfig.resultCache?.enabled
       ? new ResultCache({
@@ -705,21 +712,40 @@ export class McpRouter {
       this.states.set(server, state);
     }
 
+    const lastConnectError = state.lastConnectError;
+    if (lastConnectError) {
+      const withinCooldown = Date.now() - lastConnectError.timestamp < this.connectErrorCooldownMs;
+      if (withinCooldown) {
+        throw lastConnectError.error;
+      }
+      state.lastConnectError = undefined;
+    }
+
     if (state.initPromise) {
       await state.initPromise;
       return state;
     }
 
     state.initPromise = (async () => {
-      if (!state!.transport.isConnected()) {
-        await state!.transport.connect();
+      try {
+        if (!state!.transport.isConnected()) {
+          await state!.transport.connect();
+        }
+        if (!state!.initialized) {
+          await initializeProtocol(state!.transport, PACKAGE_VERSION);
+          state!.initialized = true;
+        }
+        state!.lastConnectError = undefined;
+        this.markUsed(server);
+        await this.enforceMaxConcurrent(server);
+      } catch (error) {
+        const normalizedError = error instanceof Error ? error : new Error(String(error));
+        state!.lastConnectError = {
+          error: normalizedError,
+          timestamp: Date.now()
+        };
+        throw normalizedError;
       }
-      if (!state!.initialized) {
-        await initializeProtocol(state!.transport, PACKAGE_VERSION);
-        state!.initialized = true;
-      }
-      this.markUsed(server);
-      await this.enforceMaxConcurrent(server);
     })();
 
     try {

@@ -132,8 +132,11 @@ class MockTransport implements McpTransport {
   }
 }
 
-function makeRouter(servers: Record<string, McpServerConfig>): McpRouter {
-  const cfg: McpClientConfig = { servers };
+function makeRouter(
+  servers: Record<string, McpServerConfig>,
+  overrides: Partial<McpClientConfig> = {}
+): McpRouter {
+  const cfg: McpClientConfig = { servers, ...overrides };
   return new McpRouter(
     servers,
     cfg,
@@ -177,10 +180,13 @@ test("McpRouter: dynamic add/remove updates collision behavior", async () => {
     connectError: "offline"
   });
 
-  const router = makeRouter({
-    linear: { transport: "sse", url: "mock://linear" },
-    todoist: { transport: "sse", url: "mock://todoist" }
-  });
+  const router = makeRouter(
+    {
+      linear: { transport: "sse", url: "mock://linear" },
+      todoist: { transport: "sse", url: "mock://todoist" }
+    },
+    { routerConnectErrorCooldownMs: 20 }
+  );
 
   const noCollision = await router.dispatch(undefined, "call", "create-task", { title: "A" });
   assert.ok(!("error" in noCollision));
@@ -188,6 +194,7 @@ test("McpRouter: dynamic add/remove updates collision behavior", async () => {
 
   const todoBehavior = MockTransport.behaviors.get("mock://todoist")!;
   delete todoBehavior.connectError;
+  await new Promise((resolve) => setTimeout(resolve, 30));
   await router.dispatch("todoist", "list"); // server becomes available
   await router.dispatch("todoist", "call", "create-task", { content: "seed recency" });
 

@@ -106,6 +106,7 @@ function makeRouter(
   servers: Record<string, McpServerConfig>,
   overrides: {
     routerIdleTimeoutMs?: number;
+    routerConnectErrorCooldownMs?: number;
     routerMaxConcurrent?: number;
     schemaCompression?: { enabled?: boolean; maxDescriptionLength?: number };
     intentRouting?: McpClientConfig["intentRouting"];
@@ -121,6 +122,7 @@ function makeRouter(
     {
       servers,
       routerIdleTimeoutMs: overrides.routerIdleTimeoutMs,
+      routerConnectErrorCooldownMs: overrides.routerConnectErrorCooldownMs,
       routerMaxConcurrent: overrides.routerMaxConcurrent,
       schemaCompression: overrides.schemaCompression,
       intentRouting: overrides.intentRouting,
@@ -150,6 +152,39 @@ test("dispatch returns unknown_server error for missing server", async () => {
 
   const result = await router.dispatch("missing", "list");
   assert.equal("error" in result ? result.error : "", "unknown_server");
+});
+
+test("ensureConnected caches connect failures briefly before retrying", async () => {
+  const behavior: Behavior = {
+    tools: [{ name: "ping", description: "Ping", inputSchema: { type: "object" } }],
+    connectError: new Error("connect failed")
+  };
+  MockTransport.behaviors.set("mock://unstable", behavior);
+
+  const router = makeRouter(
+    { unstable: { transport: "sse", url: "mock://unstable" } },
+    { routerConnectErrorCooldownMs: 20 }
+  );
+
+  const first = await router.dispatch("unstable", "list");
+  assert.ok("error" in first);
+
+  const second = await router.dispatch("unstable", "list");
+  assert.ok("error" in second);
+
+  let instance = MockTransport.instances.get("mock://unstable");
+  assert.ok(instance);
+  assert.equal(instance!.connectCount, 1);
+
+  behavior.connectError = undefined;
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  const third = await router.dispatch("unstable", "list");
+  assert.equal("error" in third, false);
+
+  instance = MockTransport.instances.get("mock://unstable");
+  assert.ok(instance);
+  assert.equal(instance!.connectCount, 2);
 });
 
 test("dispatch action=list returns cached tool list", async () => {
