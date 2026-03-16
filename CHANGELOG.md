@@ -1,16 +1,23 @@
 # Changelog
 
-## [2.2.0] - 2026-03-16
+## [2.3.0] - 2026-03-16
 
 ### Fixed
 - **LSP multi-byte UTF-8 parsing** (critical): `Content-Length` is in bytes but buffer slicing used character count, causing parse errors with non-ASCII MCP responses. Now uses byte-accurate `Buffer` operations.
 - **Empty env var silent fallback**: `resolveEnvVars` silently returned `""` when `process.env.VAR` was explicitly empty and fallback found nothing. Now treats empty strings as missing values and throws, preventing silent auth failures.
 - **imap-email recipe**: added missing `install` block (required for stdio), completed `auth.envVars` with all referenced env vars, added to `servers/index.json`, added `README.md`.
+- **Security regex state leak**: `INJECTION_PATTERNS` were module-level `RegExp` objects with `/gi` flags sharing `lastIndex` state. Now constructs fresh `RegExp` per call.
+- **Stdio startup timeout**: `startProcess()` silently resolved on timeout (dead process marked "connected"). Now rejects with error and kills the unresponsive process.
+- **Router connect race condition**: concurrent callers could trigger redundant connect retries after failure. Now caches connect errors with configurable cooldown (`routerConnectErrorCooldownMs`, default 10s).
+- **Shared request ID counter**: `globalRequestId` was module-level mutable state shared across instances. Moved to per-instance scope in McpRouter/StandaloneServer.
 
 ### Changed
 - **CI**: removed duplicate `test.yml` workflow (kept `ci.yml` as single source of truth).
 - **prepublishOnly**: `validate-recipes.sh` now runs full recipe schema validation (not just URL checks). Prevents publishing invalid recipes to npm.
 - **npm package**: `servers/candidates.md` excluded via `.npmignore` (internal TODO file).
+- **ESLint**: disabled `no-undef` for TypeScript files (TypeScript's own checker handles this).
+- **Cleanup**: removed 5 leftover v1 `config.json` files (wise, hostinger, github, chrome-devtools, atlassian).
+- **package.json**: added `git+` prefix to repository URL per npm convention.
 
 ## [2.1.4] - 2026-03-16
 
