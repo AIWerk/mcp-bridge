@@ -25,7 +25,8 @@
     ],
     "audience": "general",
     "selfHosted": true,
-    "sideEffects": "read-write"
+    "sideEffects": "read-write",
+    "authSummary": "api-key"
   },
   "transports": [
     {

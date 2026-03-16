@@ -47,7 +47,8 @@
     ],
     "audience": "developer",
     "selfHosted": true,
-    "sideEffects": "read-only"
+    "sideEffects": "read-only",
+    "authSummary": "none"
   },
   "capabilities": {
     "tools": true,

@@ -51,7 +51,8 @@
     ],
     "audience": "general",
     "selfHosted": false,
-    "sideEffects": "read-write"
+    "sideEffects": "read-write",
+    "authSummary": "api-key"
   },
   "capabilities": {
     "tools": true,

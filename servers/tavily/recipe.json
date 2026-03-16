@@ -51,7 +51,8 @@
     ],
     "audience": "developer",
     "selfHosted": false,
-    "sideEffects": "read-only"
+    "sideEffects": "read-only",
+    "authSummary": "api-key"
   },
   "capabilities": {
     "tools": true,

@@ -50,7 +50,8 @@
     ],
     "audience": "developer",
     "selfHosted": false,
-    "sideEffects": "billing-impact"
+    "sideEffects": "billing-impact",
+    "authSummary": "api-key"
   },
   "capabilities": {
     "tools": true,

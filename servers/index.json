@@ -24,7 +24,8 @@
       ],
       "installMethod": null,
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "atlassian": {
       "name": "Atlassian (Confluence + Jira)",
@@ -48,7 +49,8 @@
       ],
       "installMethod": "uvx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "chrome-devtools": {
       "name": "Chrome DevTools",
@@ -72,7 +74,8 @@
       ],
       "installMethod": "npx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "github": {
       "name": "GitHub",
@@ -96,7 +99,8 @@
       ],
       "installMethod": "docker",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "google-maps": {
       "name": "Google Maps",
@@ -120,7 +124,8 @@
       ],
       "installMethod": "npx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "hetzner": {
       "name": "Hetzner Cloud",
@@ -144,7 +149,8 @@
       ],
       "installMethod": "git",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "hostinger": {
       "name": "Hostinger",
@@ -168,7 +174,8 @@
       ],
       "installMethod": "npx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "imap-email": {
       "name": "IMAP Email",
@@ -191,7 +198,8 @@
       ],
       "installMethod": "npx",
       "maturity": "beta",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "linear": {
       "name": "Linear",
@@ -215,7 +223,8 @@
       ],
       "installMethod": "git",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "miro": {
       "name": "Miro",
@@ -239,7 +248,8 @@
       ],
       "installMethod": "npx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "notion": {
       "name": "Notion",
@@ -263,7 +273,8 @@
       ],
       "installMethod": "npx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "stripe": {
       "name": "Stripe",
@@ -287,7 +298,8 @@
       ],
       "installMethod": "npx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "tavily": {
       "name": "Tavily",
@@ -311,7 +323,8 @@
       ],
       "installMethod": "npx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "todoist": {
       "name": "Todoist",
@@ -335,7 +348,8 @@
       ],
       "installMethod": "npx",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     },
     "wise": {
       "name": "Wise",
@@ -359,7 +373,8 @@
       ],
       "installMethod": "git",
       "maturity": "stable",
-      "toolCount": null
+      "toolCount": null,
+      "authSummary": "none"
     }
   }
 }

@@ -42,7 +42,8 @@
     ],
     "audience": "developer",
     "selfHosted": false,
-    "sideEffects": "read-write"
+    "sideEffects": "read-write",
+    "authSummary": "bearer"
   },
   "capabilities": {
     "tools": true,
