@@ -3,7 +3,7 @@
   "id": "wise",
   "name": "Wise",
   "description": "International money transfers and multi-currency account management via the Wise (TransferWise) API",
-  "repository": "https://github.com/kstam/wise-mcp",
+  "repository": "https://github.com/Szotasz/wise-mcp",
 
   "transports": [
     {
@@ -26,14 +26,14 @@
 
   "install": {
     "method": "git",
-    "repository": "https://github.com/kstam/wise-mcp",
+    "repository": "https://github.com/Szotasz/wise-mcp",
     "buildCommand": "npm install && npm run build",
     "version": "latest"
   },
 
   "metadata": {
     "homepage": "https://wise.com/",
-    "author": "kstam",
+    "author": "Szotasz",
     "tags": ["payments", "transfers", "international", "currency", "fintech"],
     "category": "finance",
     "pricing": "byok",
