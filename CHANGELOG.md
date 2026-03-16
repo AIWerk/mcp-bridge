@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.1.4] - 2026-03-16
+
+### Fixed
+- **Unified install path**: all persistent servers (git clone, npm install) go to `~/.openclaw/mcp-servers/<name>/` instead of nested inside plugin `node_modules` (fixes TypeScript path conflicts)
+- **Linear**: changed from `npm install -g` to local install in `~/.openclaw/mcp-servers/linear-mcp/`
+
+## [2.1.3] - 2026-03-16
+
+### Fixed
+- **Wise/Hetzner clone path**: moved git clone from plugin `node_modules` to `~/.openclaw/mcp-servers/` to avoid nested `node_modules` TypeScript build failures
+
+## [2.1.2] - 2026-03-16
+
+### Fixed
+- **Recipe URLs**: corrected Wise (`kstam` → `Szotasz`) and Hetzner (`valerius21` → `dkruyt`) repository URLs
+- **CI**: added `validate-recipes.sh` and `prepublishOnly` hook to prevent broken/hallucinated URLs
+
+## [2.1.1] - 2026-03-15
+
+### Fixed
+- Minor dependency updates
+
 ## [2.1.0] - 2026-03-15
 
 ### Added
