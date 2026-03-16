@@ -494,6 +494,82 @@ What kind of changes can this server make:
 
 Agents SHOULD warn users before invoking tools from servers with `billing-impact` side effects.
 
+### 3.7 Catalog Enrichment (Dynamic Metadata)
+
+Not all metadata needs to live in the recipe. The catalog can **enrich** recipes with computed or curated metadata at serve time, without modifying the original `recipe.json`.
+
+#### 3.7.1 Problem
+
+As the catalog grows, new metadata dimensions will be needed (e.g., auth summary, popularity score, compatibility flags). Updating every recipe manually for each new dimension is unsustainable at 100+ recipes.
+
+#### 3.7.2 Solution: Enrichment Overlay
+
+The catalog maintains an **enrichment overlay** per recipe, separate from the recipe itself:
+
+```
+Recipe (author's responsibility):
+  recipe.json — id, name, transports, auth, install, metadata (author-provided hints)
+
+Catalog overlays (catalog's responsibility):
+  quality.json    — verified, badge, upstreamHash (existing, see §2.8)
+  promotion.json  — promoted, affiliateUrl (existing, see §6.3)
+  enrichment.json — computed/curated metadata dimensions
+```
+
+**Enrichment sources:**
+
+| Source | Description | Example |
+|--------|-------------|---------|
+| **Computed from recipe** | Derived from existing recipe fields | `authSummary: "api-key"` from `auth.type` |
+| **AI-extracted** | LLM analyzes the recipe + README | auto-generate `subcategory`, `audience` |
+| **Curated by catalog operator** | Manually assigned by AIWerk | `origin: "official"`, `countries: ["CH"]` |
+| **Usage-derived** | Computed from catalog analytics | `popularityScore`, `weeklyDownloads` |
+
+#### 3.7.3 Merge Rules
+
+When the catalog serves a recipe (via `catalog.info` or `catalog.search`):
+
+1. Start with the raw `recipe.json` metadata
+2. Deep-merge the enrichment overlay (enrichment wins on conflict)
+3. Deep-merge the quality overlay
+4. Deep-merge the promotion overlay
+
+**Recipe author hints are preserved** — if a recipe author sets `subcategory: "email"` in their recipe, and the catalog enrichment also has `subcategory: "email"`, they agree. If the catalog has a different value, the catalog overlay wins (the catalog operator is the authority for catalog-level metadata).
+
+**Recipe authors are encouraged but not required** to include the new metadata fields. The catalog will fill in gaps automatically.
+
+#### 3.7.4 Adding New Dimensions
+
+To add a new metadata dimension (e.g., `authSummary`):
+
+1. **No spec change needed** — add it to the enrichment overlay
+2. **No recipe changes needed** — the catalog computes it from existing `auth` fields
+3. **Backfill** — run enrichment on all existing recipes (batch job)
+4. **Search/filter** — update `catalog.search` to support the new dimension
+5. **Optional:** add the field to the recipe schema in the next spec revision so authors can provide hints
+
+This means the catalog can evolve its search/filter dimensions independently of the recipe format version. Recipe authors never need to update their recipes for catalog-side improvements.
+
+#### 3.7.5 Taxonomy Registry
+
+The canonical list of categories, subcategories, origins, countries, and other enum values is maintained by the catalog as a **taxonomy registry**:
+
+```
+catalog.taxonomy() → {
+  categories: [...],
+  subcategories: { "productivity": [...], "development": [...], ... },
+  origins: [...],
+  audiences: [...],
+  sideEffects: [...],
+  countries: [...]   // ISO codes relevant to the catalog
+}
+```
+
+- The bridge ships a **static snapshot** of the taxonomy (`taxonomy.json`) for offline use
+- The catalog serves the **live version** via `catalog.taxonomy()`
+- When both are available, the catalog version wins (it may have new entries)
+- Adding a new category/subcategory = update the catalog's taxonomy, no recipe or spec changes
+
 ## 4. Client Adapter Specification
 
 ### 4.1 Adapter Contract
