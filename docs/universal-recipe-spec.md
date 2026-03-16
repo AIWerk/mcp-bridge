@@ -520,7 +520,7 @@ Catalog overlays (catalog's responsibility):
 
 | Source | Description | Example |
 |--------|-------------|---------|
-| **Computed from recipe** | Derived from existing recipe fields | `authSummary: "api-key"` from `auth.type` |
+| **Computed from recipe** | Derived from existing recipe fields | `authSummary: "api-key"` from `auth.type` (see §3.8) |
 | **AI-extracted** | LLM analyzes the recipe + README | auto-generate `subcategory`, `audience` |
 | **Curated by catalog operator** | Manually assigned by AIWerk | `origin: "official"`, `countries: ["CH"]` |
 | **Usage-derived** | Computed from catalog analytics | `popularityScore`, `weeklyDownloads` |
@@ -569,6 +569,23 @@ catalog.taxonomy() → {
 - The catalog serves the **live version** via `catalog.taxonomy()`
 - When both are available, the catalog version wins (it may have new entries)
 - Adding a new category/subcategory = update the catalog's taxonomy, no recipe or spec changes
+
+### 3.8 Auth Summary
+
+A convenience field that summarizes the authentication requirement in a single string. Useful for quick filtering in search results and index listings.
+
+| `authSummary` value | Meaning |
+|---------------------|---------|
+| `none` | No authentication needed |
+| `api-key` | Single API key/token required |
+| `bearer` | Bearer token in HTTP header |
+| `oauth2` | OAuth 2.0 flow required |
+| `basic` | Username + password |
+| `custom` | Non-standard auth (see recipe `auth.instructions`) |
+
+**Derivation rule:** If `auth.required` is `false` or `auth` is absent → `"none"`. Otherwise use `auth.type`.
+
+This field is a **canonical enrichment example** (see §3.7): the catalog can compute it from the existing `auth` block. Recipe authors MAY include it as a convenience; if omitted, the catalog enrichment overlay fills it in automatically.
 
 ## 4. Client Adapter Specification
 
