@@ -908,6 +908,37 @@ These warnings help submitters catch likely mistakes without blocking the submis
 
 **Implementation:** The `validate-recipes.sh` script in the bridge repo already handles Level 1 + partial Level 3. Level 2 warnings should be added as a separate pass that outputs GitHub PR annotations (warnings, not errors).
 
+### 7.5 Recipe Submission Methods
+
+A public recipe repository (e.g., `awesome-mcp-recipes`) SHOULD support two submission paths to accommodate both technical and non-technical contributors:
+
+#### Method A: Issue Template (non-technical)
+
+A GitHub Issue Template form where the submitter fills in fields in the browser — no git/fork/JSON knowledge required:
+
+- Server name, description, homepage
+- Transport type, command, args
+- Auth type, env var names, credentials URL
+- Category, subcategory, countries
+- Contact info (GitHub username minimum)
+
+After submission, the issue is reviewed by a curator who creates the `recipe.json` and opens an internal PR. Optionally, a GitHub Action can auto-generate a draft `recipe.json` from the form fields.
+
+**Advantages:** Low barrier to entry, encourages non-developer contributions (e.g., SaaS companies submitting their own server).
+
+#### Method B: Pull Request (technical)
+
+The submitter forks the repo, creates `recipes/<id>/recipe.json`, and opens a PR:
+
+- Full control over the recipe content
+- CI validates automatically (see §7.4)
+- Faster path to merge (no curator intermediary for the recipe generation step)
+- PR template reminds the submitter of required/recommended fields
+
+**Advantages:** Direct, precise, version-controlled. Preferred for developers and repeat contributors.
+
+Both methods result in the same outcome: a validated `recipe.json` in the repository's `recipes/` directory, followed by catalog sync.
+
 ## 8. Versioning & Compatibility
 
 - **Schema version** increments only for breaking changes.
