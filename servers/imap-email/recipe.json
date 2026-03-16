@@ -6,19 +6,35 @@
   "recipeVersion": "1.0.0",
   "metadata": {
     "category": "communication",
-    "tags": ["email", "imap", "smtp", "inbox"],
+    "tags": [
+      "email",
+      "imap",
+      "smtp",
+      "inbox"
+    ],
     "country": "global",
     "language": "en",
     "homepage": "https://github.com/AIWerk/mcp-server-imap",
     "license": "MIT",
     "pricing": "free",
-    "maturity": "beta"
+    "maturity": "beta",
+    "subcategory": "email",
+    "origin": "aiwerk",
+    "countries": [
+      "global"
+    ],
+    "audience": "general",
+    "selfHosted": true,
+    "sideEffects": "read-write"
   },
   "transports": [
     {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@aiwerk/mcp-server-imap"],
+      "args": [
+        "-y",
+        "@aiwerk/mcp-server-imap"
+      ],
       "env": {
         "IMAP_HOST": "${IMAP_HOST}",
         "IMAP_PORT": "${IMAP_PORT}",
@@ -33,7 +49,15 @@
   "auth": {
     "required": true,
     "type": "api-key",
-    "envVars": ["IMAP_HOST", "IMAP_PORT", "IMAP_USER", "IMAP_PASS", "SMTP_HOST", "SMTP_PORT", "SMTP_SEND_ENABLED"],
+    "envVars": [
+      "IMAP_HOST",
+      "IMAP_PORT",
+      "IMAP_USER",
+      "IMAP_PASS",
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_SEND_ENABLED"
+    ],
     "instructions": "Set your IMAP server hostname, port, username (email), and password. For Gmail use an App Password. Set SMTP_SEND_ENABLED=true to enable email sending.",
     "bootstrap": "env-only"
   },
@@ -44,7 +68,18 @@
   },
   "capabilities": {
     "toolCount": 10,
-    "toolNames": ["email_list", "email_read", "email_search", "email_folders", "email_move", "email_flag", "email_delete", "email_send", "email_reply", "email_attachment"],
+    "toolNames": [
+      "email_list",
+      "email_read",
+      "email_search",
+      "email_folders",
+      "email_move",
+      "email_flag",
+      "email_delete",
+      "email_send",
+      "email_reply",
+      "email_attachment"
+    ],
     "sideEffects": "external-write"
   }
 }

@@ -4,7 +4,6 @@
   "name": "GitHub",
   "description": "GitHub repository management — repos, issues, PRs, code search, and more via the official GitHub MCP server",
   "repository": "https://github.com/github/github-mcp-server",
-
   "transports": [
     {
       "type": "stdio",
@@ -22,30 +21,42 @@
       }
     }
   ],
-
   "auth": {
     "required": true,
     "type": "api-key",
-    "envVars": ["GITHUB_MCP_TOKEN"],
+    "envVars": [
+      "GITHUB_MCP_TOKEN"
+    ],
     "credentialsUrl": "https://github.com/settings/tokens",
     "instructions": "Create a Personal Access Token at GitHub Settings > Developer settings > Personal access tokens. Grant repo, issues, and pull_requests scopes."
   },
-
   "install": {
     "method": "docker",
     "image": "ghcr.io/github/github-mcp-server",
     "version": "latest"
   },
-
   "metadata": {
     "homepage": "https://github.com/github/github-mcp-server",
     "author": "GitHub",
-    "tags": ["git", "repos", "issues", "pull-requests", "code-review"],
+    "tags": [
+      "git",
+      "repos",
+      "issues",
+      "pull-requests",
+      "code-review"
+    ],
     "category": "development",
     "pricing": "byok",
-    "maturity": "stable"
+    "maturity": "stable",
+    "subcategory": "version-control",
+    "origin": "official",
+    "countries": [
+      "global"
+    ],
+    "audience": "developer",
+    "selfHosted": false,
+    "sideEffects": "read-write"
   },
-
   "capabilities": {
     "tools": true,
     "resources": false,

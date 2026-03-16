@@ -4,12 +4,13 @@
   "name": "Atlassian (Confluence + Jira)",
   "description": "Confluence wiki and Jira project management — search, create, and update pages and issues",
   "repository": "https://github.com/sooperset/mcp-atlassian",
-
   "transports": [
     {
       "type": "stdio",
       "command": "uvx",
-      "args": ["mcp-atlassian"],
+      "args": [
+        "mcp-atlassian"
+      ],
       "env": {
         "CONFLUENCE_URL": "${CONFLUENCE_URL}",
         "CONFLUENCE_USERNAME": "${CONFLUENCE_USERNAME}",
@@ -20,7 +21,6 @@
       }
     }
   ],
-
   "auth": {
     "required": true,
     "type": "api-key",
@@ -35,22 +35,33 @@
     "credentialsUrl": "https://id.atlassian.com/manage-profile/security/api-tokens",
     "instructions": "Create an API token at Atlassian account settings. Set CONFLUENCE_URL and JIRA_URL to your instance URLs (e.g., https://yourcompany.atlassian.net/wiki and https://yourcompany.atlassian.net)."
   },
-
   "install": {
     "method": "uvx",
     "package": "mcp-atlassian",
     "version": "latest"
   },
-
   "metadata": {
     "homepage": "https://github.com/sooperset/mcp-atlassian",
     "author": "sooperset",
-    "tags": ["wiki", "project-management", "confluence", "jira", "atlassian"],
+    "tags": [
+      "wiki",
+      "project-management",
+      "confluence",
+      "jira",
+      "atlassian"
+    ],
     "category": "productivity",
     "pricing": "byok",
-    "maturity": "stable"
+    "maturity": "stable",
+    "subcategory": "project-management",
+    "origin": "community",
+    "countries": [
+      "global"
+    ],
+    "audience": "business",
+    "selfHosted": false,
+    "sideEffects": "read-write"
   },
-
   "capabilities": {
     "tools": true,
     "resources": false,
