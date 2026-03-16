@@ -60,14 +60,14 @@ export class StandaloneServer {
     const stdin = process.stdin;
     const stdout = process.stdout;
 
-    stdin.setEncoding("utf8");
-    let buffer = "";
+    let buffer = Buffer.alloc(0);
     // LSP framing state
     let lspContentLength = -1; // -1 means not in LSP mode for current message
     let lspHeadersDone = false;
 
-    stdin.on("data", (chunk: string) => {
-      buffer += chunk;
+    stdin.on("data", (chunk: Buffer | string) => {
+      const chunkBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
+      buffer = Buffer.concat([buffer, chunkBuffer]);
 
       // Process buffer in a loop — it may contain multiple messages
       let progress = true;
@@ -76,12 +76,11 @@ export class StandaloneServer {
 
         // If we're reading an LSP body, check if we have enough bytes
         if (lspContentLength >= 0 && lspHeadersDone) {
-          const bufferBytes = Buffer.byteLength(buffer, "utf8");
-          if (bufferBytes >= lspContentLength) {
+          if (buffer.length >= lspContentLength) {
             // Extract exactly lspContentLength bytes (LSP spec defines Content-Length in bytes)
-            const bodyBuffer = Buffer.from(buffer, "utf8").slice(0, lspContentLength);
+            const bodyBuffer = buffer.subarray(0, lspContentLength);
             const body = bodyBuffer.toString("utf8");
-            buffer = buffer.substring(body.length);
+            buffer = buffer.subarray(lspContentLength);
             lspContentLength = -1;
             lspHeadersDone = false;
             const trimmed = body.trim();
@@ -96,16 +95,17 @@ export class StandaloneServer {
         }
 
         // Look for complete lines to detect framing
-        const newlineIdx = buffer.indexOf("\n");
+        const newlineIdx = buffer.indexOf(0x0a);
         if (newlineIdx === -1) break;
 
-        const line = buffer.slice(0, newlineIdx);
+        const lineBuffer = buffer.subarray(0, newlineIdx);
+        const line = lineBuffer.toString("utf8").replace(/\r$/, "");
         const trimmed = line.trim();
 
         // LSP header detection
         if (lspContentLength >= 0 && !lspHeadersDone) {
           // We're reading LSP headers — consume until empty line
-          buffer = buffer.slice(newlineIdx + 1);
+          buffer = buffer.subarray(newlineIdx + 1);
           progress = true;
           if (trimmed === "") {
             // End of headers — next read the body
@@ -123,14 +123,14 @@ export class StandaloneServer {
           if (!isNaN(length) && length > 0) {
             lspContentLength = length;
             lspHeadersDone = false;
-            buffer = buffer.slice(newlineIdx + 1);
+            buffer = buffer.subarray(newlineIdx + 1);
             progress = true;
             continue;
           }
         }
 
         // Newline-delimited JSON: consume the line
-        buffer = buffer.slice(newlineIdx + 1);
+        buffer = buffer.subarray(newlineIdx + 1);
         progress = true;
 
         if (!trimmed || !trimmed.startsWith("{")) continue;
