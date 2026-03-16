@@ -44,7 +44,7 @@
     "build": "tsc",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "bash scripts/validate-recipes.sh",
     "validate-recipe": "npx tsx bin/validate-recipe.ts",
     "lint": "eslint src/",
     "format": "prettier --write src/",
