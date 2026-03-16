@@ -160,7 +160,7 @@ export function resolveEnvVars(
         return fallbackVal;
       }
     }
-    if (resolved === undefined) {
+    if (resolved === undefined || resolved === "") {
       throw new Error(`[mcp-bridge] Missing required environment variable "${varName}" while resolving ${contextDescription}`);
     }
     return resolved;
