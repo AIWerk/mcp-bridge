@@ -6,18 +6,18 @@
 
 import type { McpServerConfig, McpClientConfig } from "./types.js";
 
-// Prompt injection patterns to strip (case-insensitive)
-const INJECTION_PATTERNS: RegExp[] = [
-  /ignore\s+(all\s+)?previous\s+instructions/gi,
-  /ignore\s+(all\s+)?prior\s+instructions/gi,
-  /disregard\s+(all\s+)?previous\s+instructions/gi,
-  /you\s+are\s+now\b/gi,
-  /^system\s*:/gim,
-  /\bact\s+as\s+(a|an)\s+/gi,
-  /pretend\s+you\s+are\b/gi,
-  /from\s+now\s+on\s+you\s+are\b/gi,
-  /new\s+instructions\s*:/gi,
-  /override\s+(all\s+)?instructions/gi,
+// Prompt injection patterns to strip (pattern source + flags)
+const INJECTION_PATTERNS: Array<{ source: string; flags: string }> = [
+  { source: "ignore\\s+(all\\s+)?previous\\s+instructions", flags: "gi" },
+  { source: "ignore\\s+(all\\s+)?prior\\s+instructions", flags: "gi" },
+  { source: "disregard\\s+(all\\s+)?previous\\s+instructions", flags: "gi" },
+  { source: "you\\s+are\\s+now\\b", flags: "gi" },
+  { source: "^system\\s*:", flags: "gim" },
+  { source: "\\bact\\s+as\\s+(a|an)\\s+", flags: "gi" },
+  { source: "pretend\\s+you\\s+are\\b", flags: "gi" },
+  { source: "from\\s+now\\s+on\\s+you\\s+are\\b", flags: "gi" },
+  { source: "new\\s+instructions\\s*:", flags: "gi" },
+  { source: "override\\s+(all\\s+)?instructions", flags: "gi" },
 ];
 
 function stripHtmlTags(text: string): string {
@@ -26,10 +26,8 @@ function stripHtmlTags(text: string): string {
 
 function stripInjectionPatterns(text: string): string {
   let result = text;
-  for (const pattern of INJECTION_PATTERNS) {
-    // Reset lastIndex for global regexes
-    pattern.lastIndex = 0;
-    result = result.replace(pattern, "");
+  for (const { source, flags } of INJECTION_PATTERNS) {
+    result = result.replace(new RegExp(source, flags), "");
   }
   return result;
 }

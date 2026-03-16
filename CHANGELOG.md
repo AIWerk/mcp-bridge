@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.0] - 2026-03-16
+
+### Fixed
+- **LSP multi-byte UTF-8 parsing** (critical): `Content-Length` is in bytes but buffer slicing used character count, causing parse errors with non-ASCII MCP responses. Now uses byte-accurate `Buffer` operations.
+- **Empty env var silent fallback**: `resolveEnvVars` silently returned `""` when `process.env.VAR` was explicitly empty and fallback found nothing. Now treats empty strings as missing values and throws, preventing silent auth failures.
+- **imap-email recipe**: added missing `install` block (required for stdio), completed `auth.envVars` with all referenced env vars, added to `servers/index.json`, added `README.md`.
+
+### Changed
+- **CI**: removed duplicate `test.yml` workflow (kept `ci.yml` as single source of truth).
+- **prepublishOnly**: `validate-recipes.sh` now runs full recipe schema validation (not just URL checks). Prevents publishing invalid recipes to npm.
+- **npm package**: `servers/candidates.md` excluded via `.npmignore` (internal TODO file).
+
 ## [2.1.4] - 2026-03-16
 
 ### Fixed

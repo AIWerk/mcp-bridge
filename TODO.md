@@ -5,7 +5,7 @@
 - [x] Smart Filter Phase 1 - keyword-based filtering, default enabled
 - [x] Auto-reconnect on failure (exponential backoff + jitter)
 - [x] Graceful server failure isolation
-- [x] 14 built-in servers (v2 recipe format)
+- [x] 15 built-in servers (v2 recipe format)
 - [x] Router mode (single `mcp` meta-tool, ~98% token reduction)
 - [x] Direct mode (individual tool registration)
 - [x] 3 transports: stdio, SSE, streamable-http
@@ -49,6 +49,18 @@
 - [ ] `mcp-bridge servers` - show status table (connected/idle/degraded/stopped)
 - [ ] `--log-file` option for HTTP mode
 - [ ] `mcp-bridge update --catalog-only` - catalog-only update
+
+## Spec Compliance (Universal Recipe Spec v2.0)
+- [ ] `mcp-bridge migrate-recipe` CLI command (§5.2) - convert v1 config.json to v2 recipe.json
+- [ ] `mcp-bridge uninstall <server>` CLI command - remove installed server
+- [ ] Adapter contract formalization (§4.1) - `toNativeConfig`, `fromNativeConfig`, `install`, `uninstall` interface
+- [ ] Claude Desktop adapter - recipe -> claude_desktop_config.json translation
+- [ ] Cursor adapter - recipe -> .cursor/mcp.json translation
+- [ ] `adapters/` override directories per recipe (§4.5) - client-specific config patches
+- [ ] Add imap-email to servers/index.json (missing from index, recipe + dir exists)
+- [ ] Add README.md for imap-email server recipe
+- [ ] Remove leftover v1 config.json files (wise, hostinger, github, chrome-devtools, atlassian)
+- [ ] Server icons (§2.1) - icon.svg/png per recipe directory
 
 ## Future
 - [ ] Hosted bridge mode (bridge.aiwerk.ch) - multi-tenant, per-user isolation (spec: docs/hosted-bridge-spec.md)
