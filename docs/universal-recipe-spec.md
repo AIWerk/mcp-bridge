@@ -498,6 +498,8 @@ Agents SHOULD warn users before invoking tools from servers with `billing-impact
 
 Not all metadata needs to live in the recipe. The catalog can **enrich** recipes with computed or curated metadata at serve time, without modifying the original `recipe.json`.
 
+> **Authorship rule:** If the recipe author provided a value, it is authoritative by default. The catalog enrichment only fills in **missing** fields. A catalog curator MAY override author-provided values via an explicit curated overlay, but this must be a deliberate editorial action — not automatic.
+
 #### 3.7.1 Problem
 
 As the catalog grows, new metadata dimensions will be needed (e.g., auth summary, popularity score, compatibility flags). Updating every recipe manually for each new dimension is unsustainable at 100+ recipes.
@@ -871,6 +873,40 @@ The validator MUST emit warnings (not errors) for:
 | `-a` | **no** | Leading hyphen |
 | `a` | **no** | Below minimum 2 chars |
 | `My-Server` | **no** | Uppercase not allowed |
+
+### 7.4 CI Validation for Recipe Submissions
+
+When recipes are submitted via pull request (e.g., to a public `mcp-recipes` repository), a CI pipeline SHOULD run multi-level validation:
+
+#### Level 1: Schema Validation (blocking — PR cannot merge if failed)
+
+- Recipe schema valid (all required fields present, correct types)
+- URLs reachable (repository, homepage, credentialsUrl)
+- `preInstall` / `postInstall` arrays empty (security policy — see §9.2)
+- `id` format valid (kebab-case, 2-64 chars)
+- `auth.envVars` covers all `${VAR}` references in transports (§7.1 rule 8)
+- `install` block present when stdio transport is defined (§7.1 rule 9)
+
+#### Level 2: Enrichment Consistency Warnings (non-blocking — PR can merge, but submitter is notified)
+
+These warnings help submitters catch likely mistakes without blocking the submission:
+
+| Warning | Trigger | Suggestion |
+|---------|---------|------------|
+| Country mismatch | description contains "Swiss"/"Schweiz"/"Suisse" but `countries` is `["global"]` | "Did you mean `countries: [\"CH\"]`?" |
+| Auth summary mismatch | `authSummary` value doesn't match computed value from `auth.type`/`auth.required` | "authSummary says 'none' but auth.required is true" |
+| Unknown subcategory | `subcategory` not in taxonomy known list | "Unknown subcategory — will be accepted but may not appear in category filters" |
+| Unknown category | `category` not in taxonomy known list | Same as above |
+| Tool count mismatch | `metadata.toolCount` ≠ `capabilities.toolNames.length` (when both present) | "toolCount says 27 but toolNames has 25 entries" |
+| Missing contact | No `maintainer` field and no `repository` URL | "Consider adding maintainer contact for security notifications" |
+| Stale verification | `metadata.lastVerified` > 90 days old | "Recipe hasn't been verified in 90+ days" |
+
+#### Level 3: Cross-Reference Check (non-blocking)
+
+- If `install-server.sh` exists, verify that the recipe's repository URL matches the clone URL in the install script
+- If the recipe `id` already exists in the catalog, warn about potential duplicates
+
+**Implementation:** The `validate-recipes.sh` script in the bridge repo already handles Level 1 + partial Level 3. Level 2 warnings should be added as a separate pass that outputs GitHub PR annotations (warnings, not errors).
 
 ## 8. Versioning & Compatibility
 
