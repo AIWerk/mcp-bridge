@@ -54,16 +54,29 @@ export function parseEnvFile(content: string): Record<string, string> {
     const eqIdx = trimmed.indexOf("=");
     if (eqIdx === -1) continue;
     const key = trimmed.substring(0, eqIdx).trim();
-    let value = trimmed.substring(eqIdx + 1).trim();
+    const rawValue = trimmed.substring(eqIdx + 1).trim();
+    let value: string;
+    let wasQuoted = false;
     // Strip surrounding quotes and handle escaped quotes within
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-      const quote = value[0];
-      value = value.slice(1, -1);
+    if ((rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+        (rawValue.startsWith("'") && rawValue.endsWith("'"))) {
+      const quote = rawValue[0];
+      value = rawValue.slice(1, -1);
       // Unescape escaped quotes: \" → " or \' → '
       value = value.replace(new RegExp(`\\\\${quote}`, "g"), quote);
       // Unescape escaped backslashes: \\ → \
       value = value.replace(/\\\\/g, "\\");
+      wasQuoted = true;
+    } else {
+      value = rawValue;
+    }
+    // Strip inline comments (KEY=value # comment) for unquoted values only.
+    // Quoted values preserve # characters literally: KEY="val#ue" → val#ue
+    if (!wasQuoted) {
+      const hashIdx = value.indexOf(" #");
+      if (hashIdx !== -1) {
+        value = value.substring(0, hashIdx).trimEnd();
+      }
     }
     if (key) env[key] = value;
   }

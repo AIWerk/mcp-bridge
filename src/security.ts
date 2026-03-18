@@ -260,16 +260,20 @@ export function processResult(
   // Sanitize step (only for trust=sanitize, handled inside applyTrustLevel)
   processed = applyTrustLevel(processed, serverName, serverConfig);
 
-  // If both truncated and untrusted, flatten the metadata to top level
+  // If both truncated and untrusted/sanitize, flatten the metadata to top level
+  // to avoid double-wrapping ({ _trust, result: { _truncated, result: actual } })
   const trust = serverConfig.trust ?? "trusted";
-  if (wasTruncated && trust === "untrusted") {
-    return {
-      _trust: "untrusted",
-      _server: serverName,
+  if (wasTruncated && (trust === "untrusted" || trust === "sanitize")) {
+    const flat: Record<string, unknown> = {
       _truncated: true,
       _originalLength: processed.result?._originalLength,
       result: processed.result?.result,
     };
+    if (trust === "untrusted") {
+      flat._trust = "untrusted";
+      flat._server = serverName;
+    }
+    return flat;
   }
   return processed;
 }

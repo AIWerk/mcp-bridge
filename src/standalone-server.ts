@@ -50,7 +50,7 @@ export class StandaloneServer {
     this.tokenManager = new OAuth2TokenManager(logger, new FileTokenStore());
 
     if (this.isRouterMode()) {
-      this.router = new McpRouter(config.servers || {}, config, logger);
+      this.router = new McpRouter(config.servers ?? {}, config, logger);
     }
   }
 

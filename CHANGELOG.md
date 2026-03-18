@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.6.5] - 2026-03-19
+
+### Fixed
+- **Device code OAuth2 invalidation bug**: `invalidateOAuth2Token()` now correctly skips both `authorization_code` and `device_code` token-store flows in SSE and streamable-http transports (prevents `resolveOAuth2Config` throw on device_code 401 retry).
+- **Dispatch error action list**: invalid action message now includes all supported actions (`status`, `promotions` were missing).
+- **Result metadata consistency**: `processResult()` now flattens truncated metadata consistently for both `trust: "untrusted"` and `trust: "sanitize"` to avoid nested wrappers.
+- **SSE/stream parsing robustness**: line splitting now handles both LF and CRLF (`/\r?\n/`) in SSE and streamable-http transports.
+- **Stdio startup false-positive hardening**: startup readiness now accepts JSON/LSP headers and whitespace readiness signals, while ignoring banner text on stdout (reduces fragile "connected" states).
+- **.env inline comments**: `parseEnvFile()` now strips unquoted inline comments (`KEY=value # comment`) while preserving quoted `#` characters.
+- **StandaloneServer init cleanup**: replaced `config.servers || {}` with nullish-safe `config.servers ?? {}`.
+
+### Notes
+- `tsconfig.json` already had `strict: true`; no change required.
+
 ## [2.6.3] - 2026-03-18
 
 ### Changed

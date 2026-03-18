@@ -349,7 +349,7 @@ export class McpRouter {
       }
 
       if (normalizedAction !== "call") {
-        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent`);
+        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions`);
       }
 
       if (!tool) {

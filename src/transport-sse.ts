@@ -3,6 +3,7 @@ import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import {
   BaseTransport,
   isAuthCodeOAuth2,
+  isDeviceCodeOAuth2,
   resolveOAuth2Config,
   resolveServerHeaders,
   resolveServerHeadersAsync,
@@ -94,7 +95,8 @@ export class SseTransport extends BaseTransport {
     if (this.config.auth?.type !== "oauth2") {
       return;
     }
-    if (isAuthCodeOAuth2(this.config.auth)) {
+    // Auth code and device code flows use the token store, not the in-memory cache
+    if (isAuthCodeOAuth2(this.config.auth) || isDeviceCodeOAuth2(this.config.auth)) {
       return;
     }
 
@@ -151,7 +153,7 @@ export class SseTransport extends BaseTransport {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
+        const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || "";
 
         for (const line of lines) {

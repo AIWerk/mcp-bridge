@@ -3,6 +3,7 @@ import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import {
   BaseTransport,
   isAuthCodeOAuth2,
+  isDeviceCodeOAuth2,
   resolveOAuth2Config,
   resolveServerHeaders,
   resolveServerHeadersAsync,
@@ -73,8 +74,8 @@ export class StreamableHttpTransport extends BaseTransport {
     if (this.config.auth?.type !== "oauth2") {
       return;
     }
-    // authorization_code tokens are managed via TokenStore, not the in-memory cache
-    if (isAuthCodeOAuth2(this.config.auth)) {
+    // Auth code and device code tokens are managed via TokenStore, not the in-memory cache
+    if (isAuthCodeOAuth2(this.config.auth) || isDeviceCodeOAuth2(this.config.auth)) {
       return;
     }
 
@@ -186,7 +187,7 @@ export class StreamableHttpTransport extends BaseTransport {
                   if (done) break;
 
                   partial += decoder.decode(value, { stream: true });
-                  const lines = partial.split("\n");
+                  const lines = partial.split(/\r?\n/);
                   // Keep the last (potentially incomplete) line in partial
                   partial = lines.pop() || "";
 
