@@ -126,7 +126,7 @@ export class OAuth2TokenManager {
 
     const refreshPromise = this.doTokenRefresh(
       serverName, stored,
-      (s) => this.refreshAuthCodeToken(s, config),
+      (s) => this.refreshStoredToken(s, config),
       "Auth code",
     );
     this.tokenRefreshInflight.set(serverName, refreshPromise);
@@ -170,7 +170,7 @@ export class OAuth2TokenManager {
 
     const refreshPromise = this.doTokenRefresh(
       serverName, stored,
-      (s) => this.refreshDeviceCodeToken(s, config),
+      (s) => this.refreshStoredToken(s, config),
       "Device code",
     );
     this.tokenRefreshInflight.set(serverName, refreshPromise);
@@ -210,13 +210,20 @@ export class OAuth2TokenManager {
     throw error;
   }
 
-  private async refreshDeviceCodeToken(stored: StoredToken, config: DeviceCodeOAuth2Config): Promise<StoredToken> {
+  /**
+   * Shared refresh token exchange for both auth_code and device_code flows.
+   * The only differences are which fields are optional (clientId/clientSecret).
+   */
+  private async refreshStoredToken(
+    stored: StoredToken,
+    params: { clientId?: string; clientSecret?: string; scopes?: string[] },
+  ): Promise<StoredToken> {
     const formData = new URLSearchParams();
     formData.set("grant_type", "refresh_token");
     formData.set("refresh_token", stored.refreshToken!);
-    formData.set("client_id", config.clientId);
-    if (config.clientSecret) formData.set("client_secret", config.clientSecret);
-    if (config.scopes?.length) formData.set("scope", config.scopes.join(" "));
+    if (params.clientId) formData.set("client_id", params.clientId);
+    if (params.clientSecret) formData.set("client_secret", params.clientSecret);
+    if (params.scopes?.length) formData.set("scope", params.scopes.join(" "));
 
     const response = await fetch(stored.tokenUrl, {
       method: "POST",
@@ -243,48 +250,8 @@ export class OAuth2TokenManager {
       refreshToken: payload.refresh_token ?? stored.refreshToken,
       expiresAt,
       tokenUrl: stored.tokenUrl,
-      clientId: config.clientId,
-      scopes: config.scopes,
-    };
-  }
-
-
-
-  private async refreshAuthCodeToken(stored: StoredToken, config: AuthCodeOAuth2Config): Promise<StoredToken> {
-    const formData = new URLSearchParams();
-    formData.set("grant_type", "refresh_token");
-    formData.set("refresh_token", stored.refreshToken!);
-    if (config.clientId) formData.set("client_id", config.clientId);
-    if (config.clientSecret) formData.set("client_secret", config.clientSecret);
-    if (config.scopes?.length) formData.set("scope", config.scopes.join(" "));
-
-    const response = await fetch(stored.tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData.toString(),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OAuth2 refresh token exchange failed: HTTP ${response.status}`);
-    }
-
-    const payload = (await response.json()) as OAuth2TokenResponse;
-    if (!payload.access_token) {
-      throw new Error("OAuth2 refresh response missing access_token");
-    }
-
-    const expiresIn = Number.isFinite(payload.expires_in)
-      ? Number(payload.expires_in)
-      : DEFAULT_EXPIRES_IN_SECONDS;
-    const expiresAt = Date.now() + Math.max(0, expiresIn - EXPIRY_BUFFER_SECONDS) * 1000;
-
-    return {
-      accessToken: payload.access_token,
-      refreshToken: payload.refresh_token ?? stored.refreshToken,
-      expiresAt,
-      tokenUrl: stored.tokenUrl,
-      clientId: config.clientId,
-      scopes: config.scopes,
+      clientId: params.clientId,
+      scopes: params.scopes,
     };
   }
 

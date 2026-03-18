@@ -525,3 +525,32 @@ test("performDeviceCodeLogin passes AbortSignal to fetch", async () => {
 
   await mock.close();
 });
+
+// -- openBrowser shell injection regression test ----------------------------
+
+test("openBrowser uses execFile not exec (source code regression guard)", async () => {
+  // Read the actual source file and verify exec is NOT used with string interpolation.
+  // This guards against someone accidentally reverting execFile back to exec.
+  const { readFileSync } = await import("fs");
+  const { join } = await import("path");
+  const src = readFileSync(join(import.meta.dirname!, "..", "src", "cli-auth.ts"), "utf8");
+
+  // The openBrowser function should use execFile, not exec with template strings
+  const openBrowserSection = src.slice(
+    src.indexOf("function openBrowser"),
+    src.indexOf("}", src.indexOf("function openBrowser") + 200) + 50
+  );
+
+  // Verify execFile is used
+  assert.ok(openBrowserSection.includes("execFile"), "openBrowser should use execFile");
+
+  // Verify no exec() with string interpolation (shell injection vector)
+  assert.ok(
+    !openBrowserSection.includes('exec(`'),
+    "openBrowser must NOT use exec with template literals (shell injection)",
+  );
+  assert.ok(
+    !openBrowserSection.includes("exec(cmd"),
+    "openBrowser must NOT use exec(cmd) (shell injection)",
+  );
+});

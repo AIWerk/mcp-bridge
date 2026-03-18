@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.6.3] - 2026-03-18
+
+### Changed
+- **Shared `doTokenRefresh()`** (`oauth2-token-manager.ts`): extracted common refresh logic from duplicate `doAuthCodeRefresh`/`doDeviceCodeRefresh` methods into a single `doTokenRefresh(serverName, stored, refreshFn, flowName)` method. Both auth_code and device_code flows now use the same wrapper.
+- **Shared `refreshStoredToken()`** (`oauth2-token-manager.ts`): extracted common refresh token exchange logic from `refreshAuthCodeToken`/`refreshDeviceCodeToken` into a single method parameterized by `clientId`, `clientSecret`, and `scopes`.
+
+### Added
+- **AbortSignal support** (`cli-auth.ts`): `performDeviceCodeLogin()` now accepts an optional `signal?: AbortSignal` parameter. Checks abort state before and after sleep, passes signal to `fetch()` calls. Allows callers (e.g. OpenClaw plugin) to cancel an abandoned login flow.
+- **Regression tests**: non-JSON error response recovery (HTML 500 + broken JSON → retry), AbortSignal cancellation, pre-aborted signal, `openBrowser` `execFile` source code guard.
+
 ## [2.6.2] - 2026-03-18
 
 ### Fixed
