@@ -396,6 +396,7 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
       deviceAuthorizationUrl: deviceAuth.deviceAuthorizationUrl,
       tokenUrl: deviceAuth.tokenUrl,
       clientId: deviceAuth.clientId,
+      clientSecret: deviceAuth.clientSecret,
       scopes: deviceAuth.scopes,
     }, logger);
   } else if (grantType === "authorization_code") {

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { randomBytes, createHash } from "crypto";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { platform } from "os";
 import type { Logger } from "./types.js";
 import type { StoredToken } from "./token-store.js";
@@ -51,22 +51,26 @@ export function computeCodeChallenge(verifier: string): string {
 /**
  * Open a URL in the default browser using platform-specific commands.
  */
+/**
+ * Open a URL in the default browser.
+ * Uses execFile (no shell) to prevent shell injection from untrusted URLs
+ * (e.g. verification_uri_complete from an external authorization server).
+ */
 function openBrowser(url: string, logger: Logger): void {
   const os = platform();
-  let cmd: string;
   if (os === "darwin") {
-    cmd = `open "${url}"`;
+    execFile("open", [url], (err) => {
+      if (err) logger.warn(`[mcp-bridge] Could not open browser automatically. Please visit:\n${url}`);
+    });
   } else if (os === "win32") {
-    cmd = `start "" "${url}"`;
+    execFile("cmd", ["/c", "start", "", url], (err) => {
+      if (err) logger.warn(`[mcp-bridge] Could not open browser automatically. Please visit:\n${url}`);
+    });
   } else {
-    cmd = `xdg-open "${url}"`;
+    execFile("xdg-open", [url], (err) => {
+      if (err) logger.warn(`[mcp-bridge] Could not open browser automatically. Please visit:\n${url}`);
+    });
   }
-
-  exec(cmd, (err) => {
-    if (err) {
-      logger.warn(`[mcp-bridge] Could not open browser automatically. Please visit:\n${url}`);
-    }
-  });
 }
 
 interface OAuth2TokenResponse {
@@ -203,6 +207,7 @@ export interface DeviceCodeConfig {
   deviceAuthorizationUrl: string;
   tokenUrl: string;
   clientId: string;
+  clientSecret?: string;
   scopes?: string[];
   /** Skip opening browser (for tests). */
   skipBrowser?: boolean;
@@ -237,6 +242,7 @@ export async function performDeviceCodeLogin(
   // Step 1: Request device code
   const formData = new URLSearchParams();
   formData.set("client_id", config.clientId);
+  if (config.clientSecret) formData.set("client_secret", config.clientSecret);
   if (config.scopes?.length) formData.set("scope", config.scopes.join(" "));
 
   const deviceResponse = await fetch(config.deviceAuthorizationUrl, {
@@ -294,6 +300,7 @@ export async function performDeviceCodeLogin(
     tokenForm.set("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
     tokenForm.set("device_code", deviceCode);
     tokenForm.set("client_id", config.clientId);
+    if (config.clientSecret) tokenForm.set("client_secret", config.clientSecret);
 
     const tokenResponse = await fetch(config.tokenUrl, {
       method: "POST",
@@ -301,7 +308,20 @@ export async function performDeviceCodeLogin(
       body: tokenForm.toString(),
     });
 
-    const tokenPayload = (await tokenResponse.json()) as OAuth2TokenResponse;
+    // Guard against non-JSON responses (e.g. 500 HTML error pages)
+    const contentType = tokenResponse.headers.get("content-type") || "";
+    if (!tokenResponse.ok && !contentType.includes("json")) {
+      logger.warn(`[mcp-bridge] Token poll returned HTTP ${tokenResponse.status} (non-JSON), retrying...`);
+      continue;
+    }
+
+    let tokenPayload: OAuth2TokenResponse;
+    try {
+      tokenPayload = (await tokenResponse.json()) as OAuth2TokenResponse;
+    } catch {
+      logger.warn("[mcp-bridge] Token poll returned invalid JSON, retrying...");
+      continue;
+    }
 
     if (tokenPayload.error) {
       if (tokenPayload.error === "authorization_pending") {

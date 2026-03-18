@@ -21,6 +21,7 @@ export interface DeviceCodeOAuth2Config {
   grantType: "device_code";
   tokenUrl: string;
   clientId: string;
+  clientSecret?: string;
   scopes?: string[];
 }
 
@@ -44,7 +45,7 @@ export class OAuth2TokenManager {
   private readonly logger: Logger;
   private readonly tokenCache = new Map<string, CachedToken>();
   private readonly inflight = new Map<string, Promise<string>>();
-  private readonly authCodeInflight = new Map<string, Promise<string>>();
+  private readonly tokenRefreshInflight = new Map<string, Promise<string>>();
   private readonly tokenStore?: TokenStore;
 
   constructor(logger: Logger, tokenStore?: TokenStore) {
@@ -118,17 +119,17 @@ export class OAuth2TokenManager {
     // Token expired — try refresh with inflight dedup to avoid
     // concurrent requests both trying to refresh the same token
     // (the second refresh would fail because the first invalidated the refresh_token)
-    const existingInflight = this.authCodeInflight.get(serverName);
+    const existingInflight = this.tokenRefreshInflight.get(serverName);
     if (existingInflight) {
       return existingInflight;
     }
 
     const refreshPromise = this.doAuthCodeRefresh(serverName, stored, config);
-    this.authCodeInflight.set(serverName, refreshPromise);
+    this.tokenRefreshInflight.set(serverName, refreshPromise);
     try {
       return await refreshPromise;
     } finally {
-      this.authCodeInflight.delete(serverName);
+      this.tokenRefreshInflight.delete(serverName);
     }
   }
 
@@ -158,17 +159,17 @@ export class OAuth2TokenManager {
     }
 
     // Token expired — try refresh with inflight dedup
-    const existingInflight = this.authCodeInflight.get(serverName);
+    const existingInflight = this.tokenRefreshInflight.get(serverName);
     if (existingInflight) {
       return existingInflight;
     }
 
     const refreshPromise = this.doDeviceCodeRefresh(serverName, stored, config);
-    this.authCodeInflight.set(serverName, refreshPromise);
+    this.tokenRefreshInflight.set(serverName, refreshPromise);
     try {
       return await refreshPromise;
     } finally {
-      this.authCodeInflight.delete(serverName);
+      this.tokenRefreshInflight.delete(serverName);
     }
   }
 
@@ -197,6 +198,7 @@ export class OAuth2TokenManager {
     formData.set("grant_type", "refresh_token");
     formData.set("refresh_token", stored.refreshToken!);
     formData.set("client_id", config.clientId);
+    if (config.clientSecret) formData.set("client_secret", config.clientSecret);
     if (config.scopes?.length) formData.set("scope", config.scopes.join(" "));
 
     const response = await fetch(stored.tokenUrl, {

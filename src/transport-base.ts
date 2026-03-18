@@ -315,7 +315,7 @@ export function resolveDeviceCodeOAuth2Config(
     throw new Error("[mcp-bridge] resolveDeviceCodeOAuth2Config called for non-device_code auth config");
   }
 
-  const auth = config.auth as { type: "oauth2"; grantType: "device_code"; tokenUrl: string; clientId: string; scopes?: string[] };
+  const auth = config.auth as { type: "oauth2"; grantType: "device_code"; tokenUrl: string; clientId: string; clientSecret?: string; scopes?: string[] };
 
   const scopes = auth.scopes?.map((scope, index) =>
     resolveEnvVars(scope, `oauth2 scope[${index}]`, extraEnv, envFallback)
@@ -325,6 +325,7 @@ export function resolveDeviceCodeOAuth2Config(
     grantType: "device_code",
     tokenUrl: resolveEnvVars(auth.tokenUrl, "oauth2 tokenUrl", extraEnv, envFallback),
     clientId: resolveEnvVars(auth.clientId, "oauth2 clientId", extraEnv, envFallback),
+    ...(auth.clientSecret ? { clientSecret: resolveEnvVars(auth.clientSecret, "oauth2 clientSecret", extraEnv, envFallback) } : {}),
     ...(scopes && scopes.length > 0 ? { scopes } : {}),
   };
 }

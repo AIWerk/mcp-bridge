@@ -32,6 +32,7 @@ export type HttpAuthConfig =
       deviceAuthorizationUrl: string;
       tokenUrl: string;
       clientId: string;
+      clientSecret?: string;
       scopes?: string[];
     };
 
