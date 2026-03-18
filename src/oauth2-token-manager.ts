@@ -37,6 +37,7 @@ export class OAuth2TokenManager {
   private readonly logger: Logger;
   private readonly tokenCache = new Map<string, CachedToken>();
   private readonly inflight = new Map<string, Promise<string>>();
+  private readonly authCodeInflight = new Map<string, Promise<string>>();
   private readonly tokenStore?: TokenStore;
 
   constructor(logger: Logger, tokenStore?: TokenStore) {
@@ -107,11 +108,28 @@ export class OAuth2TokenManager {
       return stored.accessToken;
     }
 
-    // Token expired — try refresh
+    // Token expired — try refresh with inflight dedup to avoid
+    // concurrent requests both trying to refresh the same token
+    // (the second refresh would fail because the first invalidated the refresh_token)
+    const existingInflight = this.authCodeInflight.get(serverName);
+    if (existingInflight) {
+      return existingInflight;
+    }
+
+    const refreshPromise = this.doAuthCodeRefresh(serverName, stored, config);
+    this.authCodeInflight.set(serverName, refreshPromise);
+    try {
+      return await refreshPromise;
+    } finally {
+      this.authCodeInflight.delete(serverName);
+    }
+  }
+
+  private async doAuthCodeRefresh(serverName: string, stored: StoredToken, config: AuthCodeOAuth2Config): Promise<string> {
     if (stored.refreshToken) {
       try {
         const refreshed = await this.refreshAuthCodeToken(stored, config);
-        this.tokenStore.save(serverName, refreshed);
+        this.tokenStore!.save(serverName, refreshed);
         return refreshed.accessToken;
       } catch (err) {
         this.logger.warn("[mcp-bridge] Auth code token refresh failed:", err);
@@ -119,7 +137,7 @@ export class OAuth2TokenManager {
     }
 
     // Refresh failed or no refresh token
-    this.tokenStore.remove(serverName);
+    this.tokenStore!.remove(serverName);
     const error = new Error(
       `Authentication expired for server "${serverName}". Run: mcp-bridge auth login ${serverName}`,
     );

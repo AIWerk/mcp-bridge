@@ -93,7 +93,8 @@ export interface RouterTransportRefs {
     logger: Logger,
     onReconnected?: () => Promise<void>,
     tokenManager?: OAuth2TokenManager,
-    requestIdGenerator?: () => number
+    requestIdGenerator?: () => number,
+    serverName?: string,
   ) => McpTransport;
   stdio: new (
     config: McpServerConfig,
@@ -108,7 +109,8 @@ export interface RouterTransportRefs {
     logger: Logger,
     onReconnected?: () => Promise<void>,
     tokenManager?: OAuth2TokenManager,
-    requestIdGenerator?: () => number
+    requestIdGenerator?: () => number,
+    serverName?: string,
   ) => McpTransport;
 }
 

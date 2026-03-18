@@ -5,6 +5,16 @@ import { platform } from "os";
 import type { Logger } from "./types.js";
 import type { StoredToken } from "./token-store.js";
 
+/** Escape HTML special characters to prevent XSS in callback responses. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export interface AuthCodeConfig {
   authorizationUrl: string;
   tokenUrl: string;
@@ -113,7 +123,7 @@ export async function performAuthCodeLogin(
       const error = url.searchParams.get("error");
       if (error) {
         res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(`<html><body><h2>Authentication failed</h2><p>${error}: ${url.searchParams.get("error_description") || ""}</p></body></html>`);
+        res.end(`<html><body><h2>Authentication failed</h2><p>${escapeHtml(error)}: ${escapeHtml(url.searchParams.get("error_description") || "")}</p></body></html>`);
         if (!settled) {
           settled = true;
           clearTimeout(timeout);
