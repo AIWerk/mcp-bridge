@@ -17,6 +17,13 @@ export interface AuthCodeOAuth2Config {
   scopes?: string[];
 }
 
+export interface DeviceCodeOAuth2Config {
+  grantType: "device_code";
+  tokenUrl: string;
+  clientId: string;
+  scopes?: string[];
+}
+
 interface CachedToken {
   accessToken: string;
   expiresAt: number;
@@ -123,6 +130,103 @@ export class OAuth2TokenManager {
     } finally {
       this.authCodeInflight.delete(serverName);
     }
+  }
+
+  /**
+   * Get a token for a device_code flow server.
+   * Checks TokenStore, refreshes if expired, throws if unavailable.
+   */
+  async getTokenForDeviceCode(serverName: string, config: DeviceCodeOAuth2Config): Promise<string> {
+    if (!this.tokenStore) {
+      throw new Error(
+        `Authentication required for server "${serverName}". Run: mcp-bridge auth login ${serverName}`,
+      );
+    }
+
+    const stored = this.tokenStore.load(serverName);
+    if (!stored) {
+      const err = new Error(
+        `Authentication required for server "${serverName}". Run: mcp-bridge auth login ${serverName}`,
+      );
+      (err as any).code = -32007;
+      throw err;
+    }
+
+    const now = Date.now();
+    if (stored.expiresAt > now) {
+      return stored.accessToken;
+    }
+
+    // Token expired — try refresh with inflight dedup
+    const existingInflight = this.authCodeInflight.get(serverName);
+    if (existingInflight) {
+      return existingInflight;
+    }
+
+    const refreshPromise = this.doDeviceCodeRefresh(serverName, stored, config);
+    this.authCodeInflight.set(serverName, refreshPromise);
+    try {
+      return await refreshPromise;
+    } finally {
+      this.authCodeInflight.delete(serverName);
+    }
+  }
+
+  private async doDeviceCodeRefresh(serverName: string, stored: StoredToken, config: DeviceCodeOAuth2Config): Promise<string> {
+    if (stored.refreshToken) {
+      try {
+        const refreshed = await this.refreshDeviceCodeToken(stored, config);
+        this.tokenStore!.save(serverName, refreshed);
+        return refreshed.accessToken;
+      } catch (err) {
+        this.logger.warn("[mcp-bridge] Device code token refresh failed:", err);
+      }
+    }
+
+    // Refresh failed or no refresh token
+    this.tokenStore!.remove(serverName);
+    const error = new Error(
+      `Authentication expired for server "${serverName}". Run: mcp-bridge auth login ${serverName}`,
+    );
+    (error as any).code = -32006;
+    throw error;
+  }
+
+  private async refreshDeviceCodeToken(stored: StoredToken, config: DeviceCodeOAuth2Config): Promise<StoredToken> {
+    const formData = new URLSearchParams();
+    formData.set("grant_type", "refresh_token");
+    formData.set("refresh_token", stored.refreshToken!);
+    formData.set("client_id", config.clientId);
+    if (config.scopes?.length) formData.set("scope", config.scopes.join(" "));
+
+    const response = await fetch(stored.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formData.toString(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OAuth2 refresh token exchange failed: HTTP ${response.status}`);
+    }
+
+    const payload = (await response.json()) as OAuth2TokenResponse;
+    if (!payload.access_token) {
+      throw new Error("OAuth2 refresh response missing access_token");
+    }
+
+    const expiresIn = Number.isFinite(payload.expires_in)
+      ? Number(payload.expires_in)
+      : DEFAULT_EXPIRES_IN_SECONDS;
+    const expiresAt = Date.now() + Math.max(0, expiresIn - EXPIRY_BUFFER_SECONDS) * 1000;
+
+    return {
+      accessToken: payload.access_token,
+      refreshToken: payload.refresh_token ?? stored.refreshToken,
+      expiresAt,
+      tokenUrl: stored.tokenUrl,
+      clientId: config.clientId,
+      scopes: config.scopes,
+    };
   }
 
   private async doAuthCodeRefresh(serverName: string, stored: StoredToken, config: AuthCodeOAuth2Config): Promise<string> {

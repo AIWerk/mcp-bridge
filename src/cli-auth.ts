@@ -199,6 +199,152 @@ export async function performAuthCodeLogin(
   });
 }
 
+export interface DeviceCodeConfig {
+  deviceAuthorizationUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  scopes?: string[];
+}
+
+interface DeviceAuthorizationResponse {
+  device_code?: string;
+  user_code?: string;
+  verification_uri?: string;
+  verification_uri_complete?: string;
+  expires_in?: number;
+  interval?: number;
+  error?: string;
+  error_description?: string;
+}
+
+const DEFAULT_POLL_INTERVAL_S = 5;
+const SLOW_DOWN_INCREMENT_S = 5;
+
+/**
+ * Perform the OAuth2 Device Authorization Grant (RFC 8628).
+ *
+ * 1. POST to deviceAuthorizationUrl to obtain device_code + user_code
+ * 2. Display user_code and verification_uri to the user
+ * 3. Poll tokenUrl until the user authorizes or the code expires
+ */
+export async function performDeviceCodeLogin(
+  serverName: string,
+  config: DeviceCodeConfig,
+  logger: Logger,
+): Promise<StoredToken> {
+  // Step 1: Request device code
+  const formData = new URLSearchParams();
+  formData.set("client_id", config.clientId);
+  if (config.scopes?.length) formData.set("scope", config.scopes.join(" "));
+
+  const deviceResponse = await fetch(config.deviceAuthorizationUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: formData.toString(),
+  });
+
+  if (!deviceResponse.ok) {
+    const text = await deviceResponse.text().catch(() => "");
+    throw new Error(`Device authorization request failed: HTTP ${deviceResponse.status} ${text}`);
+  }
+
+  const devicePayload = (await deviceResponse.json()) as DeviceAuthorizationResponse;
+
+  if (devicePayload.error) {
+    throw new Error(`Device authorization error: ${devicePayload.error} — ${devicePayload.error_description || ""}`);
+  }
+
+  if (!devicePayload.device_code || !devicePayload.user_code || !devicePayload.verification_uri) {
+    throw new Error("Device authorization response missing required fields (device_code, user_code, verification_uri)");
+  }
+
+  const deviceCode = devicePayload.device_code;
+  const userCode = devicePayload.user_code;
+  const verificationUri = devicePayload.verification_uri;
+  const verificationUriComplete = devicePayload.verification_uri_complete;
+  const expiresInS = devicePayload.expires_in ?? 900;
+  let intervalS = devicePayload.interval ?? DEFAULT_POLL_INTERVAL_S;
+
+  // Step 2: Display instructions to the user
+  logger.info(`[mcp-bridge] ──────────────────────────────────────────`);
+  logger.info(`[mcp-bridge]  Device authentication for "${serverName}"`);
+  logger.info(`[mcp-bridge]`);
+  logger.info(`[mcp-bridge]  1. Open: ${verificationUri}`);
+  logger.info(`[mcp-bridge]  2. Enter code: ${userCode}`);
+  logger.info(`[mcp-bridge] ──────────────────────────────────────────`);
+
+  if (verificationUriComplete) {
+    logger.info(`[mcp-bridge] Or open this URL directly: ${verificationUriComplete}`);
+    openBrowser(verificationUriComplete, logger);
+  }
+
+  logger.info(`[mcp-bridge] Waiting for authorization (expires in ${expiresInS}s)...`);
+
+  // Step 3: Poll for token
+  const deadline = Date.now() + expiresInS * 1000;
+
+  while (Date.now() < deadline) {
+    await sleep(intervalS * 1000);
+
+    const tokenForm = new URLSearchParams();
+    tokenForm.set("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
+    tokenForm.set("device_code", deviceCode);
+    tokenForm.set("client_id", config.clientId);
+
+    const tokenResponse = await fetch(config.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: tokenForm.toString(),
+    });
+
+    const tokenPayload = (await tokenResponse.json()) as OAuth2TokenResponse;
+
+    if (tokenPayload.error) {
+      if (tokenPayload.error === "authorization_pending") {
+        continue;
+      }
+      if (tokenPayload.error === "slow_down") {
+        intervalS += SLOW_DOWN_INCREMENT_S;
+        continue;
+      }
+      if (tokenPayload.error === "expired_token") {
+        throw new Error("Device code expired. Please try again.");
+      }
+      if (tokenPayload.error === "access_denied") {
+        throw new Error("Authorization denied by user.");
+      }
+      throw new Error(`Device code token error: ${tokenPayload.error} — ${tokenPayload.error_description || ""}`);
+    }
+
+    if (!tokenPayload.access_token) {
+      throw new Error("Device code token response missing access_token");
+    }
+
+    const expiresIn = Number.isFinite(tokenPayload.expires_in)
+      ? Number(tokenPayload.expires_in)
+      : DEFAULT_EXPIRES_IN;
+
+    const expiresAt = Date.now() + Math.max(0, expiresIn - EXPIRY_BUFFER_SECONDS) * 1000;
+
+    logger.info(`[mcp-bridge] Authentication successful. Token expires in ${expiresIn}s.`);
+
+    return {
+      accessToken: tokenPayload.access_token,
+      refreshToken: tokenPayload.refresh_token,
+      expiresAt,
+      tokenUrl: config.tokenUrl,
+      clientId: config.clientId,
+      scopes: config.scopes,
+    };
+  }
+
+  throw new Error("Device code expired (timeout). Please try again.");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function exchangeCodeForToken(
   config: AuthCodeConfig,
   code: string,

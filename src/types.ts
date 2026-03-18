@@ -25,6 +25,14 @@ export type HttpAuthConfig =
       clientSecret?: string;
       scopes?: string[];
       callbackPort?: number;
+    }
+  | {
+      type: "oauth2";
+      grantType: "device_code";
+      deviceAuthorizationUrl: string;
+      tokenUrl: string;
+      clientId: string;
+      scopes?: string[];
     };
 
 export interface RetryConfig {

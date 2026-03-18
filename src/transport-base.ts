@@ -1,5 +1,5 @@
 import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, JsonRpcMessage, RequestIdGenerator, nextRequestId } from "./types.js";
-import type { OAuth2Config, AuthCodeOAuth2Config, OAuth2TokenManager } from "./oauth2-token-manager.js";
+import type { OAuth2Config, AuthCodeOAuth2Config, DeviceCodeOAuth2Config, OAuth2TokenManager } from "./oauth2-token-manager.js";
 import { loadOpenClawDotEnvFallback } from "./config.js";
 
 export type PendingRequest = { resolve: (value: McpResponse) => void; reject: (reason: Error) => void; timeout: NodeJS.Timeout };
@@ -243,6 +243,11 @@ export function isAuthCodeOAuth2(auth: { type: "oauth2"; grantType?: string }): 
   return auth.grantType === "authorization_code";
 }
 
+/** Check whether an oauth2 auth config uses the device_code grant type. */
+export function isDeviceCodeOAuth2(auth: { type: "oauth2"; grantType?: string }): boolean {
+  return auth.grantType === "device_code";
+}
+
 export function resolveOAuth2Config(
   config: McpServerConfig,
   extraEnv?: Record<string, string | undefined>,
@@ -256,17 +261,23 @@ export function resolveOAuth2Config(
     throw new Error("[mcp-bridge] resolveOAuth2Config called for authorization_code config — use resolveAuthCodeOAuth2Config instead");
   }
 
-  const scopes = config.auth.scopes?.map((scope, index) =>
+  if (isDeviceCodeOAuth2(config.auth)) {
+    throw new Error("[mcp-bridge] resolveOAuth2Config called for device_code config — use resolveDeviceCodeOAuth2Config instead");
+  }
+
+  const auth = config.auth as { type: "oauth2"; clientId: string; clientSecret: string; tokenUrl: string; scopes?: string[]; audience?: string };
+
+  const scopes = auth.scopes?.map((scope, index) =>
     resolveEnvVars(scope, `oauth2 scope[${index}]`, extraEnv, envFallback)
   );
 
   return {
-    clientId: resolveEnvVars(config.auth.clientId!, "oauth2 clientId", extraEnv, envFallback),
-    clientSecret: resolveEnvVars(config.auth.clientSecret!, "oauth2 clientSecret", extraEnv, envFallback),
-    tokenUrl: resolveEnvVars(config.auth.tokenUrl, "oauth2 tokenUrl", extraEnv, envFallback),
+    clientId: resolveEnvVars(auth.clientId, "oauth2 clientId", extraEnv, envFallback),
+    clientSecret: resolveEnvVars(auth.clientSecret, "oauth2 clientSecret", extraEnv, envFallback),
+    tokenUrl: resolveEnvVars(auth.tokenUrl, "oauth2 tokenUrl", extraEnv, envFallback),
     ...(scopes && scopes.length > 0 ? { scopes } : {}),
-    ...("audience" in config.auth && config.auth.audience
-      ? { audience: resolveEnvVars(config.auth.audience, "oauth2 audience", extraEnv, envFallback) }
+    ...(auth.audience
+      ? { audience: resolveEnvVars(auth.audience, "oauth2 audience", extraEnv, envFallback) }
       : {}),
   };
 }
@@ -295,6 +306,29 @@ export function resolveAuthCodeOAuth2Config(
   };
 }
 
+export function resolveDeviceCodeOAuth2Config(
+  config: McpServerConfig,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
+): DeviceCodeOAuth2Config {
+  if (!config.auth || config.auth.type !== "oauth2" || !isDeviceCodeOAuth2(config.auth)) {
+    throw new Error("[mcp-bridge] resolveDeviceCodeOAuth2Config called for non-device_code auth config");
+  }
+
+  const auth = config.auth as { type: "oauth2"; grantType: "device_code"; tokenUrl: string; clientId: string; scopes?: string[] };
+
+  const scopes = auth.scopes?.map((scope, index) =>
+    resolveEnvVars(scope, `oauth2 scope[${index}]`, extraEnv, envFallback)
+  );
+
+  return {
+    grantType: "device_code",
+    tokenUrl: resolveEnvVars(auth.tokenUrl, "oauth2 tokenUrl", extraEnv, envFallback),
+    clientId: resolveEnvVars(auth.clientId, "oauth2 clientId", extraEnv, envFallback),
+    ...(scopes && scopes.length > 0 ? { scopes } : {}),
+  };
+}
+
 export async function resolveAuthHeadersAsync(
   config: McpServerConfig,
   tokenManager: OAuth2TokenManager,
@@ -311,6 +345,15 @@ export async function resolveAuthHeadersAsync(
       }
       const authCodeConfig = resolveAuthCodeOAuth2Config(config, extraEnv, envFallback);
       const token = await tokenManager.getTokenForAuthCode(serverName, authCodeConfig);
+      return { Authorization: `Bearer ${token}` };
+    }
+
+    if (isDeviceCodeOAuth2(config.auth)) {
+      if (!serverName) {
+        throw new Error("[mcp-bridge] serverName is required for device_code OAuth2 flow");
+      }
+      const deviceCodeConfig = resolveDeviceCodeOAuth2Config(config, extraEnv, envFallback);
+      const token = await tokenManager.getTokenForDeviceCode(serverName, deviceCodeConfig);
       return { Authorization: `Bearer ${token}` };
     }
 

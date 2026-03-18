@@ -10,7 +10,7 @@ import { StandaloneServer } from "../src/standalone-server.js";
 import { PACKAGE_VERSION } from "../src/protocol.js";
 import { checkForUpdate, runUpdate } from "../src/update-checker.js";
 import { FileTokenStore } from "../src/token-store.js";
-import { performAuthCodeLogin } from "../src/cli-auth.js";
+import { performAuthCodeLogin, performDeviceCodeLogin } from "../src/cli-auth.js";
 import type { Logger, HttpAuthConfig } from "../src/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -328,7 +328,7 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
           } else {
             status = token.refreshToken ? "expired (refresh available)" : "expired";
           }
-        } else if (grantType === "authorization_code") {
+        } else if (grantType === "authorization_code" || grantType === "device_code") {
           status = "not authenticated";
         } else {
           status = "-";
@@ -382,21 +382,36 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
   }
 
   const auth = serverConfig.auth;
-  if (!auth || auth.type !== "oauth2" || !("grantType" in auth) || (auth as any).grantType !== "authorization_code") {
-    logger.error(`Server "${serverName}" is not configured for OAuth2 authorization_code flow`);
+  if (!auth || auth.type !== "oauth2" || !("grantType" in auth)) {
+    logger.error(`Server "${serverName}" is not configured for an interactive OAuth2 flow (authorization_code or device_code)`);
     process.exit(1);
   }
 
-  const authCodeAuth = auth as Extract<HttpAuthConfig, { grantType: "authorization_code" }>;
+  const grantType = (auth as any).grantType;
 
-  const token = await performAuthCodeLogin(serverName, {
-    authorizationUrl: authCodeAuth.authorizationUrl,
-    tokenUrl: authCodeAuth.tokenUrl,
-    clientId: authCodeAuth.clientId,
-    clientSecret: authCodeAuth.clientSecret,
-    scopes: authCodeAuth.scopes,
-    callbackPort: authCodeAuth.callbackPort,
-  }, logger);
+  let token;
+  if (grantType === "device_code") {
+    const deviceAuth = auth as Extract<HttpAuthConfig, { grantType: "device_code" }>;
+    token = await performDeviceCodeLogin(serverName, {
+      deviceAuthorizationUrl: deviceAuth.deviceAuthorizationUrl,
+      tokenUrl: deviceAuth.tokenUrl,
+      clientId: deviceAuth.clientId,
+      scopes: deviceAuth.scopes,
+    }, logger);
+  } else if (grantType === "authorization_code") {
+    const authCodeAuth = auth as Extract<HttpAuthConfig, { grantType: "authorization_code" }>;
+    token = await performAuthCodeLogin(serverName, {
+      authorizationUrl: authCodeAuth.authorizationUrl,
+      tokenUrl: authCodeAuth.tokenUrl,
+      clientId: authCodeAuth.clientId,
+      clientSecret: authCodeAuth.clientSecret,
+      scopes: authCodeAuth.scopes,
+      callbackPort: authCodeAuth.callbackPort,
+    }, logger);
+  } else {
+    logger.error(`Server "${serverName}" uses grant type "${grantType}" which does not support interactive login`);
+    process.exit(1);
+  }
 
   tokenStore.save(serverName, token);
   process.stdout.write(`Authentication successful for ${serverName}. Token stored.\n`);
