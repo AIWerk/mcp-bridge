@@ -238,6 +238,7 @@ export async function performDeviceCodeLogin(
   serverName: string,
   config: DeviceCodeConfig,
   logger: Logger,
+  signal?: AbortSignal,
 ): Promise<StoredToken> {
   // Step 1: Request device code
   const formData = new URLSearchParams();
@@ -294,7 +295,15 @@ export async function performDeviceCodeLogin(
   const deadline = Date.now() + expiresInS * 1000;
 
   while (Date.now() < deadline) {
+    if (signal?.aborted) {
+      throw new Error("Device code login aborted");
+    }
+
     await sleep(intervalS * 1000);
+
+    if (signal?.aborted) {
+      throw new Error("Device code login aborted");
+    }
 
     const tokenForm = new URLSearchParams();
     tokenForm.set("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
@@ -306,6 +315,7 @@ export async function performDeviceCodeLogin(
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: tokenForm.toString(),
+      signal,
     });
 
     // Guard against non-JSON responses (e.g. 500 HTML error pages)

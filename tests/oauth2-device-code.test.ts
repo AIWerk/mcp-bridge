@@ -418,3 +418,110 @@ test("resolveDeviceCodeOAuth2Config throws for non-device_code config", () => {
     /non-device_code/,
   );
 });
+
+// -- Regression tests for security fixes ------------------------------------
+
+test("performDeviceCodeLogin handles non-JSON error response gracefully", async () => {
+  // Mock server returns HTML 500 on first token poll, then succeeds
+  let polls = 0;
+  const { baseUrl, close } = await new Promise<{ baseUrl: string; close: () => Promise<void> }>((resolve) => {
+    const server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        if (req.url === "/device/code") {
+          res.setHeader("Content-Type", "application/json");
+          res.writeHead(200);
+          res.end(JSON.stringify({
+            device_code: "dc", user_code: "CODE", verification_uri: "https://example.com",
+            expires_in: 30, interval: 1,
+          }));
+          return;
+        }
+        if (req.url === "/token") {
+          polls++;
+          if (polls === 1) {
+            // Return HTML 500 — should not crash
+            res.setHeader("Content-Type", "text/html");
+            res.writeHead(500);
+            res.end("<!DOCTYPE html><html><body>Internal Server Error</body></html>");
+            return;
+          }
+          if (polls === 2) {
+            // Return 200 with broken JSON — should not crash
+            res.setHeader("Content-Type", "application/json");
+            res.writeHead(200);
+            res.end("not valid json {{{");
+            return;
+          }
+          // Third poll succeeds
+          res.setHeader("Content-Type", "application/json");
+          res.writeHead(200);
+          res.end(JSON.stringify({
+            access_token: "recovered-token", refresh_token: "rt", expires_in: 3600, token_type: "Bearer",
+          }));
+          return;
+        }
+        res.writeHead(404);
+        res.end("");
+      });
+    });
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address() as { port: number };
+      resolve({
+        baseUrl: `http://127.0.0.1:${addr.port}`,
+        close: () => new Promise<void>((r) => server.close(() => r())),
+      });
+    });
+  });
+
+  const token = await performDeviceCodeLogin("test-server", {
+    skipBrowser: true,
+    deviceAuthorizationUrl: `${baseUrl}/device/code`,
+    tokenUrl: `${baseUrl}/token`,
+    clientId: "test",
+  }, makeLogger());
+
+  assert.equal(token.accessToken, "recovered-token");
+  assert.ok(polls >= 3, "Should have polled at least 3 times");
+  await close();
+});
+
+test("performDeviceCodeLogin respects AbortSignal", async () => {
+  const mock = await createMockDeviceServer({ pendingPolls: 100 }); // would poll forever
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 1500);
+
+  await assert.rejects(
+    () => performDeviceCodeLogin("test-server", {
+      skipBrowser: true,
+      deviceAuthorizationUrl: `${mock.baseUrl}/device/code`,
+      tokenUrl: `${mock.baseUrl}/token`,
+      clientId: "test",
+    }, makeLogger(), controller.signal),
+    /aborted/i,
+  );
+
+  await mock.close();
+});
+
+test("performDeviceCodeLogin passes AbortSignal to fetch", async () => {
+  // Already aborted signal should throw immediately
+  const controller = new AbortController();
+  controller.abort();
+
+  const mock = await createMockDeviceServer({ pendingPolls: 0 });
+
+  await assert.rejects(
+    () => performDeviceCodeLogin("test-server", {
+      skipBrowser: true,
+      deviceAuthorizationUrl: `${mock.baseUrl}/device/code`,
+      tokenUrl: `${mock.baseUrl}/token`,
+      clientId: "test",
+    }, makeLogger(), controller.signal),
+    /abort/i,
+  );
+
+  await mock.close();
+});

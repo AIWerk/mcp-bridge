@@ -124,7 +124,11 @@ export class OAuth2TokenManager {
       return existingInflight;
     }
 
-    const refreshPromise = this.doAuthCodeRefresh(serverName, stored, config);
+    const refreshPromise = this.doTokenRefresh(
+      serverName, stored,
+      (s) => this.refreshAuthCodeToken(s, config),
+      "Auth code",
+    );
     this.tokenRefreshInflight.set(serverName, refreshPromise);
     try {
       return await refreshPromise;
@@ -164,7 +168,11 @@ export class OAuth2TokenManager {
       return existingInflight;
     }
 
-    const refreshPromise = this.doDeviceCodeRefresh(serverName, stored, config);
+    const refreshPromise = this.doTokenRefresh(
+      serverName, stored,
+      (s) => this.refreshDeviceCodeToken(s, config),
+      "Device code",
+    );
     this.tokenRefreshInflight.set(serverName, refreshPromise);
     try {
       return await refreshPromise;
@@ -173,14 +181,23 @@ export class OAuth2TokenManager {
     }
   }
 
-  private async doDeviceCodeRefresh(serverName: string, stored: StoredToken, config: DeviceCodeOAuth2Config): Promise<string> {
+  /**
+   * Shared refresh logic for both auth_code and device_code flows.
+   * Takes a refreshFn that performs the actual token exchange.
+   */
+  private async doTokenRefresh(
+    serverName: string,
+    stored: StoredToken,
+    refreshFn: (stored: StoredToken) => Promise<StoredToken>,
+    flowName: string,
+  ): Promise<string> {
     if (stored.refreshToken) {
       try {
-        const refreshed = await this.refreshDeviceCodeToken(stored, config);
+        const refreshed = await refreshFn(stored);
         this.tokenStore!.save(serverName, refreshed);
         return refreshed.accessToken;
       } catch (err) {
-        this.logger.warn("[mcp-bridge] Device code token refresh failed:", err);
+        this.logger.warn(`[mcp-bridge] ${flowName} token refresh failed:`, err);
       }
     }
 
@@ -231,25 +248,7 @@ export class OAuth2TokenManager {
     };
   }
 
-  private async doAuthCodeRefresh(serverName: string, stored: StoredToken, config: AuthCodeOAuth2Config): Promise<string> {
-    if (stored.refreshToken) {
-      try {
-        const refreshed = await this.refreshAuthCodeToken(stored, config);
-        this.tokenStore!.save(serverName, refreshed);
-        return refreshed.accessToken;
-      } catch (err) {
-        this.logger.warn("[mcp-bridge] Auth code token refresh failed:", err);
-      }
-    }
 
-    // Refresh failed or no refresh token
-    this.tokenStore!.remove(serverName);
-    const error = new Error(
-      `Authentication expired for server "${serverName}". Run: mcp-bridge auth login ${serverName}`,
-    );
-    (error as any).code = -32006;
-    throw error;
-  }
 
   private async refreshAuthCodeToken(stored: StoredToken, config: AuthCodeOAuth2Config): Promise<StoredToken> {
     const formData = new URLSearchParams();
