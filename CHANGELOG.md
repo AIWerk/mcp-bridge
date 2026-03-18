@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.5.3] - 2026-03-18
+
+### Fixed
+- **Build pipeline**: `prepublishOnly` now runs `tsc` before recipe validation. Previous publishes (v2.5.0–v2.5.2) shipped stale `dist/` files — OAuth2 auth CLI commands, `token-store`, and `cli-auth` were in `src/` but never compiled to `dist/`. Users got the old binary without auth support.
+
+## [2.5.2] - 2026-03-18
+
+### Fixed
+- **XSS in auth callback** (`cli-auth.ts`): `error` and `error_description` query params are now HTML-escaped via `escapeHtml()` in the callback response. Prevents XSS from malicious authorization servers.
+- **Auth code refresh race condition** (`oauth2-token-manager.ts`): added `authCodeInflight` Map for inflight deduplication. Concurrent requests no longer double-refresh (which would invalidate the refresh token on the second attempt).
+- **`RouterTransportRefs` type** (`mcp-router.ts`): added `serverName?: string` parameter to SSE and streamable-http constructor signatures. Custom transport injection no longer silently loses the server name.
+
+## [2.5.1] - 2026-03-18
+
+### Fixed
+- **Streamable HTTP SSE streaming** (`transport-streamable-http.ts`): replaced `response.text()` with `getReader()` chunked streaming for SSE responses. Previously buffered the entire response before parsing.
+- **`ensureConnected` race condition**: added cooldown tracking to prevent concurrent callers from bypassing reconnect cooldown.
+- **`maxResultChars` JSON-aware truncation**: truncation now respects JSON structure boundaries instead of cutting mid-value.
+- **Security disclaimer**: added explicit warning that `trust: "sanitize"` is NOT a security boundary (bypassable via Unicode homoglyphs, zero-width chars, base64, multi-step chains).
+- **Batch throttling**: limited concurrent batch execution to max 3 parallel calls (was unbounded).
+- **`callToolWithRetry` retry documentation**: added JSDoc explaining retry conditions and backoff behavior.
+- **`parseEnvFile` escaped quotes**: `.env` parser now correctly handles escaped quotes within values.
+- **stdio `MAX_BUFFER`**: reduced from 50MB to 10MB (prevents OOM from runaway child processes).
+- **Env merge order comments**: clarified precedence in config loading (system env > .env > defaults).
+
 ## [2.5.0] - 2026-03-18
 
 ### Added
