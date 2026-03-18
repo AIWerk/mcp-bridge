@@ -17,7 +17,7 @@ Most AI agents connect to MCP servers one-by-one. With 10+ servers, that's 10+ c
 - **Intent routing**: say what you need in plain language, the bridge finds the right tool
 - **Schema compression**: tool descriptions compressed ~57%, full schema on demand
 - **Security layer**: trust levels, tool deny/allow lists, result size limits
-- **HTTP auth**: bearer token, custom headers, and **OAuth2 Client Credentials** with automatic token management
+- **HTTP auth**: bearer token, custom headers, **OAuth2 Client Credentials**, and **OAuth2 Authorization Code + PKCE** (interactive browser login)
 - **Result caching**: LRU cache with per-tool TTL overrides
 - **Batch calls**: parallel multi-tool execution via `action=batch`
 - **Multi-server resolution**: automatic tool disambiguation when multiple servers provide the same tool
@@ -398,6 +398,37 @@ SSE and streamable-HTTP transports support three auth methods:
 
 OAuth2 features: automatic token acquisition, caching with expiry-aware refresh, single-attempt 401 retry, env var substitution in credentials.
 
+**OAuth2 Authorization Code + PKCE** (interactive browser login):
+
+For MCP servers behind enterprise SSO or user-level OAuth2 that require browser-based login:
+
+```json
+{
+  "auth": {
+    "type": "oauth2",
+    "grantType": "authorization_code",
+    "authorizationUrl": "https://auth.example.com/authorize",
+    "tokenUrl": "https://auth.example.com/oauth/token",
+    "clientId": "optional-public-client-id",
+    "scopes": ["read", "write"]
+  }
+}
+```
+
+Then authenticate via CLI:
+
+```bash
+mcp-bridge auth login my-server    # Opens browser, completes OAuth2 flow
+mcp-bridge auth status             # Check token status for all servers
+mcp-bridge auth logout my-server   # Remove stored token
+```
+
+Features:
+- **PKCE (RFC 7636)** — mandatory S256 code challenge, no `clientSecret` needed for public clients
+- **Persistent tokens** — stored in `~/.mcp-bridge/tokens/` (chmod 600), survive bridge restarts
+- **Automatic refresh** — tokens refreshed transparently via `refresh_token` grant
+- **Actionable errors** — expired tokens return error with exact CLI command to re-authenticate
+
 ### Environment variables
 
 Secrets go in `~/.mcp-bridge/.env` (chmod 600 on init):
@@ -427,6 +458,10 @@ mcp-bridge servers                # List configured servers
 mcp-bridge search <query>         # Search catalog by keyword
 mcp-bridge update [--check]       # Check for / install updates
 mcp-bridge --version              # Print version
+
+mcp-bridge auth login <server>    # OAuth2 browser login (Authorization Code + PKCE)
+mcp-bridge auth logout <server>   # Remove stored token
+mcp-bridge auth status            # Show auth status for all servers
 ```
 
 ## Server Catalog
@@ -517,6 +552,8 @@ For production deployments with high security requirements, consider adding an e
 | ✅ | HTTP auth (bearer, headers) | 2.0.0 |
 | ✅ | Configurable retries + graceful shutdown | 2.0.0 |
 | ✅ | OAuth2 Client Credentials | 2.1.0 |
+| ✅ | OAuth2 Authorization Code + PKCE | 2.5.0 |
+| 🔜 | OAuth2 Device Code flow (headless) | planned |
 | 🔜 | Hosted bridge (bridge.aiwerk.ch) | planned |
 | 🔜 | Remote catalog integration | planned |
 | 🔜 | OpenTelemetry / Prometheus metrics | planned |

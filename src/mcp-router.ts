@@ -19,6 +19,7 @@ import { AdaptivePromotion } from "./adaptive-promotion.js";
 import { ResultCache, createResultCacheKey } from "./result-cache.js";
 import { ToolResolver } from "./tool-resolution.js";
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
+import { FileTokenStore } from "./token-store.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -183,7 +184,7 @@ export class McpRouter {
       : null;
     this.maxBatchSize = clientConfig.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;
     this.toolResolver = new ToolResolver(Object.keys(servers));
-    this.tokenManager = new OAuth2TokenManager(logger);
+    this.tokenManager = new OAuth2TokenManager(logger, new FileTokenStore());
 
     if (clientConfig.adaptivePromotion?.enabled) {
       this.promotion = new AdaptivePromotion(clientConfig.adaptivePromotion, logger);
@@ -847,7 +848,8 @@ export class McpRouter {
         this.logger,
         onReconnected,
         this.tokenManager,
-        () => this.nextRequestId()
+        () => this.nextRequestId(),
+        serverName,
       );
     }
     if (serverConfig.transport === "stdio") {
@@ -860,7 +862,8 @@ export class McpRouter {
         this.logger,
         onReconnected,
         this.tokenManager,
-        () => this.nextRequestId()
+        () => this.nextRequestId(),
+        serverName,
       );
     }
 

@@ -1,4 +1,5 @@
 import type { Logger } from "./types.js";
+import type { TokenStore, StoredToken } from "./token-store.js";
 
 export interface OAuth2Config {
   clientId: string;
@@ -6,6 +7,14 @@ export interface OAuth2Config {
   tokenUrl: string;
   scopes?: string[];
   audience?: string;
+}
+
+export interface AuthCodeOAuth2Config {
+  grantType: "authorization_code";
+  tokenUrl: string;
+  clientId?: string;
+  clientSecret?: string;
+  scopes?: string[];
 }
 
 interface CachedToken {
@@ -28,9 +37,11 @@ export class OAuth2TokenManager {
   private readonly logger: Logger;
   private readonly tokenCache = new Map<string, CachedToken>();
   private readonly inflight = new Map<string, Promise<string>>();
+  private readonly tokenStore?: TokenStore;
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, tokenStore?: TokenStore) {
     this.logger = logger;
+    this.tokenStore = tokenStore;
   }
 
   async getToken(config: OAuth2Config): Promise<string> {
@@ -69,6 +80,89 @@ export class OAuth2TokenManager {
   clear(): void {
     this.tokenCache.clear();
     this.inflight.clear();
+  }
+
+  /**
+   * Get a token for an authorization_code flow server.
+   * Checks TokenStore, refreshes if expired, throws if unavailable.
+   */
+  async getTokenForAuthCode(serverName: string, config: AuthCodeOAuth2Config): Promise<string> {
+    if (!this.tokenStore) {
+      throw new Error(
+        `Authentication required for server "${serverName}". Run: mcp-bridge auth login ${serverName}`,
+      );
+    }
+
+    const stored = this.tokenStore.load(serverName);
+    if (!stored) {
+      const err = new Error(
+        `Authentication required for server "${serverName}". Run: mcp-bridge auth login ${serverName}`,
+      );
+      (err as any).code = -32007;
+      throw err;
+    }
+
+    const now = Date.now();
+    if (stored.expiresAt > now) {
+      return stored.accessToken;
+    }
+
+    // Token expired — try refresh
+    if (stored.refreshToken) {
+      try {
+        const refreshed = await this.refreshAuthCodeToken(stored, config);
+        this.tokenStore.save(serverName, refreshed);
+        return refreshed.accessToken;
+      } catch (err) {
+        this.logger.warn("[mcp-bridge] Auth code token refresh failed:", err);
+      }
+    }
+
+    // Refresh failed or no refresh token
+    this.tokenStore.remove(serverName);
+    const error = new Error(
+      `Authentication expired for server "${serverName}". Run: mcp-bridge auth login ${serverName}`,
+    );
+    (error as any).code = -32006;
+    throw error;
+  }
+
+  private async refreshAuthCodeToken(stored: StoredToken, config: AuthCodeOAuth2Config): Promise<StoredToken> {
+    const formData = new URLSearchParams();
+    formData.set("grant_type", "refresh_token");
+    formData.set("refresh_token", stored.refreshToken!);
+    if (config.clientId) formData.set("client_id", config.clientId);
+    if (config.clientSecret) formData.set("client_secret", config.clientSecret);
+    if (config.scopes?.length) formData.set("scope", config.scopes.join(" "));
+
+    const response = await fetch(stored.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: formData.toString(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OAuth2 refresh token exchange failed: HTTP ${response.status}`);
+    }
+
+    const payload = (await response.json()) as OAuth2TokenResponse;
+    if (!payload.access_token) {
+      throw new Error("OAuth2 refresh response missing access_token");
+    }
+
+    const expiresIn = Number.isFinite(payload.expires_in)
+      ? Number(payload.expires_in)
+      : DEFAULT_EXPIRES_IN_SECONDS;
+    const expiresAt = Date.now() + Math.max(0, expiresIn - EXPIRY_BUFFER_SECONDS) * 1000;
+
+    return {
+      accessToken: payload.access_token,
+      refreshToken: payload.refresh_token ?? stored.refreshToken,
+      expiresAt,
+      tokenUrl: stored.tokenUrl,
+      clientId: config.clientId,
+      scopes: config.scopes,
+    };
   }
 
   private makeKey(tokenUrl: string, clientId: string): string {

@@ -1,5 +1,5 @@
 import { McpTransport, McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, JsonRpcMessage, RequestIdGenerator, nextRequestId } from "./types.js";
-import type { OAuth2Config, OAuth2TokenManager } from "./oauth2-token-manager.js";
+import type { OAuth2Config, AuthCodeOAuth2Config, OAuth2TokenManager } from "./oauth2-token-manager.js";
 import { loadOpenClawDotEnvFallback } from "./config.js";
 
 export type PendingRequest = { resolve: (value: McpResponse) => void; reject: (reason: Error) => void; timeout: NodeJS.Timeout };
@@ -238,6 +238,11 @@ export function resolveAuthHeaders(
   throw new Error("[mcp-bridge] OAuth2 auth requires async header resolution via resolveAuthHeadersAsync");
 }
 
+/** Check whether an oauth2 auth config uses the authorization_code grant type. */
+export function isAuthCodeOAuth2(auth: { type: "oauth2"; grantType?: string }): boolean {
+  return auth.grantType === "authorization_code";
+}
+
 export function resolveOAuth2Config(
   config: McpServerConfig,
   extraEnv?: Record<string, string | undefined>,
@@ -247,18 +252,46 @@ export function resolveOAuth2Config(
     throw new Error("[mcp-bridge] resolveOAuth2Config called for non-oauth2 auth config");
   }
 
+  if (isAuthCodeOAuth2(config.auth)) {
+    throw new Error("[mcp-bridge] resolveOAuth2Config called for authorization_code config — use resolveAuthCodeOAuth2Config instead");
+  }
+
   const scopes = config.auth.scopes?.map((scope, index) =>
     resolveEnvVars(scope, `oauth2 scope[${index}]`, extraEnv, envFallback)
   );
 
   return {
-    clientId: resolveEnvVars(config.auth.clientId, "oauth2 clientId", extraEnv, envFallback),
-    clientSecret: resolveEnvVars(config.auth.clientSecret, "oauth2 clientSecret", extraEnv, envFallback),
+    clientId: resolveEnvVars(config.auth.clientId!, "oauth2 clientId", extraEnv, envFallback),
+    clientSecret: resolveEnvVars(config.auth.clientSecret!, "oauth2 clientSecret", extraEnv, envFallback),
     tokenUrl: resolveEnvVars(config.auth.tokenUrl, "oauth2 tokenUrl", extraEnv, envFallback),
     ...(scopes && scopes.length > 0 ? { scopes } : {}),
-    ...(config.auth.audience
+    ...("audience" in config.auth && config.auth.audience
       ? { audience: resolveEnvVars(config.auth.audience, "oauth2 audience", extraEnv, envFallback) }
       : {}),
+  };
+}
+
+export function resolveAuthCodeOAuth2Config(
+  config: McpServerConfig,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>
+): AuthCodeOAuth2Config {
+  if (!config.auth || config.auth.type !== "oauth2" || !isAuthCodeOAuth2(config.auth)) {
+    throw new Error("[mcp-bridge] resolveAuthCodeOAuth2Config called for non-authorization_code auth config");
+  }
+
+  const auth = config.auth as { type: "oauth2"; grantType: "authorization_code"; tokenUrl: string; clientId?: string; clientSecret?: string; scopes?: string[] };
+
+  const scopes = auth.scopes?.map((scope, index) =>
+    resolveEnvVars(scope, `oauth2 scope[${index}]`, extraEnv, envFallback)
+  );
+
+  return {
+    grantType: "authorization_code",
+    tokenUrl: resolveEnvVars(auth.tokenUrl, "oauth2 tokenUrl", extraEnv, envFallback),
+    ...(auth.clientId ? { clientId: resolveEnvVars(auth.clientId, "oauth2 clientId", extraEnv, envFallback) } : {}),
+    ...(auth.clientSecret ? { clientSecret: resolveEnvVars(auth.clientSecret, "oauth2 clientSecret", extraEnv, envFallback) } : {}),
+    ...(scopes && scopes.length > 0 ? { scopes } : {}),
   };
 }
 
@@ -266,11 +299,21 @@ export async function resolveAuthHeadersAsync(
   config: McpServerConfig,
   tokenManager: OAuth2TokenManager,
   extraEnv?: Record<string, string | undefined>,
-  envFallback?: () => Record<string, string>
+  envFallback?: () => Record<string, string>,
+  serverName?: string,
 ): Promise<Record<string, string>> {
   if (!config.auth) return {};
 
   if (config.auth.type === "oauth2") {
+    if (isAuthCodeOAuth2(config.auth)) {
+      if (!serverName) {
+        throw new Error("[mcp-bridge] serverName is required for authorization_code OAuth2 flow");
+      }
+      const authCodeConfig = resolveAuthCodeOAuth2Config(config, extraEnv, envFallback);
+      const token = await tokenManager.getTokenForAuthCode(serverName, authCodeConfig);
+      return { Authorization: `Bearer ${token}` };
+    }
+
     const oauth2Config = resolveOAuth2Config(config, extraEnv, envFallback);
     const token = await tokenManager.getToken(oauth2Config);
     return { Authorization: `Bearer ${token}` };
@@ -296,10 +339,11 @@ export async function resolveServerHeadersAsync(
   config: McpServerConfig,
   tokenManager: OAuth2TokenManager,
   extraEnv?: Record<string, string | undefined>,
-  envFallback?: () => Record<string, string>
+  envFallback?: () => Record<string, string>,
+  serverName?: string,
 ): Promise<Record<string, string>> {
   const base = resolveEnvRecord(config.headers || {}, "header", extraEnv, envFallback);
-  const auth = await resolveAuthHeadersAsync(config, tokenManager, extraEnv, envFallback);
+  const auth = await resolveAuthHeadersAsync(config, tokenManager, extraEnv, envFallback, serverName);
   return { ...base, ...auth };
 }
 

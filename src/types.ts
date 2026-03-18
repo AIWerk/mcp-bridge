@@ -15,6 +15,16 @@ export type HttpAuthConfig =
       tokenUrl: string;
       scopes?: string[];
       audience?: string;
+    }
+  | {
+      type: "oauth2";
+      grantType: "authorization_code";
+      authorizationUrl: string;
+      tokenUrl: string;
+      clientId?: string;
+      clientSecret?: string;
+      scopes?: string[];
+      callbackPort?: number;
     };
 
 export interface RetryConfig {

@@ -16,6 +16,7 @@ import { SseTransport } from "./transport-sse.js";
 import { StdioTransport } from "./transport-stdio.js";
 import { StreamableHttpTransport } from "./transport-streamable-http.js";
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
+import { FileTokenStore } from "./token-store.js";
 
 interface DirectToolEntry {
   serverName: string;
@@ -46,7 +47,7 @@ export class StandaloneServer {
   constructor(config: BridgeConfig, logger: Logger) {
     this.config = config;
     this.logger = logger;
-    this.tokenManager = new OAuth2TokenManager(logger);
+    this.tokenManager = new OAuth2TokenManager(logger, new FileTokenStore());
 
     if (this.isRouterMode()) {
       this.router = new McpRouter(config.servers || {}, config, logger);
@@ -488,7 +489,7 @@ export class StandaloneServer {
 
     switch (serverConfig.transport) {
       case "sse":
-        return new SseTransport(serverConfig, this.config, this.logger, onReconnected, this.tokenManager, () => this.nextRequestId());
+        return new SseTransport(serverConfig, this.config, this.logger, onReconnected, this.tokenManager, () => this.nextRequestId(), serverName);
       case "stdio":
         return new StdioTransport(serverConfig, this.config, this.logger, onReconnected, () => this.nextRequestId());
       case "streamable-http":
@@ -498,7 +499,8 @@ export class StandaloneServer {
           this.logger,
           onReconnected,
           this.tokenManager,
-          () => this.nextRequestId()
+          () => this.nextRequestId(),
+          serverName,
         );
       default:
         throw new Error(`Unsupported transport: ${serverConfig.transport}`);

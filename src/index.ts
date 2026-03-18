@@ -8,7 +8,9 @@ export {
   resolveArgs,
   resolveAuthHeaders,
   resolveAuthHeadersAsync,
+  isAuthCodeOAuth2,
   resolveOAuth2Config,
+  resolveAuthCodeOAuth2Config,
   resolveServerHeaders,
   resolveServerHeadersAsync,
   warnIfNonTlsRemoteUrl,
@@ -17,7 +19,15 @@ export { StdioTransport } from "./transport-stdio.js";
 export { SseTransport } from "./transport-sse.js";
 export { StreamableHttpTransport } from "./transport-streamable-http.js";
 export { OAuth2TokenManager } from "./oauth2-token-manager.js";
-export type { OAuth2Config } from "./oauth2-token-manager.js";
+export type { OAuth2Config, AuthCodeOAuth2Config } from "./oauth2-token-manager.js";
+
+// Token store
+export { FileTokenStore } from "./token-store.js";
+export type { TokenStore, StoredToken } from "./token-store.js";
+
+// CLI auth
+export { performAuthCodeLogin, generateCodeVerifier, computeCodeChallenge } from "./cli-auth.js";
+export type { AuthCodeConfig } from "./cli-auth.js";
 
 // Router
 export { McpRouter } from "./mcp-router.js";

@@ -9,7 +9,9 @@ import { loadConfig, initConfigDir, getConfigDir } from "../src/config.js";
 import { StandaloneServer } from "../src/standalone-server.js";
 import { PACKAGE_VERSION } from "../src/protocol.js";
 import { checkForUpdate, runUpdate } from "../src/update-checker.js";
-import type { Logger } from "../src/types.js";
+import { FileTokenStore } from "../src/token-store.js";
+import { performAuthCodeLogin } from "../src/cli-auth.js";
+import type { Logger, HttpAuthConfig } from "../src/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,7 +48,8 @@ function createLogger(level: LogLevel): Logger {
 // -- Arg parsing ----------------------------------------------------------
 
 interface CliArgs {
-  command: "serve" | "init" | "install" | "catalog" | "servers" | "search" | "update" | "version" | "help";
+  command: "serve" | "init" | "install" | "catalog" | "servers" | "search" | "update" | "version" | "help" | "auth";
+  authSubcommand?: "login" | "logout" | "status";
   sse: boolean;
   http: boolean;
   port: number;
@@ -99,6 +102,17 @@ function parseArgs(argv: string[]): CliArgs {
       case "servers": args.command = "servers"; break;
       case "search": args.command = "search"; break;
       case "update": args.command = "update"; break;
+      case "auth":
+        args.command = "auth";
+        // Consume subcommand
+        if (i + 1 < argv.length) {
+          const sub = argv[i + 1];
+          if (sub === "login" || sub === "logout" || sub === "status") {
+            args.authSubcommand = sub;
+            i++;
+          }
+        }
+        break;
       default:
         if (!arg.startsWith("-")) {
           args.positional.push(arg);
@@ -131,6 +145,9 @@ Usage:
   mcp-bridge servers                List configured servers
   mcp-bridge search <query>         Search catalog by keyword
   mcp-bridge update [--check]       Check for / install updates
+  mcp-bridge auth login <server>    Authenticate with an OAuth2 server
+  mcp-bridge auth logout <server>   Remove stored token for a server
+  mcp-bridge auth status            Show auth status for all servers
 
 Options:
   --config PATH     Custom config file (default: ~/.mcp-bridge/config.json)
@@ -264,6 +281,127 @@ async function cmdUpdate(logger: Logger, checkOnly: boolean): Promise<void> {
   process.stdout.write(result + "\n");
 }
 
+async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
+  const sub = args.authSubcommand;
+  if (!sub) {
+    process.stderr.write("Usage: mcp-bridge auth <login|logout|status> [server-name]\n");
+    process.exit(1);
+  }
+
+  const tokenStore = new FileTokenStore();
+
+  if (sub === "status") {
+    let config;
+    try {
+      config = loadConfig({ configPath: args.configPath, logger });
+    } catch {
+      config = null;
+    }
+
+    const stored = tokenStore.list();
+    if (stored.length === 0 && !config) {
+      process.stdout.write("No stored tokens.\n");
+      return;
+    }
+
+    process.stdout.write("\nAuth status:\n\n");
+    process.stdout.write("  Server          Auth Type              Token Status\n");
+    process.stdout.write("  " + "\u2500".repeat(60) + "\n");
+
+    // Show configured servers
+    const shown = new Set<string>();
+    if (config) {
+      for (const [name, serverConfig] of Object.entries(config.servers)) {
+        const authType = serverConfig.auth?.type ?? "none";
+        const grantType = serverConfig.auth?.type === "oauth2" && "grantType" in serverConfig.auth
+          ? (serverConfig.auth as any).grantType
+          : serverConfig.auth?.type === "oauth2" ? "client_credentials" : "";
+        const label = authType === "oauth2" ? `oauth2 (${grantType})` : authType;
+
+        const token = tokenStore.load(name);
+        let status: string;
+        if (token) {
+          const now = Date.now();
+          if (token.expiresAt > now) {
+            const mins = Math.round((token.expiresAt - now) / 60000);
+            status = `valid (expires in ${mins}m)`;
+          } else {
+            status = token.refreshToken ? "expired (refresh available)" : "expired";
+          }
+        } else if (grantType === "authorization_code") {
+          status = "not authenticated";
+        } else {
+          status = "-";
+        }
+
+        process.stdout.write(`  ${name.padEnd(16)}${label.padEnd(23)}${status}\n`);
+        shown.add(name);
+      }
+    }
+
+    // Show stored tokens not in config
+    for (const { serverName, token } of stored) {
+      if (shown.has(serverName)) continue;
+      const now = Date.now();
+      const status = token.expiresAt > now
+        ? `valid (expires in ${Math.round((token.expiresAt - now) / 60000)}m)`
+        : "expired";
+      process.stdout.write(`  ${serverName.padEnd(16)}${"oauth2 (stored)".padEnd(23)}${status}\n`);
+    }
+
+    process.stdout.write("\n");
+    return;
+  }
+
+  // login / logout need a server name
+  const serverName = args.positional[0];
+  if (!serverName) {
+    process.stderr.write(`Usage: mcp-bridge auth ${sub} <server-name>\n`);
+    process.exit(1);
+  }
+
+  if (sub === "logout") {
+    tokenStore.remove(serverName);
+    process.stdout.write(`Removed stored token for ${serverName}\n`);
+    return;
+  }
+
+  // login
+  let config;
+  try {
+    config = loadConfig({ configPath: args.configPath, logger });
+  } catch (err) {
+    logger.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+
+  const serverConfig = config.servers[serverName];
+  if (!serverConfig) {
+    logger.error(`Server "${serverName}" not found in config`);
+    process.exit(1);
+  }
+
+  const auth = serverConfig.auth;
+  if (!auth || auth.type !== "oauth2" || !("grantType" in auth) || (auth as any).grantType !== "authorization_code") {
+    logger.error(`Server "${serverName}" is not configured for OAuth2 authorization_code flow`);
+    process.exit(1);
+  }
+
+  const authCodeAuth = auth as Extract<HttpAuthConfig, { grantType: "authorization_code" }>;
+
+  const token = await performAuthCodeLogin(serverName, {
+    authorizationUrl: authCodeAuth.authorizationUrl,
+    tokenUrl: authCodeAuth.tokenUrl,
+    clientId: authCodeAuth.clientId,
+    clientSecret: authCodeAuth.clientSecret,
+    scopes: authCodeAuth.scopes,
+    callbackPort: authCodeAuth.callbackPort,
+  }, logger);
+
+  tokenStore.save(serverName, token);
+  process.stdout.write(`Authentication successful for ${serverName}. Token stored.\n`);
+}
+
 async function cmdServe(args: CliArgs, logger: Logger): Promise<void> {
   let config;
   try {
@@ -338,6 +476,9 @@ async function main(): Promise<void> {
       break;
     case "update":
       await cmdUpdate(logger, args.checkOnly);
+      break;
+    case "auth":
+      await cmdAuth(args, logger);
       break;
     case "serve":
       await cmdServe(args, logger);

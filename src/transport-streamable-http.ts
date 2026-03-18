@@ -2,6 +2,7 @@ import { Logger, McpClientConfig, McpRequest, McpResponse, McpServerConfig, Requ
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import {
   BaseTransport,
+  isAuthCodeOAuth2,
   resolveOAuth2Config,
   resolveServerHeaders,
   resolveServerHeadersAsync,
@@ -13,6 +14,7 @@ export class StreamableHttpTransport extends BaseTransport {
   private resolvedHeaders: Record<string, string> | null = null;
   private pendingRequestControllers = new Map<number, AbortController>();
   private readonly tokenManager: OAuth2TokenManager;
+  private readonly serverName?: string;
 
   protected get transportName(): string { return "streamable-http"; }
 
@@ -22,10 +24,12 @@ export class StreamableHttpTransport extends BaseTransport {
     logger: Logger,
     onReconnected?: () => Promise<void>,
     tokenManager?: OAuth2TokenManager,
-    requestIdGenerator?: RequestIdGenerator
+    requestIdGenerator?: RequestIdGenerator,
+    serverName?: string,
   ) {
     super(config, clientConfig, logger, onReconnected, requestIdGenerator);
     this.tokenManager = tokenManager ?? new OAuth2TokenManager(logger);
+    this.serverName = serverName;
   }
 
   async connect(): Promise<void> {
@@ -58,7 +62,7 @@ export class StreamableHttpTransport extends BaseTransport {
 
   private async refreshResolvedHeaders(): Promise<Record<string, string>> {
     if (this.config.auth?.type === "oauth2") {
-      this.resolvedHeaders = await resolveServerHeadersAsync(this.config, this.tokenManager, undefined, this.clientConfig.envFallback);
+      this.resolvedHeaders = await resolveServerHeadersAsync(this.config, this.tokenManager, undefined, this.clientConfig.envFallback, this.serverName);
     } else {
       this.resolvedHeaders = resolveServerHeaders(this.config, undefined, this.clientConfig.envFallback);
     }
@@ -67,6 +71,10 @@ export class StreamableHttpTransport extends BaseTransport {
 
   private invalidateOAuth2Token(): void {
     if (this.config.auth?.type !== "oauth2") {
+      return;
+    }
+    // authorization_code tokens are managed via TokenStore, not the in-memory cache
+    if (isAuthCodeOAuth2(this.config.auth)) {
       return;
     }
 

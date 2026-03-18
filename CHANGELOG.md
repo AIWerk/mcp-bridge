@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.5.0] - 2026-03-18
+
+### Added
+- **OAuth2 Authorization Code flow with PKCE** for interactive browser-based login. Supports MCP servers behind enterprise SSO and user-level OAuth2 (no `clientSecret` required for public clients).
+  - New CLI commands: `mcp-bridge auth login <server>`, `mcp-bridge auth logout <server>`, `mcp-bridge auth status`
+  - PKCE (RFC 7636, S256 method) — mandatory for all Authorization Code flows
+  - Local HTTP callback server for browser redirect (configurable port, default 9876)
+  - Platform-specific browser launch (xdg-open / open / start)
+  - 120-second login timeout
+- **File-based token persistence** at `~/.mcp-bridge/tokens/<server>.json` (chmod 600) with automatic directory creation (chmod 700)
+- **Automatic token refresh** for stored Authorization Code tokens — transparent renewal via `refresh_token` grant without user interaction
+- New error codes: `-32006` (`auth_expired` — token expired, refresh failed) and `-32007` (`auth_required` — no stored token for server)
+- New files: `src/token-store.ts` (FileTokenStore), `src/cli-auth.ts` (PKCE login flow), `tests/oauth2-auth-code.test.ts` (21 tests)
+
+### Changed
+- `HttpAuthConfig` type extended with `authorization_code` variant (optional `clientId`/`clientSecret`, required `authorizationUrl`/`tokenUrl`)
+- `OAuth2TokenManager` accepts optional `TokenStore` for file-based token persistence
+- SSE and StreamableHTTP transports now receive `serverName` for auth-code token resolution
+- Transport header resolution (`resolveServerHeadersAsync`) accepts optional `serverName` parameter
+
+### Fixed
+- Transport constructors and `McpRouter.createTransport` now pass `serverName` through to auth-code OAuth2 flow (previously auth-code tokens could not be resolved at runtime)
+
 ## [2.4.0] - 2026-03-16
 
 ### Added
