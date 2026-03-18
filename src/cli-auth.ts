@@ -204,6 +204,8 @@ export interface DeviceCodeConfig {
   tokenUrl: string;
   clientId: string;
   scopes?: string[];
+  /** Skip opening browser (for tests). */
+  skipBrowser?: boolean;
 }
 
 interface DeviceAuthorizationResponse {
@@ -275,7 +277,9 @@ export async function performDeviceCodeLogin(
 
   if (verificationUriComplete) {
     logger.info(`[mcp-bridge] Or open this URL directly: ${verificationUriComplete}`);
-    openBrowser(verificationUriComplete, logger);
+    if (!config.skipBrowser) {
+      openBrowser(verificationUriComplete, logger);
+    }
   }
 
   logger.info(`[mcp-bridge] Waiting for authorization (expires in ${expiresInS}s)...`);

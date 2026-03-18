@@ -115,7 +115,7 @@ test("performDeviceCodeLogin succeeds after pending poll", async () => {
   const mock = await createMockDeviceServer({ pendingPolls: 1 });
 
   try {
-    const token = await performDeviceCodeLogin("test-server", {
+    const token = await performDeviceCodeLogin("test-server", { skipBrowser: true,
       deviceAuthorizationUrl: `${mock.baseUrl}/device/code`,
       tokenUrl: `${mock.baseUrl}/token`,
       clientId: "test-client",
@@ -139,7 +139,7 @@ test("performDeviceCodeLogin handles slow_down by increasing interval", async ()
   const mock = await createMockDeviceServer({ pendingPolls: 1, slowDownOnPoll: 1 });
 
   try {
-    const token = await performDeviceCodeLogin("test-server", {
+    const token = await performDeviceCodeLogin("test-server", { skipBrowser: true,
       deviceAuthorizationUrl: `${mock.baseUrl}/device/code`,
       tokenUrl: `${mock.baseUrl}/token`,
       clientId: "test-client",
@@ -158,7 +158,7 @@ test("performDeviceCodeLogin throws on expired_token error", async () => {
 
   try {
     await assert.rejects(
-      () => performDeviceCodeLogin("test-server", {
+      () => performDeviceCodeLogin("test-server", { skipBrowser: true,
         deviceAuthorizationUrl: `${mock.baseUrl}/device/code`,
         tokenUrl: `${mock.baseUrl}/token`,
         clientId: "test-client",
@@ -175,7 +175,7 @@ test("performDeviceCodeLogin throws on access_denied error", async () => {
 
   try {
     await assert.rejects(
-      () => performDeviceCodeLogin("test-server", {
+      () => performDeviceCodeLogin("test-server", { skipBrowser: true,
         deviceAuthorizationUrl: `${mock.baseUrl}/device/code`,
         tokenUrl: `${mock.baseUrl}/token`,
         clientId: "test-client",
@@ -192,7 +192,7 @@ test("performDeviceCodeLogin throws on device authorization HTTP error", async (
   await mock.close(); // Close immediately so the fetch fails
 
   await assert.rejects(
-    () => performDeviceCodeLogin("test-server", {
+    () => performDeviceCodeLogin("test-server", { skipBrowser: true,
       deviceAuthorizationUrl: `http://127.0.0.1:1/device/code`,
       tokenUrl: `http://127.0.0.1:1/token`,
       clientId: "test-client",
