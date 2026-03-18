@@ -400,7 +400,7 @@ OAuth2 features: automatic token acquisition, caching with expiry-aware refresh,
 
 **OAuth2 Authorization Code + PKCE** (interactive browser login):
 
-For MCP servers behind enterprise SSO or user-level OAuth2 that require browser-based login:
+For MCP servers behind enterprise SSO or user-level OAuth2 that require browser-based login (desktop/laptop):
 
 ```json
 {
@@ -428,6 +428,40 @@ Features:
 - **Persistent tokens** — stored in `~/.mcp-bridge/tokens/` (chmod 600), survive bridge restarts
 - **Automatic refresh** — tokens refreshed transparently via `refresh_token` grant
 - **Actionable errors** — expired tokens return error with exact CLI command to re-authenticate
+
+**OAuth2 Device Code** (headless environments — VPS, Docker, SSH, CI):
+
+For environments without a browser. You authenticate on a separate device using a short code:
+
+```json
+{
+  "auth": {
+    "type": "oauth2",
+    "grantType": "device_code",
+    "deviceAuthorizationUrl": "https://github.com/login/device/code",
+    "tokenUrl": "https://github.com/login/oauth/access_token",
+    "clientId": "your-app-id",
+    "scopes": ["repo", "read:org"]
+  }
+}
+```
+
+```bash
+mcp-bridge auth login my-server
+# ──────────────────────────────────────────
+#  Device authentication for "my-server"
+#
+#  1. Open: https://github.com/login/device
+#  2. Enter code: ABCD-1234
+# ──────────────────────────────────────────
+# Waiting for authorization...
+```
+
+Features:
+- **RFC 8628 compliant** — works with GitHub, Google, Microsoft, Auth0, Okta
+- **No local browser needed** — authenticate from phone/laptop, token received on server
+- **Automatic polling** — respects `interval` and `slow_down` responses
+- **Same token persistence** — stored in `~/.mcp-bridge/tokens/` with auto-refresh
 
 ### Environment variables
 
@@ -556,7 +590,7 @@ For production deployments with high security requirements, consider adding an e
 | ✅ | Configurable retries + graceful shutdown | 2.0.0 |
 | ✅ | OAuth2 Client Credentials | 2.1.0 |
 | ✅ | OAuth2 Authorization Code + PKCE | 2.5.0 |
-| 🔜 | OAuth2 Device Code flow (headless) | planned |
+| ✅ | OAuth2 Device Code flow (headless) | 2.6.0 |
 | 🔜 | Hosted bridge (bridge.aiwerk.ch) | planned |
 | 🔜 | Remote catalog integration | planned |
 | 🔜 | OpenTelemetry / Prometheus metrics | planned |

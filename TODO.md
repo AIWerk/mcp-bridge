@@ -36,7 +36,7 @@
 - [x] OAuth2 Client Credentials - automatic token management, caching, 401 retry
 - [x] OAuth2 Authorization Code + PKCE - interactive browser login, file-based token persistence, auto-refresh
 - [x] CLI: `mcp-bridge auth login/logout/status`
-- [ ] OAuth2 Device Code flow (RFC 8628) - headless environments (VPS, Docker, CI)
+- [x] OAuth2 Device Code flow (RFC 8628) - headless environments (VPS, Docker, CI)
 
 ## ✅ Reliability (complete as of v2.0.0)
 - [x] Configurable retries - exponential backoff, per-server override, transient errors only

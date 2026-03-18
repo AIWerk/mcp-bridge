@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.6.0] - 2026-03-18
+
+### Added
+- **OAuth2 Device Code flow (RFC 8628)** for headless environments (VPS, Docker, SSH, CI) where no browser is available. User authenticates on a separate device using a short code.
+  - New `performDeviceCodeLogin()` in `cli-auth.ts` — POSTs to device authorization endpoint, displays `user_code` + `verification_uri`, polls token endpoint
+  - Handles `authorization_pending`, `slow_down` (+5s interval), `expired_token`, `access_denied` responses per RFC 8628
+  - Opens `verification_uri_complete` in browser when available
+  - New `DeviceCodeOAuth2Config` interface + `getTokenForDeviceCode()` in `oauth2-token-manager.ts` — token store, refresh, inflight dedup
+  - Transport integration: `device_code` wired into `resolveAuthHeadersAsync()` (same path as `authorization_code`)
+  - CLI: `mcp-bridge auth login/status` supports `device_code` servers
+  - 14 new tests (277 total)
+
 ## [2.5.3] - 2026-03-18
 
 ### Fixed
