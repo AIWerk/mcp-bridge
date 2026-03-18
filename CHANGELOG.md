@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.2] - 2026-03-18
+
+### Fixed
+- **Shell injection in `openBrowser()`** (`cli-auth.ts`): replaced `exec()` with `execFile()` to prevent shell injection from untrusted `verification_uri_complete` URLs returned by external authorization servers.
+- **Non-JSON token poll crash** (`cli-auth.ts`): polling loop now guards against non-JSON error responses (e.g. 500 HTML pages) with content-type check + try/catch on `.json()` parse.
+- **`authCodeInflight` → `tokenRefreshInflight`** (`oauth2-token-manager.ts`): renamed shared inflight dedup Map for clarity (used by both auth_code and device_code flows).
+- **Confidential client support** (`cli-auth.ts`, `oauth2-token-manager.ts`): added optional `clientSecret` to `DeviceCodeConfig` and `DeviceCodeOAuth2Config`, sent in device authorization and token requests per RFC 8628 §3.4.
+
 ## [2.6.1] - 2026-03-18
 
 ### Fixed
