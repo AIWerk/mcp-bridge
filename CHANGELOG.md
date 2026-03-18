@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.6.1] - 2026-03-18
+
+### Fixed
+- **Device code tests opening browser**: tests called `xdg-open` on `verification_uri_complete` URLs during test runs. Added `skipBrowser` option to `DeviceCodeConfig`, used in all device code tests.
+
 ## [2.6.0] - 2026-03-18
 
 ### Added
