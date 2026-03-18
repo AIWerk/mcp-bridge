@@ -108,6 +108,10 @@ export function isToolAllowed(
 /**
  * Apply max result size truncation.
  * Returns the result as-is or a truncation wrapper.
+ *
+ * Uses JSON-aware truncation: tries to produce valid JSON by truncating
+ * at the object/array level rather than slicing raw JSON strings
+ * (which produces invalid JSON that LLMs may hallucinate around).
  */
 export function applyMaxResultSize(
   result: any,
@@ -120,11 +124,103 @@ export function applyMaxResultSize(
   const serialized = JSON.stringify(result);
   if (serialized.length <= limit) return result;
 
+  // Try JSON-aware truncation: if the result is an array, take fewer elements;
+  // if it's an object with a nested array, truncate the largest array.
+  const truncated = truncateJsonAware(result, limit);
+  if (truncated !== null) {
+    return {
+      _truncated: true,
+      _originalLength: serialized.length,
+      result: truncated,
+    };
+  }
+
+  // Fallback: stringify and cut at a safe boundary, then wrap as a string
+  // to ensure the consumer always gets valid JSON
+  let cutPoint = Math.min(limit, serialized.length);
+  // Try to cut at the last complete JSON token boundary (comma, closing bracket, or newline)
+  const lastSafe = Math.max(
+    serialized.lastIndexOf(",", cutPoint),
+    serialized.lastIndexOf("}", cutPoint),
+    serialized.lastIndexOf("]", cutPoint),
+    serialized.lastIndexOf("\n", cutPoint),
+  );
+  if (lastSafe > cutPoint * 0.5) {
+    cutPoint = lastSafe + 1;
+  }
+
   return {
     _truncated: true,
     _originalLength: serialized.length,
-    result: serialized.slice(0, limit),
+    result: serialized.slice(0, cutPoint) + "…",
+    _note: "Result truncated. Original response exceeded size limit.",
   };
+}
+
+/**
+ * JSON-aware truncation: reduce array sizes to fit within the char limit.
+ * Returns the truncated value or null if not applicable.
+ */
+function truncateJsonAware(value: any, limit: number): any | null {
+  if (Array.isArray(value)) {
+    return truncateArray(value, limit);
+  }
+
+  if (value !== null && typeof value === "object") {
+    // Find the largest array field and truncate it
+    let largestKey: string | null = null;
+    let largestLen = 0;
+    for (const [k, v] of Object.entries(value)) {
+      if (Array.isArray(v) && v.length > largestLen) {
+        largestKey = k;
+        largestLen = v.length;
+      }
+    }
+    if (largestKey && largestLen > 1) {
+      const copy = { ...value };
+      copy[largestKey] = truncateArray(value[largestKey], limit);
+      if (JSON.stringify(copy).length <= limit) {
+        return copy;
+      }
+      // Still too large — try with fewer elements
+      return truncateObjectWithArrays(value, limit);
+    }
+  }
+
+  return null;
+}
+
+function truncateArray(arr: any[], limit: number): any[] {
+  // Binary search for the number of elements that fit
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    const slice = arr.slice(0, mid);
+    if (JSON.stringify(slice).length <= limit) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return arr.slice(0, Math.max(1, lo));
+}
+
+function truncateObjectWithArrays(obj: Record<string, any>, limit: number): any | null {
+  const copy = { ...obj };
+  // Progressively halve all arrays until it fits
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let changed = false;
+    for (const [k, v] of Object.entries(copy)) {
+      if (Array.isArray(v) && v.length > 1) {
+        copy[k] = v.slice(0, Math.max(1, Math.ceil(v.length / 2)));
+        changed = true;
+      }
+    }
+    if (JSON.stringify(copy).length <= limit) return copy;
+    if (!changed) break;
+  }
+  return null;
 }
 
 /**

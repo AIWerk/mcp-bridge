@@ -157,10 +157,18 @@ export class StreamableHttpTransport extends BaseTransport {
             const contentType = response.headers.get("content-type") || "";
 
             if (contentType.includes("text/event-stream")) {
-              const text = await response.text();
-              const lines = text.split("\n");
-              // SSE event boundary parsing: collect data lines, dispatch on empty line
+              // Stream SSE response incrementally using ReadableStream
+              // (previous implementation used response.text() which blocked until
+              // the entire response was received, causing timeouts on long-running calls)
+              if (!response.body) {
+                throw new Error("SSE response has no body stream");
+              }
+              const reader = response.body.getReader();
+              const decoder = new TextDecoder();
+              let partial = "";
               let dataBuffer: string[] = [];
+              let hasData = false;
+
               const dispatch = () => {
                 if (dataBuffer.length === 0) return;
                 const data = dataBuffer.join("\n");
@@ -171,18 +179,38 @@ export class StreamableHttpTransport extends BaseTransport {
                   // skip malformed events
                 }
               };
-              let hasData = false;
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (trimmed.startsWith("data:")) {
-                  dataBuffer.push(trimmed.substring(5).trimStart());
-                  hasData = true;
-                } else if (trimmed === "" && dataBuffer.length > 0) {
-                  dispatch();
+
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+
+                  partial += decoder.decode(value, { stream: true });
+                  const lines = partial.split("\n");
+                  // Keep the last (potentially incomplete) line in partial
+                  partial = lines.pop() || "";
+
+                  for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith("data:")) {
+                      dataBuffer.push(trimmed.substring(5).trimStart());
+                      hasData = true;
+                    } else if (trimmed === "" && dataBuffer.length > 0) {
+                      dispatch();
+                    }
+                  }
                 }
+                // Process any remaining partial line
+                if (partial.trim().startsWith("data:")) {
+                  dataBuffer.push(partial.trim().substring(5).trimStart());
+                  hasData = true;
+                }
+                // Dispatch any trailing data (server may omit final empty line)
+                dispatch();
+              } finally {
+                reader.releaseLock();
               }
-              // Dispatch any trailing data (server may omit final empty line)
-              dispatch();
+
               if (!hasData) {
                 throw new Error("No data lines in SSE response");
               }

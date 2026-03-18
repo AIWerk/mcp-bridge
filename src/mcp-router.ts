@@ -239,14 +239,23 @@ export class McpRouter {
           return this.error("invalid_params", `batch size exceeds maxBatchSize (${this.maxBatchSize})`);
         }
 
-        const results = await Promise.all(
-          calls.map(async (call: RouterBatchCall): Promise<RouterBatchResult> => {
+        // Throttled batch execution: max 3 concurrent calls per server
+        // to avoid overloading individual backend servers.
+        const MAX_BATCH_CONCURRENCY = 3;
+        const results: RouterBatchResult[] = new Array(calls.length);
+        let nextIndex = 0;
+
+        const executeNext = async (): Promise<void> => {
+          while (nextIndex < calls.length) {
+            const idx = nextIndex++;
+            const call = calls[idx];
             const callServer = typeof call?.server === "string" ? call.server : "";
             const callTool = typeof call?.tool === "string" ? call.tool : "";
+
             const response = await this.dispatch(callServer, "call", callTool, call?.params);
 
             if ("error" in response) {
-              return {
+              results[idx] = {
                 server: callServer,
                 tool: callTool,
                 error: {
@@ -256,15 +265,21 @@ export class McpRouter {
                   ...(typeof response.code === "number" ? { code: response.code } : {})
                 }
               };
+            } else {
+              results[idx] = {
+                server: callServer,
+                tool: callTool,
+                result: "result" in response ? response.result : response
+              };
             }
+          }
+        };
 
-            return {
-              server: callServer,
-              tool: callTool,
-              result: "result" in response ? response.result : response
-            };
-          })
+        const workers = Array.from(
+          { length: Math.min(MAX_BATCH_CONCURRENCY, calls.length) },
+          () => executeNext()
         );
+        await Promise.all(workers);
 
         return { action: "batch", results };
       }
@@ -626,6 +641,15 @@ export class McpRouter {
     return null;
   }
 
+  /**
+   * Call a tool with automatic retry on transient transport errors.
+   *
+   * NOTE: Only transport-level errors (timeout, connection_error) are retried.
+   * MCP protocol errors (valid JSON-RPC responses with error fields) are NOT
+   * retried, because they typically indicate non-transient issues (unknown tool,
+   * invalid params, server-side validation failures). The retryOn config
+   * intentionally only accepts "timeout" | "connection_error" categories.
+   */
   private async callToolWithRetry(
     server: string,
     tool: string,
@@ -752,15 +776,18 @@ export class McpRouter {
           timestamp: Date.now()
         };
         throw normalizedError;
+      } finally {
+        // Clear initPromise here (inside the async IIFE) so concurrent
+        // callers that await the same promise see it cleared atomically
+        // with the lastConnectError being set. Previously this was in the
+        // outer finally block, creating a window where a concurrent caller
+        // could bypass the cooldown check.
+        state!.initPromise = undefined;
       }
     })();
 
-    try {
-      await state.initPromise;
-      return state;
-    } finally {
-      state.initPromise = undefined;
-    }
+    await state.initPromise;
+    return state;
   }
 
   private async enforceMaxConcurrent(activeServer: string): Promise<void> {

@@ -170,6 +170,8 @@ test("batch: each call respects security pipeline", async () => {
     assert.equal(slot.error, undefined);
     assert.equal(slot.result._trust, "untrusted");
     assert.equal(slot.result._truncated, true);
-    assert.equal(slot.result.result.length, 30);
+    // JSON-aware truncation: result is truncated but size may vary
+    const resultStr = typeof slot.result.result === "string" ? slot.result.result : JSON.stringify(slot.result.result);
+    assert.ok(resultStr.length < 200, "result should be truncated");
   }
 });

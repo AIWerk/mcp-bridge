@@ -55,10 +55,15 @@ export function parseEnvFile(content: string): Record<string, string> {
     if (eqIdx === -1) continue;
     const key = trimmed.substring(0, eqIdx).trim();
     let value = trimmed.substring(eqIdx + 1).trim();
-    // Strip surrounding quotes
+    // Strip surrounding quotes and handle escaped quotes within
     if ((value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))) {
+      const quote = value[0];
       value = value.slice(1, -1);
+      // Unescape escaped quotes: \" → " or \' → '
+      value = value.replace(new RegExp(`\\\\${quote}`, "g"), quote);
+      // Unescape escaped backslashes: \\ → \
+      value = value.replace(/\\\\/g, "\\");
     }
     if (key) env[key] = value;
   }
@@ -117,7 +122,10 @@ export function loadConfig(options: LoadConfigOptions = {}): BridgeConfig {
     }
   }
 
-  // Merge .env into process.env (don't overwrite existing)
+  // Populate process.env with .env values for child processes (don't overwrite
+  // existing env vars — this matches dotenv's default behavior). This is separate
+  // from the config resolution below, which uses a different merge order where
+  // .env values win over process.env.
   for (const [key, value] of Object.entries(dotEnv)) {
     if (process.env[key] === undefined) {
       process.env[key] = value;

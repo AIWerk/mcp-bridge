@@ -268,7 +268,7 @@ Per-server control over how results are passed to the agent:
 |-------|----------|
 | `trusted` (default) | Results pass through as-is |
 | `untrusted` | Results tagged with `_trust: "untrusted"` metadata |
-| `sanitize` | HTML tags stripped, prompt injection patterns removed |
+| `sanitize` | HTML tags stripped, known prompt injection patterns removed (**best-effort** — see note below) |
 
 #### Tool Filter
 
@@ -531,16 +531,19 @@ const result = await router.dispatch("todoist", "call", "find-tasks", { query: "
 
 ## Security Limitations
 
-The built-in security layer (trust levels, tool filters, result sanitization) provides **baseline protection** for common threats:
+The built-in security layer (trust levels, tool filters, result sanitization) provides **best-effort baseline protection** for common threats:
 
-- Prompt injection patterns (known strings)
-- Oversized responses
-- Unauthorized tool access
+- Prompt injection patterns (known strings — regex-based)
+- Oversized responses (JSON-aware truncation)
+- Unauthorized tool access (tool deny/allow lists)
+
+> ⚠️ **`trust: "sanitize"` is NOT a security boundary.** It catches common/known injection patterns but is trivially bypassable via Unicode homoglyphs, zero-width characters, base64 encoding, or multi-step injection chains. Treat it as defense-in-depth, not a sole protection layer.
 
 **What it does NOT cover:**
 - Unicode obfuscation / homoglyph attacks
 - Sophisticated multi-step injection chains
 - Content-level PII detection
+- Base64 or otherwise encoded payloads
 
 For production deployments with high security requirements, consider adding an external content filtering layer (e.g., guardrails, PII redaction service) between the bridge and your application.
 

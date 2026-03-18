@@ -77,7 +77,7 @@ export class StdioTransport extends BaseTransport {
     this.process.stdout.on("data", (data: Buffer) => {
       this.stdoutBuffer = Buffer.concat([this.stdoutBuffer, data]);
       // Safety limit: prevent unbounded buffer growth from misbehaving servers
-      const MAX_BUFFER = 50 * 1024 * 1024; // 50MB
+      const MAX_BUFFER = 10 * 1024 * 1024; // 10MB
       if (this.stdoutBuffer.length > MAX_BUFFER) {
         this.logger.error(`[mcp-bridge] Stdio buffer exceeded ${MAX_BUFFER} bytes, killing process`);
         this.process?.kill();
