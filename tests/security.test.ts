@@ -207,6 +207,25 @@ test("processResult with untrusted + truncated produces flat metadata (not neste
   assert.ok(resultStr.length < JSON.stringify(result).length, "result should be truncated");
 });
 
+test("processResult with sanitize + truncated preserves result (no data loss)", () => {
+  // Regression test: sanitize mode does NOT wrap result in { _trust, result },
+  // so the flatten logic must NOT try to unwrap it (which would cause undefined).
+  const result = { data: "<script>alert(1)</script>" + "x".repeat(200) };
+  const out = processResult(
+    result,
+    "srv",
+    serverConfig({ trust: "sanitize", maxResultChars: 50 }),
+    clientConfig()
+  );
+  // The result must NOT be undefined — data must be preserved (sanitized + truncated)
+  assert.ok(out !== undefined, "processResult must not return undefined");
+  const outStr = JSON.stringify(out);
+  assert.ok(!outStr.includes('"result":null'), "result must not be null");
+  assert.ok(!outStr.includes('"result":undefined'), "result must not be undefined");
+  // Should not contain the script tag (sanitized)
+  assert.ok(!outStr.includes("<script>"), "HTML should be sanitized");
+});
+
 // ─── nextRequestId overflow protection ──────────────────────────────────────
 
 test("nextRequestId returns incrementing numbers", () => {

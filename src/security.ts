@@ -191,6 +191,19 @@ function truncateJsonAware(value: any, limit: number): any | null {
 }
 
 function truncateArray(arr: any[], limit: number): any[] {
+  // For very large arrays, skip binary search (too many JSON.stringify calls)
+  // and use progressive halving instead
+  if (arr.length > 1000) {
+    let count = arr.length;
+    while (count > 1) {
+      count = Math.ceil(count / 2);
+      if (JSON.stringify(arr.slice(0, count)).length <= limit) {
+        return arr.slice(0, count);
+      }
+    }
+    return arr.slice(0, 1);
+  }
+
   // Binary search for the number of elements that fit
   let lo = 0;
   let hi = arr.length;
@@ -260,20 +273,19 @@ export function processResult(
   // Sanitize step (only for trust=sanitize, handled inside applyTrustLevel)
   processed = applyTrustLevel(processed, serverName, serverConfig);
 
-  // If both truncated and untrusted/sanitize, flatten the metadata to top level
-  // to avoid double-wrapping ({ _trust, result: { _truncated, result: actual } })
+  // If both truncated and untrusted, flatten the metadata to top level
+  // to avoid double-wrapping ({ _trust, result: { _truncated, result: actual } }).
+  // Note: sanitize mode does NOT wrap — it sanitizes in-place, so the truncation
+  // markers (_truncated, _originalLength) are already at the right level.
   const trust = serverConfig.trust ?? "trusted";
-  if (wasTruncated && (trust === "untrusted" || trust === "sanitize")) {
-    const flat: Record<string, unknown> = {
+  if (wasTruncated && trust === "untrusted") {
+    return {
+      _trust: "untrusted",
+      _server: serverName,
       _truncated: true,
       _originalLength: processed.result?._originalLength,
       result: processed.result?.result,
     };
-    if (trust === "untrusted") {
-      flat._trust = "untrusted";
-      flat._server = serverName;
-    }
-    return flat;
   }
   return processed;
 }

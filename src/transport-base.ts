@@ -134,6 +134,8 @@ export abstract class BaseTransport implements McpTransport {
         this.scheduleReconnect();
       }
     }, reconnectInterval);
+    // Allow Node.js process to exit gracefully even if reconnect is pending
+    this.reconnectTimer.unref();
   }
 
   /** Cancel any scheduled reconnection timer. */

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.6] - 2026-03-19
+
+### Fixed
+- **Catalog/search empty results**: `cmdCatalog` and `cmdSearch` now read `catalog.recipes` (v2 index.json format uses `recipes`, not `servers`). The CLI was returning empty results for `mcp-bridge catalog` and `mcp-bridge search`.
+- **Logger stack trace loss**: CLI logger now preserves `Error.stack` instead of converting to `[object Object]` via `String()`.
+- **Install silent failure**: `cmdInstall` catch block now logs the error message before `process.exit(1)`.
+- **Stdio startup cleanup**: clarified `onFirstData` cleanup behavior with `once()` re-registration.
+
 ## [2.6.5] - 2026-03-19
 
 ### Fixed

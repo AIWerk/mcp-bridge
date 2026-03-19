@@ -51,6 +51,17 @@ export class StandaloneServer {
 
     if (this.isRouterMode()) {
       this.router = new McpRouter(config.servers ?? {}, config, logger);
+    } else {
+      // Warn if security config is used in direct mode where processResult() doesn't run
+      const hasSecurityConfig = Object.values(config.servers ?? {}).some(
+        s => s.trust && s.trust !== "trusted" || s.maxResultChars || s.toolFilter
+      );
+      if (hasSecurityConfig || config.maxResultChars) {
+        logger.warn(
+          "[mcp-bridge] Security config (trust/maxResultChars/toolFilter) detected in direct mode. " +
+          "These settings only apply in router mode. Consider switching to mode: \"router\"."
+        );
+      }
     }
   }
 
