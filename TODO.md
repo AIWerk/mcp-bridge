@@ -65,6 +65,16 @@
 - [x] Remove leftover v1 config.json files (v2.3.0)
 - [ ] Server icons (§2.1) - icon.svg/png per recipe directory
 
+## 🔴 Cost Limit / Rate Limit (HIGH PRIORITY)
+- [ ] Per-server cost/rate limit in Smart Router - configurable daily/monthly call limits
+- [ ] Pre-call budget check - block tool call if it would exceed the limit, return error to agent
+- [ ] Config: `costLimit: { daily: 100, monthly: 1000 }` and/or `rateLimit: { maxCallsPerDay: 500 }` per server
+- [ ] In-memory counter with optional file persistence (~/.mcp-bridge/usage/)
+- [ ] CLI: `mcp-bridge usage` - show current usage stats per server
+- [ ] Bridge-level global limit as fallback (all servers combined)
+- [ ] Actionable error message: "Cost limit reached for server X. Daily limit: Y calls. Resets in Zh."
+- [ ] Background: Google Maps MCP server did 56K Text Search calls in 1 day → 1,615 CHF damage. Bridge is the only safe enforcement point.
+
 ## Future
 - [ ] Hosted bridge mode (bridge.aiwerk.ch) - multi-tenant, per-user isolation (spec: docs/hosted-bridge-spec.md)
 - [ ] Transport integration tests - E2E for SSE, stdio, streamable-http
