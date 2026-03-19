@@ -123,7 +123,10 @@ export class StdioTransport extends BaseTransport {
       let timeout: NodeJS.Timeout;
 
       const cleanup = () => {
-        this.process?.stdout?.off("data", onFirstData);
+        // Note: we don't remove onFirstData from stdout because it may have
+        // been re-registered via once("data") and the Node.js internal wrapper
+        // differs from the original reference. The settled flag ensures
+        // onFirstData is a no-op after cleanup.
         this.process?.off("error", onProcessError);
         this.process?.off("exit", onProcessExit);
         clearTimeout(timeout);

@@ -28,19 +28,20 @@ function createLogger(level: LogLevel): Logger {
   const levels: Record<LogLevel, number> = { error: 0, warn: 1, info: 2, debug: 3 };
   const threshold = levels[level];
   const ts = () => new Date().toISOString().replace("T", " ").replace("Z", "");
+  const fmt = (a: unknown) => a instanceof Error ? (a.stack || a.message) : String(a);
 
   return {
     error: (...args: unknown[]) => {
-      if (threshold >= 0) process.stderr.write(`[${ts()}] [ERROR] ${args.map(String).join(" ")}\n`);
+      if (threshold >= 0) process.stderr.write(`[${ts()}] [ERROR] ${args.map(fmt).join(" ")}\n`);
     },
     warn: (...args: unknown[]) => {
-      if (threshold >= 1) process.stderr.write(`[${ts()}] [WARN] ${args.map(String).join(" ")}\n`);
+      if (threshold >= 1) process.stderr.write(`[${ts()}] [WARN] ${args.map(fmt).join(" ")}\n`);
     },
     info: (...args: unknown[]) => {
-      if (threshold >= 2) process.stderr.write(`[${ts()}] [INFO] ${args.map(String).join(" ")}\n`);
+      if (threshold >= 2) process.stderr.write(`[${ts()}] [INFO] ${args.map(fmt).join(" ")}\n`);
     },
     debug: (...args: unknown[]) => {
-      if (threshold >= 3) process.stderr.write(`[${ts()}] [DEBUG] ${args.map(String).join(" ")}\n`);
+      if (threshold >= 3) process.stderr.write(`[${ts()}] [DEBUG] ${args.map(fmt).join(" ")}\n`);
     },
   };
 }
@@ -172,7 +173,7 @@ function cmdCatalog(logger: Logger): void {
   }
 
   const catalog = JSON.parse(readFileSync(catalogPath, "utf-8"));
-  const servers = catalog.servers || {};
+  const servers = catalog.recipes || catalog.servers || {};
 
   process.stdout.write("\nAvailable servers:\n\n");
   process.stdout.write("  Server          Transport    Description\n");
@@ -221,7 +222,7 @@ function cmdSearch(query: string, logger: Logger): void {
   }
 
   const catalog = JSON.parse(readFileSync(catalogPath, "utf-8"));
-  const servers = catalog.servers || {};
+  const servers = catalog.recipes || catalog.servers || {};
   const lowerQuery = query.toLowerCase();
 
   const matches = Object.entries(servers).filter(([name, info]: [string, any]) => {
@@ -261,6 +262,7 @@ function cmdInstall(serverName: string, logger: Logger): void {
       execFileSync("bash", [scriptPath, serverName], { stdio: "inherit" });
     }
   } catch (err) {
+    logger.error("Install failed:", err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
 }
