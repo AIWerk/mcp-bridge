@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.6.7] - 2026-03-19
+
+### Fixed
+- **CRITICAL: `processResult()` data loss with `trust: "sanitize"` + truncation** (`security.ts`): reverted v2.6.5 flatten logic that incorrectly included `sanitize` mode. Sanitize does NOT wrap results in `{ _trust, result }`, so the flatten was producing `{ _truncated: true, result: undefined }`. Now only `untrusted` mode flattens (as originally designed in v2.5.2).
+- **Direct mode security config warning** (`standalone-server.ts`): logs `logger.warn()` at startup when `trust`, `maxResultChars`, or `toolFilter` config is present in direct mode (where `processResult()` doesn't run).
+- **`reconnectTimer` not unref'd** (`transport-base.ts`): added `.unref()` to reconnect timer so Node.js process can exit gracefully when reconnect is the only pending timer.
+- **`truncateArray` performance** (`security.ts`): arrays with 1000+ elements now use progressive halving instead of binary search (avoids O(n log n) `JSON.stringify` calls).
+- Added regression test: `processResult with sanitize + truncated preserves result (no data loss)`.
+
 ## [2.6.6] - 2026-03-19
 
 ### Fixed
@@ -13,7 +22,7 @@
 ### Fixed
 - **Device code OAuth2 invalidation bug**: `invalidateOAuth2Token()` now correctly skips both `authorization_code` and `device_code` token-store flows in SSE and streamable-http transports (prevents `resolveOAuth2Config` throw on device_code 401 retry).
 - **Dispatch error action list**: invalid action message now includes all supported actions (`status`, `promotions` were missing).
-- **Result metadata consistency**: `processResult()` now flattens truncated metadata consistently for both `trust: "untrusted"` and `trust: "sanitize"` to avoid nested wrappers.
+- **Result metadata consistency**: `processResult()` now flattens truncated metadata consistently for `trust: "untrusted"` to avoid nested wrappers. *(Note: v2.6.5 also included `sanitize` in the flatten, which caused data loss — reverted in v2.6.7.)*
 - **SSE/stream parsing robustness**: line splitting now handles both LF and CRLF (`/\r?\n/`) in SSE and streamable-http transports.
 - **Stdio startup false-positive hardening**: startup readiness now accepts JSON/LSP headers and whitespace readiness signals, while ignoring banner text on stdout (reduces fragile "connected" states).
 - **.env inline comments**: `parseEnvFile()` now strips unquoted inline comments (`KEY=value # comment`) while preserving quoted `#` characters.
