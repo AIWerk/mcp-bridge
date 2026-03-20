@@ -10,7 +10,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@stripe/mcp",
+        "@stripe/mcp@0.3.1",
         "--tools=all",
         "--api-key=${STRIPE_API_KEY}"
       ],
@@ -31,7 +31,7 @@
   "install": {
     "method": "npx",
     "package": "@stripe/mcp",
-    "version": "latest"
+    "version": "0.3.1"
   },
   "metadata": {
     "homepage": "https://stripe.com/",
@@ -61,5 +61,20 @@
     "resources": false,
     "prompts": false,
     "sampling": false
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "publisherId": "aiwerk",
+    "value": "K+265McBYk3Y8RHHEXDSUILier1i2G5MVCcXFRGjTGJjvj/rjKSPAb9yB0BkCNhEbo3Lf6+wwpfrcdNBUyXSAg==",
+    "signedFields": [
+      "id",
+      "name",
+      "description",
+      "transports",
+      "auth",
+      "install",
+      "metadata"
+    ],
+    "signedAt": "2026-03-20T14:25:11.866Z"
   }
 }

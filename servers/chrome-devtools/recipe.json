@@ -55,5 +55,20 @@
     "resources": false,
     "prompts": false,
     "sampling": false
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "publisherId": "aiwerk",
+    "value": "fo/w/oYgd8T4ecaOnSUq3vE5nl82RVB31Mj+2v5W/j6qM+wK17xstVMdiZuiqH+a6YDQXXe30S9enRjLK0y/CA==",
+    "signedFields": [
+      "id",
+      "name",
+      "description",
+      "transports",
+      "auth",
+      "install",
+      "metadata"
+    ],
+    "signedAt": "2026-03-20T14:24:32.876Z"
   }
 }

@@ -9,7 +9,7 @@
       "type": "stdio",
       "command": "uvx",
       "args": [
-        "mcp-atlassian"
+        "mcp-atlassian@2.1.0"
       ],
       "env": {
         "CONFLUENCE_URL": "${CONFLUENCE_URL}",
@@ -38,7 +38,7 @@
   "install": {
     "method": "uvx",
     "package": "mcp-atlassian",
-    "version": "latest"
+    "version": "2.1.0"
   },
   "metadata": {
     "homepage": "https://github.com/sooperset/mcp-atlassian",
@@ -68,5 +68,20 @@
     "resources": false,
     "prompts": false,
     "sampling": false
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "publisherId": "aiwerk",
+    "value": "ysHKVAb4IwPRJF3XtEEtumZC2xjt32ouGu5Dt3VrMl7DIp6PWb56JzewqLe4zJ14lVlksIgmDVrFCrVnVJ1QDw==",
+    "signedFields": [
+      "id",
+      "name",
+      "description",
+      "transports",
+      "auth",
+      "install",
+      "metadata"
+    ],
+    "signedAt": "2026-03-20T14:24:29.672Z"
   }
 }

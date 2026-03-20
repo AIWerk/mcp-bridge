@@ -10,7 +10,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@llmindset/mcp-miro",
+        "@llmindset/mcp-miro@0.1.1",
         "--token",
         "${MIRO_API_TOKEN}"
       ],
@@ -31,7 +31,7 @@
   "install": {
     "method": "npx",
     "package": "@llmindset/mcp-miro",
-    "version": "latest"
+    "version": "0.1.1"
   },
   "metadata": {
     "homepage": "https://miro.com/",
@@ -61,5 +61,20 @@
     "resources": false,
     "prompts": false,
     "sampling": false
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "publisherId": "aiwerk",
+    "value": "ekptOzlrjh4EmGVDQMBPpCJNchPEsRIEqFOSkMH2lM4cbMtpqVy9jWvErRTZwkLIFi4nQx2T3SGapmpBDjxhDA==",
+    "signedFields": [
+      "id",
+      "name",
+      "description",
+      "transports",
+      "auth",
+      "install",
+      "metadata"
+    ],
+    "signedAt": "2026-03-20T14:25:02.500Z"
   }
 }

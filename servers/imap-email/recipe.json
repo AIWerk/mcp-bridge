@@ -34,7 +34,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@aiwerk/mcp-server-imap"
+        "@aiwerk/mcp-server-imap@1.1.4"
       ],
       "env": {
         "IMAP_HOST": "${IMAP_HOST}",
@@ -65,7 +65,7 @@
   "install": {
     "method": "npx",
     "package": "@aiwerk/mcp-server-imap",
-    "version": "latest"
+    "version": "1.1.4"
   },
   "capabilities": {
     "toolCount": 10,
@@ -82,5 +82,21 @@
       "email_attachment"
     ],
     "sideEffects": "external-write"
+  },
+  "repository": "https://github.com/AIWerk/mcp-server-imap",
+  "signature": {
+    "algorithm": "ed25519",
+    "publisherId": "aiwerk",
+    "value": "wc3SCWP6dR1kuDUURo+WdLCWkazGiecunG6EEf5oVNWFIFBjLTN84c49dZYiK6W4L2kpmF9EUELdcpfYcQvLCg==",
+    "signedFields": [
+      "id",
+      "name",
+      "description",
+      "transports",
+      "auth",
+      "install",
+      "metadata"
+    ],
+    "signedAt": "2026-03-20T14:24:55.143Z"
   }
 }

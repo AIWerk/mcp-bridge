@@ -9,7 +9,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@anthropic-pb/hostinger-mcp-server"
+        "hostinger-api-mcp@0.1.28"
       ],
       "env": {
         "HOSTINGER_API_TOKEN": "${HOSTINGER_API_TOKEN}"
@@ -27,8 +27,8 @@
   },
   "install": {
     "method": "npx",
-    "package": "@anthropic-pb/hostinger-mcp-server",
-    "version": "latest"
+    "package": "hostinger-api-mcp",
+    "version": "0.1.28"
   },
   "metadata": {
     "homepage": "https://www.hostinger.com/",
@@ -58,5 +58,21 @@
     "resources": false,
     "prompts": false,
     "sampling": false
+  },
+  "repository": "https://github.com/hostinger/api-mcp-server",
+  "signature": {
+    "algorithm": "ed25519",
+    "publisherId": "aiwerk",
+    "value": "Btxn49bVCENtq5hgKDhSvYjU8KtbcxFKIAjclBfxl2W87YDFH68q2vkXzkqd1B9QHE74P0djp8KWt5hR0m7lBA==",
+    "signedFields": [
+      "id",
+      "name",
+      "description",
+      "transports",
+      "auth",
+      "install",
+      "metadata"
+    ],
+    "signedAt": "2026-03-20T14:25:53.457Z"
   }
 }
