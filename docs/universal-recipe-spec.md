@@ -1040,7 +1040,46 @@ canonical(tools_list_response) =
 
 Only `name`, `description`, and `inputSchema` are included. Server-internal fields (e.g., annotations, custom metadata) are excluded to avoid false positives from non-functional changes.
 
-#### 9.4.5 Limitations
+#### 9.4.5 Automated Signing Workflow
+
+The signing tool (`sign-recipe`) SHOULD automate the full integrity chain in a single invocation:
+
+```
+Input:  unsigned recipe with "version": "latest"
+Output: signed recipe with pinned version + toolsHash + Ed25519 signature
+```
+
+**Steps performed automatically:**
+
+1. **Version resolution:** If `install.version` is `"latest"` (or missing), query the package registry (npm, PyPI) for the current stable version. Replace `"latest"` with the resolved semver (e.g., `"0.6.2"`). Also update `transports[].args` if they contain `@latest` (e.g., `"todoist-mcp@latest"` → `"todoist-mcp@0.6.2"`).
+
+2. **Tool manifest capture:** Start the MCP server using the recipe's transport config (stdio: spawn the command; SSE/HTTP: connect to the endpoint). Send `tools/list`, canonicalize and hash the response. Store as `install.toolsHash`.
+
+3. **Validation:** Run the recipe validator (§7) on the updated recipe. Abort if errors are found.
+
+4. **Signing:** Compute the Ed25519 signature over `SIGNED_FIELDS` (which now includes the pinned version and `toolsHash` via the `install` field).
+
+5. **Output:** Write the signed recipe with all fields updated in-place.
+
+**CLI interface:**
+
+```bash
+# Sign a single recipe (auto-resolve version + compute toolsHash):
+sign-recipe servers/todoist/recipe.json --output servers/todoist/recipe.json
+
+# Sign all recipes in a directory:
+sign-recipe --all servers/ --output-dir servers/
+
+# Dry run (show what would change without writing):
+sign-recipe servers/todoist/recipe.json --dry-run
+```
+
+**Environment requirements for toolsHash:**
+- For stdio servers: the signing machine must have the runtime installed (Node.js, Python, etc.)
+- For servers requiring API keys: either provide dummy keys (if the server exposes tools without auth) or set the required env vars. Many MCP servers expose their tool list without valid credentials.
+- If the server cannot be started (missing deps, auth required), `toolsHash` is omitted and a warning is emitted.
+
+#### 9.4.6 Limitations
 
 - **Dynamic tools:** Some MCP servers register tools dynamically based on configuration or auth state. For these servers, `toolsHash` should be computed in a well-defined default configuration.
 - **Hosted endpoints (SSE/HTTP):** The hash can be computed for remote servers too — the adapter connects and verifies `tools/list` at connect time. However, the server operator can change behavior at any time between connections.
