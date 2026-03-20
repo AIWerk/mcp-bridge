@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.7.0] - 2026-03-20
+
+### Added
+- **Cost & Rate Limiting** (`src/rate-limiter.ts`): Per-server daily/monthly call limits with actionable UX.
+  - Pre-call check in router dispatch flow — blocks when limit reached
+  - 80% warning threshold with concrete CLI commands in the message
+  - File persistence: `~/.mcp-bridge/usage/<server>.json`
+  - Auto-reset: daily at midnight UTC, monthly on 1st
+  - Graceful handling of corrupt/missing usage files
+  - Config: `rateLimit: { maxCallsPerDay, maxCallsPerMonth }` per server
+- **CLI commands**: `mcp-bridge usage` (show usage table), `mcp-bridge limit <server> --daily N --monthly N`
+- **Spec §10**: Cost & Rate Limiting section in Universal Recipe Spec
+- **Spec §9.4**: Tool Manifest Hash (toolsHash) — runtime integrity verification
+- **Spec §9.4.5**: Automated signing workflow (version pinning + toolsHash + validation)
+- **Firecrawl recipe** (`servers/firecrawl/recipe.json`)
+- **16 recipes signed** with AIWerk Ed25519 key, 8 versions pinned from `latest` to specific semver
+- 9 new rate-limiter tests (282 → 291 total)
+
 ## [2.6.8] - 2026-03-20
 
 ### Added

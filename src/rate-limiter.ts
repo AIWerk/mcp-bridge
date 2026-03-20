@@ -41,7 +41,7 @@ function warningThreshold(limit: number): number {
 }
 
 function nextSuggestedLimit(limit: number): number {
-  return Math.max(limit + 1, limit * 2);
+  return Math.ceil(limit * 1.5);
 }
 
 export class RateLimiter {
@@ -87,12 +87,26 @@ export class RateLimiter {
       return { allowed: true };
     }
 
-    const check = this.checkLimit(serverId, config);
-    if (!check.allowed) {
-      return check;
+    // Single loadUsage call — check + increment in one pass (avoids double file read)
+    const { usage, changed } = this.loadUsage(serverId);
+    if (changed) {
+      this.saveUsage(serverId, usage);
     }
 
-    const { usage } = this.loadUsage(serverId);
+    if (dailyLimit && usage.daily.count >= dailyLimit) {
+      return {
+        allowed: false,
+        error: `❌ Rate limit reached for ${serverId}: ${usage.daily.count}/${dailyLimit} daily calls used. Resets at midnight UTC. To adjust: mcp-bridge limit ${serverId} --daily ${nextSuggestedLimit(dailyLimit)}. To check usage: mcp-bridge usage. To disable limit: mcp-bridge limit ${serverId} --daily 0`
+      };
+    }
+
+    if (monthlyLimit && usage.monthly.count >= monthlyLimit) {
+      return {
+        allowed: false,
+        error: `❌ Rate limit reached for ${serverId}: ${usage.monthly.count}/${monthlyLimit} monthly calls used. Resets on the 1st of each month at midnight UTC. To adjust: mcp-bridge limit ${serverId} --monthly ${nextSuggestedLimit(monthlyLimit)}. To check usage: mcp-bridge usage. To disable limit: mcp-bridge limit ${serverId} --monthly 0`
+      };
+    }
+
     usage.daily.count += 1;
     usage.monthly.count += 1;
     this.saveUsage(serverId, usage);

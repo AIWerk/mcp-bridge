@@ -409,12 +409,13 @@ export class McpRouter {
         }
       }
 
-      this.markUsed(server);
+      // Rate limit check BEFORE markUsed — rejected calls should not keep connection alive
       const rateLimitResult = this.rateLimiter.checkAndIncrement(server, serverConfig.rateLimit);
       if (!rateLimitResult.allowed) {
         return this.error("mcp_error", rateLimitResult.error || "Rate limit reached");
       }
 
+      this.markUsed(server);
       const callOutcome = await this.callToolWithRetry(server, tool, params ?? {}, state.transport);
       const response = callOutcome.response;
 

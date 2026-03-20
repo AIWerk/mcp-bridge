@@ -289,7 +289,7 @@ function cmdUsage(configPath: string | undefined, logger: Logger): void {
       return;
     }
 
-    process.stdout.write("\nRate limit usage:\n\n");
+    process.stdout.write("\nRate limit usage (note: cached calls are not counted):\n\n");
     process.stdout.write("  Server          Daily        Monthly      Limits\n");
     process.stdout.write("  " + "─".repeat(78) + "\n");
 
