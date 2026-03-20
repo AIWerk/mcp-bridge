@@ -36,6 +36,8 @@ export type { RouterToolHint, RouterServerStatus, RouterDispatchResponse, Router
 // Result cache
 export { ResultCache, createResultCacheKey, stableStringify } from "./result-cache.js";
 export type { ResultCacheConfig, ResultCacheStats } from "./result-cache.js";
+export { RateLimiter } from "./rate-limiter.js";
+export type { RateLimitConfig, RateLimitResult } from "./rate-limiter.js";
 export { ToolResolver } from "./tool-resolution.js";
 export type { ToolResolutionResult, ToolResolutionCandidate } from "./tool-resolution.js";
 

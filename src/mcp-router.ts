@@ -20,6 +20,7 @@ import { ResultCache, createResultCacheKey } from "./result-cache.js";
 import { ToolResolver } from "./tool-resolution.js";
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import { FileTokenStore } from "./token-store.js";
+import { RateLimiter } from "./rate-limiter.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -63,7 +64,7 @@ export interface RouterServerStatus {
 export type RouterDispatchResponse =
   | { server: string; action: "list"; tools: RouterToolHint[] }
   | { server: string; action: "refresh"; refreshed: true; tools: RouterToolHint[] }
-  | { server: string; action: "call"; tool: string; result: any; retries?: number }
+  | { server: string; action: "call"; tool: string; result: any; retries?: number; warning?: string }
   | { server: string; action: "schema"; tool: string; schema: any; description: string }
   | { action: "status"; servers: RouterServerStatus[] }
   | { action: "batch"; results: RouterBatchResult[] }
@@ -156,6 +157,7 @@ export class McpRouter {
   private readonly states = new Map<string, RouterServerState>();
   private readonly toolResolver: ToolResolver;
   private readonly tokenManager: OAuth2TokenManager;
+  private readonly rateLimiter: RateLimiter;
   private readonly requestIdState: RequestIdState = { value: 0 };
   private intentRouter: IntentRouter | null = null;
   private promotion: AdaptivePromotion | null = null;
@@ -187,6 +189,7 @@ export class McpRouter {
     this.maxBatchSize = clientConfig.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;
     this.toolResolver = new ToolResolver(Object.keys(servers));
     this.tokenManager = new OAuth2TokenManager(logger, new FileTokenStore());
+    this.rateLimiter = new RateLimiter();
 
     if (clientConfig.adaptivePromotion?.enabled) {
       this.promotion = new AdaptivePromotion(clientConfig.adaptivePromotion, logger);
@@ -407,6 +410,11 @@ export class McpRouter {
       }
 
       this.markUsed(server);
+      const rateLimitResult = this.rateLimiter.checkAndIncrement(server, serverConfig.rateLimit);
+      if (!rateLimitResult.allowed) {
+        return this.error("mcp_error", rateLimitResult.error || "Rate limit reached");
+      }
+
       const callOutcome = await this.callToolWithRetry(server, tool, params ?? {}, state.transport);
       const response = callOutcome.response;
 
@@ -430,6 +438,7 @@ export class McpRouter {
         action: "call",
         tool,
         result,
+        ...(rateLimitResult.warning ? { warning: rateLimitResult.warning } : {}),
         ...(callOutcome.retries > 0 ? { retries: callOutcome.retries } : {})
       };
     } catch (error) {

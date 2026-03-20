@@ -68,6 +68,11 @@ export interface McpServerConfig {
   maxResultChars?: number;
   // Per-server tool call retry policy (action=call only)
   retry?: RetryConfig;
+  // Per-server call count limits
+  rateLimit?: {
+    maxCallsPerDay?: number;
+    maxCallsPerMonth?: number;
+  };
 }
 
 export interface McpClientConfig {

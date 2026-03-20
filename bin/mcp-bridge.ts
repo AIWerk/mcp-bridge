@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync } from "fs";
-import { join, dirname, resolve } from "path";
+import { readFileSync, existsSync, writeFileSync } from "fs";
+import { join, dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
-import { platform } from "os";
+import { platform, homedir } from "os";
 import { execFileSync } from "child_process";
-import { loadConfig, initConfigDir, getConfigDir } from "../src/config.js";
+import { loadConfig, initConfigDir } from "../src/config.js";
 import { StandaloneServer } from "../src/standalone-server.js";
 import { PACKAGE_VERSION } from "../src/protocol.js";
 import { checkForUpdate, runUpdate } from "../src/update-checker.js";
 import { FileTokenStore } from "../src/token-store.js";
 import { performAuthCodeLogin, performDeviceCodeLogin } from "../src/cli-auth.js";
+import { RateLimiter } from "../src/rate-limiter.js";
 import type { Logger, HttpAuthConfig } from "../src/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,7 +50,7 @@ function createLogger(level: LogLevel): Logger {
 // -- Arg parsing ----------------------------------------------------------
 
 interface CliArgs {
-  command: "serve" | "init" | "install" | "catalog" | "servers" | "search" | "update" | "version" | "help" | "auth";
+  command: "serve" | "init" | "install" | "catalog" | "servers" | "search" | "update" | "version" | "help" | "auth" | "usage" | "limit";
   authSubcommand?: "login" | "logout" | "status";
   sse: boolean;
   http: boolean;
@@ -60,6 +61,8 @@ interface CliArgs {
   positional: string[];
   checkOnly: boolean;
   offline: boolean;
+  daily?: number;
+  monthly?: number;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -97,12 +100,24 @@ function parseArgs(argv: string[]): CliArgs {
       case "--help": case "-h": args.command = "help"; break;
       case "--check": args.checkOnly = true; break;
       case "--offline": args.offline = true; break;
+      case "--daily":
+        i++;
+        args.daily = parseInt(argv[i], 10);
+        if (isNaN(args.daily)) { process.stderr.write("Error: --daily requires a number\n"); process.exit(1); }
+        break;
+      case "--monthly":
+        i++;
+        args.monthly = parseInt(argv[i], 10);
+        if (isNaN(args.monthly)) { process.stderr.write("Error: --monthly requires a number\n"); process.exit(1); }
+        break;
       case "init": args.command = "init"; break;
       case "install": args.command = "install"; break;
       case "catalog": args.command = "catalog"; break;
       case "servers": args.command = "servers"; break;
       case "search": args.command = "search"; break;
       case "update": args.command = "update"; break;
+      case "usage": args.command = "usage"; break;
+      case "limit": args.command = "limit"; break;
       case "auth":
         args.command = "auth";
         // Consume subcommand
@@ -145,6 +160,9 @@ Usage:
   mcp-bridge catalog [--offline]    List available servers
   mcp-bridge servers                List configured servers
   mcp-bridge search <query>         Search catalog by keyword
+  mcp-bridge usage                  Show current per-server call usage
+  mcp-bridge limit <server> [--daily N] [--monthly N]
+                                    Set per-server rate limits (0 = unlimited)
   mcp-bridge update [--check]       Check for / install updates
   mcp-bridge auth login <server>    Authenticate with an OAuth2 server
   mcp-bridge auth logout <server>   Remove stored token for a server
@@ -240,6 +258,137 @@ function cmdSearch(query: string, logger: Logger): void {
     process.stdout.write(`  ${i + 1}  ${name.padEnd(16)}${(info as any).description || ""}\n`);
   });
   process.stdout.write("\n");
+}
+
+function resolveConfigPath(configPath?: string): string {
+  if (!configPath) {
+    return join(homedir(), ".mcp-bridge", "config.json");
+  }
+  if (configPath.endsWith("/") || configPath.endsWith("\\") || !extname(configPath)) {
+    return join(configPath, "config.json");
+  }
+  return configPath;
+}
+
+function cmdUsage(configPath: string | undefined, logger: Logger): void {
+  try {
+    const limiter = new RateLimiter();
+    const usage = limiter.getAllUsage();
+
+    let configServers: Record<string, any> = {};
+    try {
+      const config = loadConfig({ configPath, logger });
+      configServers = config.servers ?? {};
+    } catch {
+      // Show usage files even when config is missing/unreadable.
+    }
+
+    const names = new Set<string>([...Object.keys(usage), ...Object.keys(configServers)]);
+    if (names.size === 0) {
+      process.stdout.write("No usage data found.\n");
+      return;
+    }
+
+    process.stdout.write("\nRate limit usage:\n\n");
+    process.stdout.write("  Server          Daily        Monthly      Limits\n");
+    process.stdout.write("  " + "─".repeat(78) + "\n");
+
+    for (const server of [...names].sort((a, b) => a.localeCompare(b))) {
+      const counts = usage[server] ?? { daily: 0, monthly: 0 };
+      const limit = configServers[server]?.rateLimit;
+      const dailyLimit = typeof limit?.maxCallsPerDay === "number" && limit.maxCallsPerDay > 0
+        ? limit.maxCallsPerDay
+        : "-";
+      const monthlyLimit = typeof limit?.maxCallsPerMonth === "number" && limit.maxCallsPerMonth > 0
+        ? limit.maxCallsPerMonth
+        : "-";
+      process.stdout.write(
+        `  ${server.padEnd(16)}${`${counts.daily}`.padEnd(13)}${`${counts.monthly}`.padEnd(13)}daily=${dailyLimit} monthly=${monthlyLimit}\n`
+      );
+    }
+
+    process.stdout.write("\n");
+  } catch (err) {
+    logger.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
+function cmdLimit(args: CliArgs, logger: Logger): void {
+  const server = args.positional[0];
+  if (!server) {
+    process.stderr.write("Usage: mcp-bridge limit <server> --daily <n> --monthly <n>\n");
+    process.exit(1);
+  }
+
+  const hasDaily = typeof args.daily === "number";
+  const hasMonthly = typeof args.monthly === "number";
+  if (!hasDaily && !hasMonthly) {
+    process.stderr.write("Error: provide at least one limit flag (--daily or --monthly)\n");
+    process.exit(1);
+  }
+
+  if (hasDaily && args.daily! < 0) {
+    process.stderr.write("Error: --daily must be >= 0\n");
+    process.exit(1);
+  }
+  if (hasMonthly && args.monthly! < 0) {
+    process.stderr.write("Error: --monthly must be >= 0\n");
+    process.exit(1);
+  }
+
+  const resolvedPath = resolveConfigPath(args.configPath);
+  if (!existsSync(resolvedPath)) {
+    logger.error(`Config file not found: ${resolvedPath}`);
+    process.exit(1);
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(resolvedPath, "utf-8"));
+    if (!raw.servers || typeof raw.servers !== "object" || !raw.servers[server]) {
+      logger.error(`Server "${server}" not found in config`);
+      process.exit(1);
+    }
+
+    if (!raw.servers[server].rateLimit || typeof raw.servers[server].rateLimit !== "object") {
+      raw.servers[server].rateLimit = {};
+    }
+
+    if (hasDaily) {
+      if (args.daily === 0) {
+        delete raw.servers[server].rateLimit.maxCallsPerDay;
+      } else {
+        raw.servers[server].rateLimit.maxCallsPerDay = args.daily;
+      }
+    }
+
+    if (hasMonthly) {
+      if (args.monthly === 0) {
+        delete raw.servers[server].rateLimit.maxCallsPerMonth;
+      } else {
+        raw.servers[server].rateLimit.maxCallsPerMonth = args.monthly;
+      }
+    }
+
+    if (
+      raw.servers[server].rateLimit.maxCallsPerDay === undefined &&
+      raw.servers[server].rateLimit.maxCallsPerMonth === undefined
+    ) {
+      delete raw.servers[server].rateLimit;
+    }
+
+    writeFileSync(resolvedPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+
+    const effectiveDaily = raw.servers[server].rateLimit?.maxCallsPerDay ?? "unlimited";
+    const effectiveMonthly = raw.servers[server].rateLimit?.maxCallsPerMonth ?? "unlimited";
+    process.stdout.write(
+      `Updated limits for ${server}: daily=${effectiveDaily}, monthly=${effectiveMonthly}\n` +
+      `Check usage with: mcp-bridge usage\n`
+    );
+  } catch (err) {
+    logger.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
 }
 
 function cmdInstall(serverName: string, logger: Logger): void {
@@ -484,6 +633,12 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       cmdSearch(args.positional[0], logger);
+      break;
+    case "usage":
+      cmdUsage(args.configPath, logger);
+      break;
+    case "limit":
+      cmdLimit(args, logger);
       break;
     case "install":
       if (args.positional.length === 0) {
