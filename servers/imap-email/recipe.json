@@ -34,7 +34,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@aiwerk/mcp-server-imap@1.1.4"
+        "@aiwerk/mcp-server-imap@1.1.7"
       ],
       "env": {
         "IMAP_HOST": "${IMAP_HOST}",
@@ -65,7 +65,7 @@
   "install": {
     "method": "npx",
     "package": "@aiwerk/mcp-server-imap",
-    "version": "1.1.4"
+    "version": "1.1.7"
   },
   "capabilities": {
     "toolCount": 10,
@@ -87,7 +87,7 @@
   "signature": {
     "algorithm": "ed25519",
     "publisherId": "aiwerk",
-    "value": "wc3SCWP6dR1kuDUURo+WdLCWkazGiecunG6EEf5oVNWFIFBjLTN84c49dZYiK6W4L2kpmF9EUELdcpfYcQvLCg==",
+    "value": "PufPJHKoi3lVKpL4idhjJ/hvQyzbXMjDl3GIvLlF83lvY1uPWkJVfreQqnZptfCmEeXwNiO4dUX1r6jeuc4fBw==",
     "signedFields": [
       "id",
       "name",
@@ -97,6 +97,6 @@
       "install",
       "metadata"
     ],
-    "signedAt": "2026-03-20T14:24:55.143Z"
+    "signedAt": "2026-03-20T14:47:59.358Z"
   }
 }
