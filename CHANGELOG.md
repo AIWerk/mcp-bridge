@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.6.8] - 2026-03-20
+
+### Added
+- **Firecrawl recipe** (`servers/firecrawl/recipe.json`): Official Firecrawl MCP server — web scraping, crawling, search, and structured data extraction. Package: `firecrawl-mcp@3.12.1`, stdio transport, API key auth.
+
 ## [2.6.7] - 2026-03-19
 
 ### Fixed
