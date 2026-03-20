@@ -65,7 +65,8 @@
   "install": {
     "method": "npx",
     "package": "@aiwerk/mcp-server-imap",
-    "version": "1.1.7"
+    "version": "1.1.7",
+    "toolsHash": "sha256-6ae071b777345740e7edaf319c71b57e65c657c145b68b96e6f6bcd6c0c1730a"
   },
   "capabilities": {
     "toolCount": 10,
@@ -87,7 +88,7 @@
   "signature": {
     "algorithm": "ed25519",
     "publisherId": "aiwerk",
-    "value": "PufPJHKoi3lVKpL4idhjJ/hvQyzbXMjDl3GIvLlF83lvY1uPWkJVfreQqnZptfCmEeXwNiO4dUX1r6jeuc4fBw==",
+    "value": "i1SlzFzCKC2cTLRL4w7N82f7wrOV7YnygZhS71IT1t7/qAJX7uNSyfACX06CZxwz4Ty/AIyYlvYo8vLdNv5HDg==",
     "signedFields": [
       "id",
       "name",
@@ -97,6 +98,6 @@
       "install",
       "metadata"
     ],
-    "signedAt": "2026-03-20T14:47:59.358Z"
+    "signedAt": "2026-03-20T14:51:40.429Z"
   }
 }
