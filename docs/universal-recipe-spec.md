@@ -971,8 +971,80 @@ These fields execute arbitrary shell commands and represent a **supply-chain rem
 
 ### 9.3 Package Integrity
 
-- The `quality.upstreamHash` (in catalog overlay) provides integrity verification but is NOT a substitute for code audit.
+- The `quality.upstreamHash` (in catalog overlay) provides static integrity verification but is NOT a substitute for code audit.
 - Recipe signatures (Ed25519) are specified separately in the Catalog Security Spec.
+
+### 9.4 Tool Manifest Hash (Runtime Integrity)
+
+**Problem:** A signed recipe guarantees the *recipe file* was not tampered with, but not the *MCP server code* behind it. If the upstream package is compromised (same version, different code) or a `latest` tag points to a new version with unexpected behavior, the signature remains valid even though the running server has changed.
+
+Source-specific integrity checks (npm SHA-512, Docker digest, PyPI hash) exist but require per-registry logic, don't work for hosted endpoints, and verify the *binary* rather than the *behavior*.
+
+**Solution: `toolsHash`** — a SHA-256 hash of the canonical tool manifest returned by the MCP server's `tools/list` response at signing time.
+
+```json
+{
+  "install": {
+    "method": "npx",
+    "package": "todoist-mcp",
+    "version": "0.6.2",
+    "toolsHash": "sha256-a7f3b2c9d8e1f4..."
+  }
+}
+```
+
+#### 9.4.1 How it works
+
+**At signing time (publisher/catalog operator):**
+1. Start the MCP server using the recipe's transport config.
+2. Send a `tools/list` request.
+3. Canonicalize the response: sort tools by name, sort parameters alphabetically within each tool, apply `stableStringify()` (deterministic JSON with sorted keys, no whitespace).
+4. Compute: `SHA-256(canonical(tools/list response))`.
+5. Store as `install.toolsHash` in the recipe.
+6. Sign the recipe (the `install` field — including `toolsHash` — is part of `SIGNED_FIELDS`).
+
+**At install/connect time (adapter/bridge):**
+1. Start the MCP server.
+2. Send a `tools/list` request.
+3. Canonicalize and hash the response using the same algorithm.
+4. Compare with `install.toolsHash` from the recipe.
+
+#### 9.4.2 Verification outcomes
+
+| Outcome | Meaning | Adapter behavior |
+|---------|---------|-----------------|
+| **Hash matches** | Server exposes exactly the tools that were audited | ✅ `Verified by <publisher>` |
+| **Hash mismatch** | Tools have changed since signing (new tools, removed tools, changed params/descriptions) | ⚠️ Warning: "Tool manifest changed since verification — proceed with caution" |
+| **No `toolsHash` in recipe** | Recipe was signed without tool manifest verification | ℹ️ "Signature covers recipe only, not runtime behavior" |
+| **Server unreachable** | Cannot start server to verify | ⚠️ "Cannot verify tool manifest — server not running" |
+
+#### 9.4.3 Properties
+
+- **Source-independent:** Works for npm, pip, Docker, Go, binary, hosted HTTP — any MCP server that implements `tools/list`.
+- **Behavior-oriented:** Verifies what the user/agent actually interacts with (tool names, descriptions, parameters), not binary blobs.
+- **Tamper-evident:** If `toolsHash` is in the recipe and the recipe is signed, modifying either the hash or the server tools invalidates the signature.
+- **Non-blocking by default:** A mismatch produces a warning, not a hard failure. Adapters MAY offer a strict mode (`--strict-integrity`) that blocks on mismatch.
+
+#### 9.4.4 Canonicalization algorithm
+
+```
+canonical(tools_list_response) =
+  stableStringify(
+    tools.sort_by(name).map(tool => {
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema  // sorted keys recursively
+    })
+  )
+```
+
+Only `name`, `description`, and `inputSchema` are included. Server-internal fields (e.g., annotations, custom metadata) are excluded to avoid false positives from non-functional changes.
+
+#### 9.4.5 Limitations
+
+- **Dynamic tools:** Some MCP servers register tools dynamically based on configuration or auth state. For these servers, `toolsHash` should be computed in a well-defined default configuration.
+- **Hosted endpoints (SSE/HTTP):** The hash can be computed for remote servers too — the adapter connects and verifies `tools/list` at connect time. However, the server operator can change behavior at any time between connections.
+- **Not a code audit:** A matching `toolsHash` means "same tools as when signed" — it does not guarantee the tool implementations are safe.
 
 ## 10. Future Work (deferred from v2.0)
 
