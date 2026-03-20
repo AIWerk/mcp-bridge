@@ -1085,11 +1085,111 @@ sign-recipe servers/todoist/recipe.json --dry-run
 - **Hosted endpoints (SSE/HTTP):** The hash can be computed for remote servers too — the adapter connects and verifies `tools/list` at connect time. However, the server operator can change behavior at any time between connections.
 - **Not a code audit:** A matching `toolsHash` means "same tools as when signed" — it does not guarantee the tool implementations are safe.
 
-## 10. Future Work (deferred from v2.0)
+## 10. Cost & Rate Limiting
+
+### 10.1 Problem
+
+MCP servers that wrap paid APIs (Google Maps, Stripe, OpenAI, etc.) can generate unbounded costs when an AI agent makes excessive tool calls. Neither the agent, the LLM, nor the MCP server typically enforce spending limits. The bridge is the **only enforcement point** in the call chain.
+
+Real-world incident: Google Maps MCP server made 56,000 Text Search API calls in a single day → 1,615 CHF unexpected bill.
+
+### 10.2 Rate Limit (primary protection)
+
+Rate limits cap the **number of tool calls** per time window, regardless of cost. This is the primary protection because it is always accurate — it does not depend on pricing data that may be outdated.
+
+#### Recipe-level suggested limits
+
+Recipes MAY include suggested rate limits in the `metadata` field:
+
+```json
+"metadata": {
+  "pricing": "byok",
+  "rateLimit": {
+    "suggestedDailyLimit": 100,
+    "suggestedMonthlyLimit": 2000
+  }
+}
+```
+
+These are **recommendations from the recipe author**, not hard limits. The adapter applies them as defaults unless the user overrides.
+
+#### User-level overrides
+
+Users configure limits in their bridge config or via CLI:
+
+```bash
+# Set daily limit
+mcp-bridge limit google-maps --daily 50
+
+# Set monthly limit
+mcp-bridge limit google-maps --monthly 1000
+
+# Remove limit (unlimited)
+mcp-bridge limit google-maps --daily 0
+
+# View current usage
+mcp-bridge usage
+```
+
+#### Adapter behavior
+
+| Event | Adapter action |
+|-------|---------------|
+| **Tool call within limit** | Allow call, increment counter |
+| **80% of limit reached** | Include warning in tool response: `⚠️ google-maps: 80% of daily limit used (40/50). Adjust with: mcp-bridge limit google-maps --daily <number>` |
+| **Limit reached** | Block call, return error with actionable message: `❌ Rate limit reached for google-maps: 50/50 daily calls used. Resets at midnight UTC. To adjust: mcp-bridge limit google-maps --daily 100. To check usage: mcp-bridge usage. To disable limit: mcp-bridge limit google-maps --daily 0` |
+| **Server installed with suggested limit** | Display at install time: `ℹ️ Suggested daily limit: 100 calls (~$3.20/day). Adjust with: mcp-bridge limit google-maps --daily <number>` |
+
+**Key UX principle:** Every limit notification MUST include the concrete CLI command to adjust the limit. The user should never need to search documentation to change settings.
+
+#### Counter persistence
+
+- Counters are stored in `~/.mcp-bridge/usage/<server-id>.json`
+- Daily counters reset at midnight UTC
+- Monthly counters reset on the 1st of each month at midnight UTC
+- Format: `{ "daily": { "date": "2026-03-20", "count": 47 }, "monthly": { "month": "2026-03", "count": 823 } }`
+
+### 10.3 Cost Limit (supplementary protection)
+
+Cost limits use `costPerCall` from the recipe metadata to estimate spending. This is **supplementary** because pricing data may be outdated if the upstream API changes prices.
+
+```json
+"metadata": {
+  "costPerCall": 0.032,
+  "costCurrency": "USD"
+}
+```
+
+#### User configuration
+
+```bash
+mcp-bridge budget google-maps --daily 5.00 --monthly 50.00
+```
+
+#### Staleness warning
+
+If the recipe's `signature.signedAt` is older than 60 days, the adapter SHOULD warn:
+```
+⚠️ Recipe pricing data for google-maps is 67 days old. 
+   Actual API costs may have changed. Rate limits (call count) remain accurate.
+```
+
+### 10.4 Priority of limits
+
+When multiple limits are configured, the **most restrictive** applies:
+
+```
+1. User rate limit (calls/day)      ← always accurate
+2. User budget limit ($/day)        ← depends on costPerCall accuracy
+3. Recipe suggested limit           ← default if user hasn't configured
+4. No limit                         ← if nothing configured
+```
+
+## 11. Future Work (deferred from v2.0)
 
 The following topics are recognized as valuable but intentionally deferred. They will be addressed in future spec revisions when real-world usage provides clearer requirements.
 
-### 10.1 Capability Registry (v2.1+)
+### 11.1 Capability Registry (v2.1+)
 
 For advanced smart routing and agent-driven discovery, recipes may need richer tool metadata beyond `toolExamples`:
 
@@ -1100,7 +1200,7 @@ For advanced smart routing and agent-driven discovery, recipes may need richer t
 
 This would transform the catalog from a curated app directory into a runtime-usable capability registry. Deferred because the schema needs to be driven by actual smart routing implementation, not speculation.
 
-### 10.2 Runtime Execution Hints (v2.1+)
+### 11.2 Runtime Execution Hints (v2.1+)
 
 Some server properties affect how a bridge runtime should manage them:
 
@@ -1112,7 +1212,7 @@ Some server properties affect how a bridge runtime should manage them:
 
 These are bridge runtime concerns (see §1.1.1) but could benefit from recipe-level hints. Deferred until the bridge runtime spec matures.
 
-### 10.3 Enhanced Adapter Override Mechanism (v2.1+)
+### 11.3 Enhanced Adapter Override Mechanism (v2.1+)
 
 The current array-replace merge semantics (§4.5) are simple but blunt. A future revision may introduce:
 
@@ -1122,7 +1222,7 @@ The current array-replace merge semantics (§4.5) are simple but blunt. A future
 
 Deferred because the current model covers all existing recipes without issues.
 
-### 10.4 Full OAuth2 Integration Spec
+### 11.4 Full OAuth2 Integration Spec
 
 A standalone spec for OAuth2 credential bootstrap, token storage, and refresh across adapters. See §2.5.1.
 
