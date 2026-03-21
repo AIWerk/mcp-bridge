@@ -1226,6 +1226,102 @@ Deferred because the current model covers all existing recipes without issues.
 
 A standalone spec for OAuth2 credential bootstrap, token storage, and refresh across adapters. See §2.5.1.
 
+### 11.5 Auto-Discovery (v2.8+)
+
+**Problem:** Users must manually add server entries to their bridge config even when a recipe exists and the required env vars are already set. This is unnecessary friction.
+
+**Solution:** The bridge scans the `servers/` directory at startup (and on `refresh`) and automatically registers servers whose required credentials are available — no config entry needed.
+
+#### 11.5.1 Discovery Flow
+
+```
+Bridge startup / refresh
+    │
+    ├── Scan servers/*/recipe.json
+    │
+    ├── For each recipe:
+    │   ├── Read auth.envVars[]
+    │   ├── Check each var against .env + process.env
+    │   │
+    │   ├── ALL vars present?
+    │   │   └── YES → Add to router as auto-discovered server
+    │   │           (runtime only, no config file modification)
+    │   │
+    │   └── SOME or NONE present?
+    │       └── Mark as "available" with missing var list
+    │
+    └── Merge with manually configured servers
+        (manual config takes priority on conflict)
+```
+
+#### 11.5.2 Server Categories
+
+| Category | Example | Auto-discovery behavior |
+|----------|---------|------------------------|
+| API key + stdio | tavily, github, notion | ✅ env var check → auto register |
+| No auth required | chrome-devtools | ✅ always available |
+| Bearer + HTTP | apify (streamable-http) | ✅ env var check → auto register |
+| Multi env var | atlassian (6 vars), imap (7 vars) | ✅ ALL required, partial = "available" |
+
+#### 11.5.3 Status Reporting
+
+`mcp(action="status")` extended output:
+
+```json
+{
+  "servers": {
+    "tavily": { "status": "connected", "source": "auto-discovered" },
+    "github": { "status": "connected", "source": "config" },
+    "firecrawl": {
+      "status": "available",
+      "source": "auto-discovery",
+      "missing": ["FIRECRAWL_API_KEY"],
+      "credentialsUrl": "https://firecrawl.dev/account"
+    },
+    "atlassian": {
+      "status": "available",
+      "source": "auto-discovery",
+      "missing": ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN"],
+      "credentialsUrl": "https://id.atlassian.com/manage-profile/security/api-tokens"
+    }
+  }
+}
+```
+
+#### 11.5.4 Configuration
+
+```json
+{
+  "autoDiscovery": {
+    "enabled": true,
+    "serversDir": "servers/",
+    "allowList": null,
+    "denyList": []
+  }
+}
+```
+
+- **`enabled`** (default: `true`): Toggle auto-discovery on/off.
+- **`serversDir`** (default: `"servers/"`): Path to scan for recipes. Relative to bridge install directory.
+- **`allowList`** (default: `null`): If set, only these server IDs are auto-discovered. `null` = allow all.
+- **`denyList`** (default: `[]`): Server IDs to exclude from auto-discovery.
+
+#### 11.5.5 Priority Rules
+
+1. **Manual config always wins.** If a server is both manually configured and auto-discoverable, the manual config is used.
+2. **No config file modification.** Auto-discovered servers exist only in runtime memory.
+3. **Refresh clears and re-scans.** `mcp(action="refresh")` triggers a full re-scan.
+
+#### 11.5.6 Transport Selection
+
+For auto-discovered servers, the bridge uses the **first** transport entry in the recipe's `transports[]` array (matching the static selection rule in §3.2). Adapter overrides (§4) are not applied — auto-discovery uses the recipe defaults.
+
+#### 11.5.7 Implementation Notes
+
+- **Core (`mcp-bridge`)**: `autoDiscovery()` function that scans recipes + checks env vars → returns `{ ready: ServerConfig[], available: AvailableServer[] }`
+- **Adapter layer**: Each adapter can call `autoDiscovery()` and merge results with its native config format.
+- **Security**: New recipes added via `npm update` become automatically active if env vars are set. The `denyList` config provides opt-out control.
+
 ## Appendix A: Full Example — Atlassian (Complex, stdio)
 
 ```json

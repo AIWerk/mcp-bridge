@@ -593,6 +593,7 @@ For production deployments with high security requirements, consider adding an e
 | ✅ | OAuth2 Client Credentials | 2.1.0 |
 | ✅ | OAuth2 Authorization Code + PKCE | 2.5.0 |
 | ✅ | OAuth2 Device Code flow (headless) | 2.6.0 |
+| 🔜 | Auto-discovery (zero-config server registration) | planned |
 | 🔜 | Hosted bridge (bridge.aiwerk.ch) | planned |
 | 🔜 | Remote catalog integration | planned |
 | 🔜 | OpenTelemetry / Prometheus metrics | planned |
