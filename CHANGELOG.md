@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.7.3] - 2026-03-21
+
+### Added
+- **OAuth2 Auth Code in install flow**: `install-server.sh` auto-detects OAuth2 Authorization Code servers and triggers browser login (or Device Code flow on headless environments) during install.
+- **prepublishOnly CHANGELOG guard**: npm publish now fails if CHANGELOG.md is missing an entry for the current version.
+
 ## [2.7.2] - 2026-03-21
 
 ### Fixed
