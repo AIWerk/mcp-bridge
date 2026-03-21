@@ -117,7 +117,13 @@ export class StdioTransport extends BaseTransport {
       }
     });
 
-    const connectionTimeout = this.clientConfig.connectionTimeoutMs || 5000;
+    // npx-based servers need extra time for dependency resolution on first run.
+    const isNpx = this.config.command === "npx";
+    const defaultTimeout = isNpx ? 30000 : 5000;
+    const connectionTimeout = this.clientConfig.connectionTimeoutMs || defaultTimeout;
+    if (isNpx && !this.clientConfig.connectionTimeoutMs) {
+      this.logger.info(`[mcp-bridge] Using extended timeout (${defaultTimeout}ms) for npx-based server`);
+    }
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let timeout: NodeJS.Timeout;

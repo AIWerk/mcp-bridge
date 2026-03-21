@@ -10,7 +10,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "chrome-devtools-mcp@0.20.0",
+        "chrome-devtools-mcp@0.20.3",
         "--autoConnect"
       ],
       "env": {}

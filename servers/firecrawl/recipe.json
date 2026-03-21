@@ -10,7 +10,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "firecrawl-mcp@3.12.1"
+        "firecrawl-mcp@3.11.0"
       ],
       "env": {
         "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
