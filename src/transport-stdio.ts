@@ -175,16 +175,14 @@ export class StdioTransport extends BaseTransport {
       this.process!.once("exit", onProcessExit);
 
       timeout = setTimeout(() => {
-        const timeoutError = new Error(
-          `Stdio process startup timeout: no data received within ${connectionTimeout}ms`
+        // Many MCP servers (e.g. firecrawl) don't write anything to stdout until
+        // they receive the client's `initialize` request. Instead of killing the
+        // process, resolve optimistically — initializeProtocol() will validate
+        // the connection by sending `initialize` and waiting for a response.
+        this.logger.info(
+          `[mcp-bridge] No stdout data within ${connectionTimeout}ms — process still running, proceeding to initialize`
         );
-        this.logger.warn(`[mcp-bridge] ${timeoutError.message}; terminating unresponsive process`);
-        try {
-          this.process?.kill("SIGTERM");
-        } catch {
-          // Ignore kill errors and reject with timeout
-        }
-        settleReject(timeoutError);
+        settleResolve();
       }, connectionTimeout);
     });
   }
