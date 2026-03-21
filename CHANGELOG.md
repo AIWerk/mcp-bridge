@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.7.4] - 2026-03-21
+
+### Fixed
+- **Rate limiter: only count successful calls** — split `checkAndIncrement()` into `checkLimit()` + `increment()`. Failed/errored tool calls no longer consume rate limit quota. (Axel review finding #2)
+- **SSE transport: clean up `endpointUrl` on disconnect** — prevents stale endpoint URL from being used briefly during reconnect. (Axel finding #3)
+- **Token store: server name collision** — `replace()` → `encodeURIComponent()` so `my.server` and `my/server` get distinct token files. (Axel finding #4)
+- **AdaptivePromotion: `Math.max(...spread)` stack overflow** — replaced with `reduce()` to handle large `callTimestamps` arrays safely. (Axel finding #6)
+
 ## [2.7.3] - 2026-03-21
 
 ### Added

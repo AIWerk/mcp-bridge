@@ -309,6 +309,7 @@ export class SseTransport extends BaseTransport {
       this.sseAbortController.abort();
       this.sseAbortController = null;
     }
+    this.endpointUrl = null;
 
     for (const [, controller] of this.pendingRequestControllers) {
       controller.abort();

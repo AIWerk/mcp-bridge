@@ -97,7 +97,7 @@ export class AdaptivePromotion {
           server: entry.server,
           tool: entry.tool,
           callCount: recentCalls.length,
-          lastCall: Math.max(...entry.callTimestamps)
+          lastCall: entry.callTimestamps.reduce((a, b) => a > b ? a : b, 0)
         });
       }
     }
@@ -116,7 +116,7 @@ export class AdaptivePromotion {
 
       // Remove entire entry if no calls within decay period
       const lastCall = entry.callTimestamps.length > 0
-        ? Math.max(...entry.callTimestamps)
+        ? entry.callTimestamps.reduce((a, b) => a > b ? a : b, 0)
         : 0;
       if (lastCall === 0 || lastCall < decayCutoff) {
         this.usage.delete(k);

@@ -409,10 +409,10 @@ export class McpRouter {
         }
       }
 
-      // Rate limit check BEFORE markUsed — rejected calls should not keep connection alive
-      const rateLimitResult = this.rateLimiter.checkAndIncrement(server, serverConfig.rateLimit);
-      if (!rateLimitResult.allowed) {
-        return this.error("mcp_error", rateLimitResult.error || "Rate limit reached");
+      // Rate limit: check BEFORE call, increment AFTER success
+      const rateLimitCheck = this.rateLimiter.checkLimit(server, serverConfig.rateLimit);
+      if (!rateLimitCheck.allowed) {
+        return this.error("mcp_error", rateLimitCheck.error || "Rate limit reached");
       }
 
       this.markUsed(server);
@@ -422,6 +422,9 @@ export class McpRouter {
       if (response.error) {
         return this.error("mcp_error", response.error.message, undefined, response.error.code);
       }
+
+      // Only increment usage counter on successful calls
+      const rateLimitIncrement = this.rateLimiter.increment(server, serverConfig.rateLimit);
 
       // Record usage for adaptive promotion
       if (this.promotion) {
@@ -439,7 +442,7 @@ export class McpRouter {
         action: "call",
         tool,
         result,
-        ...(rateLimitResult.warning ? { warning: rateLimitResult.warning } : {}),
+        ...(rateLimitIncrement.warning ? { warning: rateLimitIncrement.warning } : {}),
         ...(callOutcome.retries > 0 ? { retries: callOutcome.retries } : {})
       };
     } catch (error) {

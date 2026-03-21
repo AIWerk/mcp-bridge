@@ -51,6 +51,9 @@ export class RateLimiter {
     this.usageDir = usageDir ?? join(homedir(), ".mcp-bridge", "usage");
   }
 
+  /**
+   * Check if a call is allowed (without incrementing). Use with increment() after success.
+   */
   checkLimit(serverId: string, config?: RateLimitConfig): RateLimitResult {
     const dailyLimit = isPositiveLimit(config?.maxCallsPerDay) ? config.maxCallsPerDay : undefined;
     const monthlyLimit = isPositiveLimit(config?.maxCallsPerMonth) ? config.maxCallsPerMonth : undefined;
@@ -80,31 +83,19 @@ export class RateLimiter {
     return { allowed: true };
   }
 
-  checkAndIncrement(serverId: string, config?: RateLimitConfig): RateLimitResult {
+  /**
+   * Increment usage counters after a successful call. Returns warning if near limit.
+   */
+  increment(serverId: string, config?: RateLimitConfig): RateLimitResult {
     const dailyLimit = isPositiveLimit(config?.maxCallsPerDay) ? config.maxCallsPerDay : undefined;
     const monthlyLimit = isPositiveLimit(config?.maxCallsPerMonth) ? config.maxCallsPerMonth : undefined;
     if (!dailyLimit && !monthlyLimit) {
       return { allowed: true };
     }
 
-    // Single loadUsage call — check + increment in one pass (avoids double file read)
     const { usage, changed } = this.loadUsage(serverId);
     if (changed) {
       this.saveUsage(serverId, usage);
-    }
-
-    if (dailyLimit && usage.daily.count >= dailyLimit) {
-      return {
-        allowed: false,
-        error: `❌ Rate limit reached for ${serverId}: ${usage.daily.count}/${dailyLimit} daily calls used. Resets at midnight UTC. To adjust: mcp-bridge limit ${serverId} --daily ${nextSuggestedLimit(dailyLimit)}. To check usage: mcp-bridge usage. To disable limit: mcp-bridge limit ${serverId} --daily 0`
-      };
-    }
-
-    if (monthlyLimit && usage.monthly.count >= monthlyLimit) {
-      return {
-        allowed: false,
-        error: `❌ Rate limit reached for ${serverId}: ${usage.monthly.count}/${monthlyLimit} monthly calls used. Resets on the 1st of each month at midnight UTC. To adjust: mcp-bridge limit ${serverId} --monthly ${nextSuggestedLimit(monthlyLimit)}. To check usage: mcp-bridge usage. To disable limit: mcp-bridge limit ${serverId} --monthly 0`
-      };
     }
 
     usage.daily.count += 1;
@@ -126,6 +117,13 @@ export class RateLimiter {
     }
 
     return { allowed: true };
+  }
+
+  /** @deprecated Use checkLimit() + increment() separately. Kept for backward compatibility. */
+  checkAndIncrement(serverId: string, config?: RateLimitConfig): RateLimitResult {
+    const check = this.checkLimit(serverId, config);
+    if (!check.allowed) return check;
+    return this.increment(serverId, config);
   }
 
   getUsage(serverId: string): { daily: number; monthly: number } {

@@ -75,7 +75,7 @@ export class FileTokenStore implements TokenStore {
 
   private tokenPath(serverName: string): string {
     // Sanitize server name to prevent path traversal
-    const safe = serverName.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const safe = encodeURIComponent(serverName);
     return join(this.tokensDir, `${safe}.json`);
   }
 
