@@ -64,7 +64,13 @@ export class FileTokenStore implements TokenStore {
     const results: { serverName: string; token: StoredToken }[] = [];
     for (const file of readdirSync(this.tokensDir)) {
       if (!file.endsWith(".json")) continue;
-      const serverName = file.slice(0, -5);
+      const encoded = file.slice(0, -5);
+      let serverName: string;
+      try {
+        serverName = decodeURIComponent(encoded);
+      } catch {
+        serverName = encoded;
+      }
       const token = this.load(serverName);
       if (token) {
         results.push({ serverName, token });

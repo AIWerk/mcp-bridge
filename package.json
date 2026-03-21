@@ -1,6 +1,6 @@
 {
   "name": "@aiwerk/mcp-bridge",
-  "version": "2.7.4",
+  "version": "2.7.5",
   "description": "Standalone MCP server that multiplexes multiple MCP servers into one interface",
   "type": "module",
   "main": "./dist/src/index.js",

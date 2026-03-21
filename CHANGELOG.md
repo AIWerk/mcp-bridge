@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.7.5] - 2026-03-21
+
+### Fixed
+- **Token store: `list()` double-encode bug** — file names are now `decodeURIComponent()`-ed before passing to `load()`, fixing token lookup for servers with special characters. (Axel re-review finding)
+
 ## [2.7.4] - 2026-03-21
 
 ### Fixed
