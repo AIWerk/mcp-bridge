@@ -4,7 +4,9 @@
 [![npm version](https://img.shields.io/npm/v/@aiwerk/mcp-bridge.svg)](https://www.npmjs.com/package/@aiwerk/mcp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Multiplex multiple MCP servers into one interface. One config, one connection, all your tools.
+**Your AI, Connected to Everything.** Multiplex multiple MCP servers into one interface. One config, one connection, all your tools.
+
+🌐 **[aiwerkmcp.com](https://aiwerkmcp.com)** — Learn more about the AIWerk MCP Platform
 
 Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, **OpenClaw**, or any MCP client.
 
