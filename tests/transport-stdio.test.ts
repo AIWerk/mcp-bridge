@@ -180,8 +180,8 @@ test("stdio transport: process crash triggers disconnect", async () => {
   }
 });
 
-test("stdio transport: connection timeout on non-responsive process", async () => {
-  // Server that never writes to stdout
+test("stdio transport: connection timeout proceeds optimistically on non-responsive process", async () => {
+  // Server that never writes to stdout — simulates servers that wait for initialize
   const silentScript = `setTimeout(() => {}, 60000);`;
 
   const config: McpServerConfig = {
@@ -197,12 +197,10 @@ test("stdio transport: connection timeout on non-responsive process", async () =
   };
   const transport = new StdioTransport(config, clientConfig, makeLogger());
 
-  await assert.rejects(
-    transport.connect(),
-    (err: Error) => err instanceof Error
-      && err.message === "Stdio process startup timeout: no data received within 500ms",
-  );
+  // connect() should resolve optimistically (not reject) — the process is still running,
+  // initializeProtocol() will validate the connection afterwards
+  await transport.connect();
 
-  assert.equal(transport.isConnected(), false);
+  assert.equal(transport.isConnected(), true);
   await transport.disconnect().catch(() => {});
 });
