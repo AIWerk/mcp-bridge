@@ -317,7 +317,32 @@ elif [[ -f "$ENV_VARS_FILE" ]] && [[ -s "$ENV_VARS_FILE" ]]; then
     ENV_VAR_NAME="$(head -n 1 "$ENV_VARS_FILE" | tr -d '[:space:]')"
 fi
 
-if [[ -n "$ENV_VAR_NAME" ]]; then
+# Check if this is an OAuth2 Authorization Code server (browser login, not API key)
+OAUTH2_AUTH_CODE="false"
+if [[ "$RECIPE_FORMAT" == "v2" ]]; then
+    OAUTH2_AUTH_CODE=$(python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    r = json.load(f)
+auth = r.get('auth', {})
+# OAuth2 auth code: explicitly requires grantType=authorization_code
+# and no envVars (login via browser, not API key)
+if auth.get('type') == 'oauth2' and auth.get('grantType') == 'authorization_code':
+    if not auth.get('envVars'):
+        print('true')
+    else:
+        print('false')
+else:
+    print('false')
+" "$RECIPE_FILE" 2>/dev/null)
+fi
+
+if [[ "$OAUTH2_AUTH_CODE" == "true" ]]; then
+    echo ""
+    echo "🔐 This server uses OAuth2 browser login (no API key needed)."
+    echo "After config is saved, we'll open your browser for authentication."
+    SKIP_TOKEN_PROMPT="true"
+elif [[ -n "$ENV_VAR_NAME" ]]; then
     TOKEN_URL="$(get_token_url)"
     [[ -n "$TOKEN_URL" ]] && echo "Get your API token here: ${TOKEN_URL}"
 
@@ -416,7 +441,38 @@ with open(config_path, "w", encoding="utf-8") as f:
 print(f"✅ Configuration merged for: {server_name} (recipe {recipe_format})")
 PY
 
-# 5. Gateway restart
+# 5. OAuth2 browser login (if applicable)
+if [[ "$OAUTH2_AUTH_CODE" == "true" ]]; then
+    echo ""
+    echo "🔐 Starting OAuth2 login for ${SERVER_TITLE}..."
+
+    # Find the mcp-bridge CLI
+    MCP_BRIDGE_BIN=""
+    if command -v mcp-bridge &>/dev/null; then
+        MCP_BRIDGE_BIN="mcp-bridge"
+    elif [[ -x "$(dirname "$0")/../dist/bin/mcp-bridge.js" ]]; then
+        MCP_BRIDGE_BIN="node $(dirname "$0")/../dist/bin/mcp-bridge.js"
+    elif command -v npx &>/dev/null; then
+        MCP_BRIDGE_BIN="npx @aiwerk/mcp-bridge"
+    fi
+
+    if [[ -n "$MCP_BRIDGE_BIN" ]]; then
+        # Detect if we have a browser available
+        if command -v xdg-open &>/dev/null || command -v open &>/dev/null || command -v wslview &>/dev/null; then
+            echo "Opening browser for authentication..."
+            $MCP_BRIDGE_BIN auth login "$SERVER_NAME"
+        else
+            echo "No browser detected (headless environment)."
+            echo "Using device code flow — follow the instructions below:"
+            $MCP_BRIDGE_BIN auth login "$SERVER_NAME" --device-code
+        fi
+    else
+        echo "⚠️  mcp-bridge CLI not found. Run manually after install:"
+        echo "   mcp-bridge auth login ${SERVER_NAME}"
+    fi
+fi
+
+# 6. Gateway restart
 echo ""
 echo "✅ ${SERVER_TITLE} MCP Server installed."
 echo "Restart mcp-bridge to pick up the new server configuration."
