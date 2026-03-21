@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.7.2] - 2026-03-21
+
+### Fixed
+- **Stdio deadlock fix**: MCP servers that wait for the client's `initialize` request before writing to stdout (e.g. firecrawl, fastmcp-based) caused a deadlock — bridge waited for stdout, server waited for initialize. Now the bridge proceeds optimistically after the connection timeout and lets `initializeProtocol()` validate the connection.
+
+## [2.7.1] - 2026-03-21
+
+### Fixed
+- **npx auto-detect timeout**: Stdio transport auto-detects `command === "npx"` and uses 30s connection timeout (was 5s). First-run npx servers need time for dependency resolution.
+- **firecrawl recipe**: Fixed non-existent version `3.12.1` → `3.11.0`
+- **chrome-devtools recipe**: Updated `0.20.0` → `0.20.3`
+
 ## [2.7.0] - 2026-03-20
 
 ### Added
