@@ -31,11 +31,11 @@ test("router mode: initialize returns correct serverInfo", async () => {
     jsonrpc: "2.0",
     id: 1,
     method: "initialize",
-    params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } },
+    params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } },
   });
 
   assert.equal(res.result?.serverInfo.name, "mcp-bridge");
-  assert.equal(res.result?.protocolVersion, "2024-11-05");
+  assert.equal(res.result?.protocolVersion, "2025-06-18");
   assert.ok(res.result?.serverInfo.version);
   assert.ok(res.result?.capabilities.tools);
 });
@@ -91,11 +91,11 @@ test("direct mode: initialize returns correct serverInfo", async () => {
     jsonrpc: "2.0",
     id: 1,
     method: "initialize",
-    params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } },
+    params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } },
   });
 
   assert.equal(res.result?.serverInfo.name, "mcp-bridge");
-  assert.equal(res.result?.protocolVersion, "2024-11-05");
+  assert.equal(res.result?.protocolVersion, "2025-06-18");
 });
 
 test("direct mode: tools/list returns prefixed tools from backends", async () => {

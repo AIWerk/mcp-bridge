@@ -28,7 +28,7 @@ export async function initializeProtocol(transport: McpTransport, version: strin
     jsonrpc: "2.0",
     method: "initialize",
     params: {
-      protocolVersion: "2024-11-05",
+      protocolVersion: "2025-06-18",
       capabilities: {},
       clientInfo: {
         name: "mcp-bridge",

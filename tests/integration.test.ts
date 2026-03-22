@@ -93,7 +93,7 @@ test("integration: stdio initialize and tools/list (router mode)", async (t) => 
       id: 1,
       method: "initialize",
       params: {
-        protocolVersion: "2024-11-05",
+        protocolVersion: "2025-06-18",
         capabilities: {},
         clientInfo: { name: "test-client", version: "0.0.1" },
       },
@@ -116,7 +116,7 @@ test("integration: stdio initialize and tools/list (router mode)", async (t) => 
     assert.ok(initResponse.result, "initialize should return a result");
     assert.equal(initResponse.result!.serverInfo.name, "mcp-bridge");
     assert.ok(initResponse.result!.serverInfo.version, "version should be set");
-    assert.equal(initResponse.result!.protocolVersion, "2024-11-05");
+    assert.equal(initResponse.result!.protocolVersion, "2025-06-18");
 
     // 2. Send notifications/initialized (no response expected)
     bridge.send({

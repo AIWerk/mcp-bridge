@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.7.6] - 2026-03-22
+
+### Fixed
+- **Protocol version updated to `2025-06-18`** — MCP servers implementing newer spec versions (2025+) rejected the old `2024-11-05` protocol version with HTTP 400. Updated `initializeProtocol()` and standalone server to current MCP spec. (reported by @homkai, #1)
+
 ## [2.7.5] - 2026-03-21
 
 ### Fixed

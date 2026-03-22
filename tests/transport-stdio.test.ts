@@ -24,7 +24,7 @@ const ECHO_SERVER_SCRIPT = `
     if (req.method === "initialize") {
       process.stdout.write(JSON.stringify({
         jsonrpc: "2.0", id: req.id,
-        result: { protocolVersion: "2024-11-05", serverInfo: { name: "echo", version: "1.0" }, capabilities: { tools: {} } }
+        result: { protocolVersion: "2025-06-18", serverInfo: { name: "echo", version: "1.0" }, capabilities: { tools: {} } }
       }) + "\\n");
     } else if (req.method === "notifications/initialized") {
       // no-op, no response
@@ -69,7 +69,7 @@ test("stdio transport: connect and tools/list", async () => {
     const initRes = await transport.sendRequest({
       jsonrpc: "2.0",
       method: "initialize",
-      params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } },
+      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } },
     });
     assert.ok(initRes.result);
     assert.equal(initRes.result.serverInfo.name, "echo");
@@ -95,7 +95,7 @@ test("stdio transport: tool call round-trip", async () => {
     await transport.sendRequest({
       jsonrpc: "2.0",
       method: "initialize",
-      params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } },
+      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } },
     });
     await transport.sendNotification({ jsonrpc: "2.0", method: "notifications/initialized" });
 
@@ -142,7 +142,7 @@ test("stdio transport: process crash triggers disconnect", async () => {
       const req = JSON.parse(line);
       process.stdout.write(JSON.stringify({
         jsonrpc: "2.0", id: req.id,
-        result: { protocolVersion: "2024-11-05", serverInfo: { name: "crash", version: "1.0" }, capabilities: { tools: {} } }
+        result: { protocolVersion: "2025-06-18", serverInfo: { name: "crash", version: "1.0" }, capabilities: { tools: {} } }
       }) + "\\n");
       setTimeout(() => process.exit(1), 50);
     });
@@ -168,7 +168,7 @@ test("stdio transport: process crash triggers disconnect", async () => {
     await transport.sendRequest({
       jsonrpc: "2.0",
       method: "initialize",
-      params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } },
+      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } },
     });
 
     // Wait for process to exit
