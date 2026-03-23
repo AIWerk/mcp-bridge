@@ -500,11 +500,14 @@ POST   /admin/users/:id/limit  — override rate limits
 - [ ] VPS hardening audit (fail2ban, root login disabled, SSH key-only)
 - [ ] File permissions audit (.env chmod 600, data dir 700)
 
-### Phase 3 (Production — before paid tier)
-- [ ] **Hetzner Vault / HashiCorp Vault** — master key stored in dedicated secret manager, never touches disk; app retrieves at startup via API
-- [ ] **Key rotation** — automated 90-day master key rotation with re-encryption script for all stored secrets; old key kept in vault for 180-day grace period
-- [ ] **Database backup encryption** — SQLite backups encrypted with separate backup key before offsite transfer; backup key also stored in vault
+### Phase 3 (Production — MANDATORY before first paid customer)
+- [ ] **HashiCorp Vault on AIWerk Tools VPS** (46.224.187.173) — master key stored in Vault, never touches disk on bridge VPS; bridge retrieves key at startup via Vault API over Tailscale. Without this, a VPS root compromise exposes all user secrets.
+- [ ] **Shamir Secret Sharing for Vault unseal** — Vault's own unseal key split into 3 shares (threshold 2): UbuntuPC pass store + tools VPS + offline backup
+- [ ] **Key rotation** — automated 90-day master key rotation with re-encryption script for all stored secrets; old key kept in Vault for 180-day grace period
+- [ ] **Database backup encryption** — SQLite backups encrypted with separate backup key before offsite transfer; backup key also stored in Vault
 - [ ] **Memory protection** — encrypted swap, `mlock()` for decrypted secrets to prevent swap-to-disk leakage
+
+> ⚠️ **Gate:** No paid tier may launch until all Phase 3 items are completed and verified. This is a business requirement, not optional hardening.
 
 ---
 
