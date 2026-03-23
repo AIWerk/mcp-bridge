@@ -82,3 +82,11 @@ export type { UpdateInfo, PluginUpdateInfo } from "./update-checker.js";
 
 // Smart filter
 export { filterServers, buildFilteredDescription } from "./smart-filter.js";
+
+// Catalog client
+export { CatalogClient, getCatalogClient, resetCatalogClient, recipeToConfig } from "./catalog-client.js";
+export type { CatalogRecipe } from "./catalog-client.js";
+
+// Recipe cache
+export { RecipeCache } from "./recipe-cache.js";
+export type { CachedRecipe } from "./recipe-cache.js";
