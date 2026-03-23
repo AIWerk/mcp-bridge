@@ -483,16 +483,28 @@ POST   /admin/users/:id/limit  — override rate limits
 
 ## 12. Security Checklist
 
-- [ ] TLS everywhere (Caddy auto-cert)
-- [ ] API keys hashed at rest (SHA-256)
-- [ ] User secrets encrypted at rest (AES-256-GCM, per-user key derivation)
-- [ ] Master encryption key in env var, NOT in DB or code
-- [ ] No plaintext secrets in logs (audit logger only logs param keys)
+### Phase 1 (MVP)
+- [x] TLS everywhere (Caddy auto-cert)
+- [x] API keys hashed at rest (HMAC-SHA-256 with master key)
+- [x] User secrets encrypted at rest (AES-256-GCM, per-user HKDF key derivation)
+- [x] Master encryption key in env var, NOT in DB or code
+- [x] No plaintext secrets in logs (audit logger only logs param keys)
 - [ ] Rate limiting on all endpoints
 - [ ] IP-based brute force protection on /api/login
 - [ ] CORS restricted to known origins
 - [ ] Non-TLS remote MCP URLs rejected (no HTTP to remote hosts)
 - [ ] User data fully deleted on account deletion (GDPR)
+
+### Phase 2 (Pre-launch hardening)
+- [ ] Master key backed up in `pass` (encrypted GPG store)
+- [ ] VPS hardening audit (fail2ban, root login disabled, SSH key-only)
+- [ ] File permissions audit (.env chmod 600, data dir 700)
+
+### Phase 3 (Production — before paid tier)
+- [ ] **Hetzner Vault / HashiCorp Vault** — master key stored in dedicated secret manager, never touches disk; app retrieves at startup via API
+- [ ] **Key rotation** — automated 90-day master key rotation with re-encryption script for all stored secrets; old key kept in vault for 180-day grace period
+- [ ] **Database backup encryption** — SQLite backups encrypted with separate backup key before offsite transfer; backup key also stored in vault
+- [ ] **Memory protection** — encrypted swap, `mlock()` for decrypted secrets to prevent swap-to-disk leakage
 
 ---
 
