@@ -27,12 +27,28 @@ This spec is a **pragmatic interoperability format**, not an abstract universal 
 
 ### 1.2 Architecture
 
-The universal recipe lives in the **mcp-bridge core** and **mcp-catalog**. These packages have no knowledge of any specific client. Client-specific translation is handled by **adapter plugins** — separate packages that import recipes and output native configs.
+The **mcp-catalog** is the single source of truth for recipes. The **mcp-bridge** fetches and caches recipes locally from the catalog. Client-specific translation is handled by **adapter plugins** — separate packages that consume recipes and output native configs.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    mcp-bridge (core)                     │
-│  servers/           ← universal recipes (v2)             │
+│  awesome-mcp-recipes (GitHub)   — Layer 1                │
+│  Community intake, auto-tested (Tier 1 + 1.5)           │
+│  Open submissions, "Listed" status                       │
+└──────────────────────────┬──────────────────────────────┘
+                           │ curation
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  mcp-catalog (catalog.aiwerk.ch) — Layer 2               │
+│  Curated, signed, verified recipes                       │
+│  Single source of truth                                  │
+│  Exposes: catalog.search / catalog.info / catalog.download│
+└──────────────────────────┬──────────────────────────────┘
+                           │ fetch + cache
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                    mcp-bridge (core) — Layer 3            │
+│  Local recipe cache (fetched from catalog)               │
+│  Bootstrap: top 15 popular recipes on first run          │
 │  src/               ← bridge runtime (connect, route)    │
 │  docs/              ← this spec                          │
 │                                                          │
@@ -50,16 +66,13 @@ The universal recipe lives in the **mcp-bridge core** and **mcp-catalog**. These
               │            │            │
        openclaw.json  claude_desktop  .cursor/
                        _config.json   mcp.json
-
-┌─────────────────────────────────────────────────────────┐
-│                   mcp-catalog (hosted)                    │
-│  Uses the same universal recipe format                   │
-│  Exposes: catalog.search / catalog.info / catalog.download│
-│  catalog.download returns raw recipe for local install    │
-└─────────────────────────────────────────────────────────┘
 ```
 
-**Key principle:** The bridge core and catalog are the source of truth for recipes. They never generate client-specific output. Adapters are separate packages/plugins that consume recipes and handle all client-specific concerns (config format, env resolution, lifecycle).
+**Key principles:**
+- The **catalog** is the source of truth for recipes. Recipes are curated, tested (Tier 1–3), and signed.
+- The **bridge** caches recipes locally for offline operation. It does not ship bundled recipes — it fetches them from the catalog.
+- **Adapters** consume recipes and handle all client-specific concerns (config format, env resolution, lifecycle).
+- The **awesome-mcp-recipes** repo is the community intake funnel where anyone can submit recipes.
 
 ## 2. Recipe Schema
 
@@ -1230,14 +1243,14 @@ A standalone spec for OAuth2 credential bootstrap, token storage, and refresh ac
 
 **Problem:** Users must manually add server entries to their bridge config even when a recipe exists and the required env vars are already set. This is unnecessary friction.
 
-**Solution:** The bridge scans the `servers/` directory at startup (and on `refresh`) and automatically registers servers whose required credentials are available — no config entry needed.
+**Solution:** The bridge scans its **local recipe cache** (populated from the catalog) at startup (and on `refresh`) and automatically registers servers whose required credentials are available — no config entry needed.
 
 #### 11.5.1 Discovery Flow
 
 ```
 Bridge startup / refresh
     │
-    ├── Scan servers/*/recipe.json
+    ├── Scan local cache: recipes/*/recipe.json
     │
     ├── For each recipe:
     │   ├── Read auth.envVars[]
@@ -1294,7 +1307,7 @@ Bridge startup / refresh
 {
   "autoDiscovery": {
     "enabled": true,
-    "serversDir": "servers/",
+    "recipesCacheDir": "recipes/",
     "allowList": null,
     "denyList": []
   }
@@ -1302,7 +1315,7 @@ Bridge startup / refresh
 ```
 
 - **`enabled`** (default: `true`): Toggle auto-discovery on/off.
-- **`serversDir`** (default: `"servers/"`): Path to scan for recipes. Relative to bridge install directory.
+- **`recipesCacheDir`** (default: `"recipes/"`): Path to scan for cached recipes. Relative to bridge data directory.
 - **`allowList`** (default: `null`): If set, only these server IDs are auto-discovered. `null` = allow all.
 - **`denyList`** (default: `[]`): Server IDs to exclude from auto-discovery.
 
@@ -1320,7 +1333,8 @@ For auto-discovered servers, the bridge uses the **first** transport entry in th
 
 - **Core (`mcp-bridge`)**: `autoDiscovery()` function that scans recipes + checks env vars → returns `{ ready: ServerConfig[], available: AvailableServer[] }`
 - **Adapter layer**: Each adapter can call `autoDiscovery()` and merge results with its native config format.
-- **Security**: New recipes added via `npm update` become automatically active if env vars are set. The `denyList` config provides opt-out control.
+- **Security**: New recipes added via catalog sync / bootstrap may become automatically active if env vars are set. The `denyList` config provides opt-out control.
+- **Bootstrap**: On first run, the bridge MAY prefetch the top 10–15 most popular catalog entries into the local cache for offline readiness.
 
 ## Appendix A: Full Example — Atlassian (Complex, stdio)
 
