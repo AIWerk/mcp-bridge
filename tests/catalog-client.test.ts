@@ -1,236 +1,298 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { CatalogClient, recipeToConfig, getCatalogClient, resetCatalogClient } from "../src/catalog-client.ts";
-import type { CatalogRecipe } from "../src/catalog-client.ts";
-import { RecipeCache } from "../src/recipe-cache.ts";
+import { CatalogClient, CatalogError } from "../src/catalog-client.ts";
 
-// ── recipeToConfig tests ────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-test("recipeToConfig: stdio with npm install", () => {
-  const recipe: CatalogRecipe = {
-    name: "test-server",
-    description: "A test server",
-    transports: [{ type: "stdio" }],
-    install: { npm: { package: "@example/mcp-server", version: "1.2.3" } },
-    auth: { type: "env", envVars: ["API_KEY", "SECRET"] },
+function makeTmpDir(): string {
+  return mkdtempSync(join(tmpdir(), "catalog-test-"));
+}
+
+function mockFetch(handler: (url: string, init?: any) => Promise<any>): () => void {
+  const original = globalThis.fetch;
+  globalThis.fetch = handler as any;
+  return () => {
+    globalThis.fetch = original;
   };
+}
 
-  const config = recipeToConfig(recipe);
+function seedCache(cacheDir: string, name: string, recipe: any): void {
+  const dir = join(cacheDir, name);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "recipe.json"), JSON.stringify(recipe, null, 2), "utf-8");
+}
 
-  assert.equal(config.transport, "stdio");
-  assert.equal(config.command, "npx");
-  assert.deepEqual(config.args, ["-y", "@example/mcp-server@1.2.3"]);
-  assert.equal(config.description, "A test server");
-  assert.deepEqual(config.env, { API_KEY: "${API_KEY}", SECRET: "${SECRET}" });
-});
+// ── resolve() with mocked fetch ──────────────────────────────────────────────
 
-test("recipeToConfig: stdio npm without version", () => {
-  const recipe: CatalogRecipe = {
-    name: "bare-pkg",
-    transports: [{ type: "stdio" }],
-    install: { npm: { package: "my-server" } },
-  };
-
-  const config = recipeToConfig(recipe);
-
-  assert.equal(config.command, "npx");
-  assert.deepEqual(config.args, ["-y", "my-server"]);
-  assert.equal(config.env, undefined);
-});
-
-test("recipeToConfig: streamable-http with url", () => {
-  const recipe: CatalogRecipe = {
-    name: "remote-server",
-    transports: [{ type: "streamable-http", url: "https://example.com/mcp" }],
-  };
-
-  const config = recipeToConfig(recipe);
-
-  assert.equal(config.transport, "streamable-http");
-  assert.equal(config.url, "https://example.com/mcp");
-  assert.equal(config.command, undefined);
-});
-
-test("recipeToConfig: defaults to stdio when no transports", () => {
-  const recipe: CatalogRecipe = { name: "bare" };
-
-  const config = recipeToConfig(recipe);
-
-  assert.equal(config.transport, "stdio");
-});
-
-// ── CatalogClient.download with mocked fetch ────────────────────────────────
-
-test("CatalogClient.download parses JSON response", async () => {
-  const recipe: CatalogRecipe = { name: "fetched-server", description: "Fetched" };
-  let callCount = 0;
-
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (_url: any, init: any): Promise<any> => {
-    callCount++;
-    const body = JSON.parse(init.body ?? "{}");
-
-    if (body.method === "initialize") {
+test("resolve: fetches from catalog and caches locally", async () => {
+  const cacheDir = makeTmpDir();
+  const restore = mockFetch(async (url) => {
+    if (url.includes("/api/recipes/my-server/download")) {
       return {
         ok: true,
-        headers: new Headers({ "content-type": "application/json", "mcp-session-id": "test-session" }),
-        json: async () => ({ jsonrpc: "2.0", id: body.id, result: { capabilities: {} } }),
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ name: "my-server", description: "fetched" }),
       };
     }
+    return { ok: false, status: 404, headers: new Headers(), text: async () => "not found" };
+  });
 
-    if (body.method === "notifications/initialized") {
-      return { ok: true, headers: new Headers(), json: async () => ({}) };
-    }
+  try {
+    const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
+    const result = await client.resolve("my-server");
 
-    if (body.method === "tools/call") {
+    assert.equal(result.name, "my-server");
+    assert.equal(result.description, "fetched");
+    // Verify it was cached
+    assert.ok(existsSync(join(cacheDir, "my-server", "recipe.json")));
+  } finally {
+    restore();
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("resolve: returns cached recipe without fetching when cache is present", async () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "cached-srv", { name: "cached-srv", description: "from cache" });
+
+  const restore = mockFetch(async (url) => {
+    if (url.includes("/api/recipes/cached-srv/download")) {
       return {
         ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ name: "cached-srv", description: "fresh" }),
+      };
+    }
+    return { ok: false, status: 500, headers: new Headers(), text: async () => "error" };
+  });
+
+  try {
+    const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
+    const result = await client.resolve("cached-srv");
+    // Should return fresh version since catalog is reachable
+    assert.equal(result.name, "cached-srv");
+    assert.equal(result.description, "fresh");
+  } finally {
+    restore();
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+// ── getCached / listCached with tmp dir ──────────────────────────────────────
+
+test("getCached: returns null for missing recipe", () => {
+  const cacheDir = makeTmpDir();
+  try {
+    const client = new CatalogClient({ cacheDir });
+    assert.equal(client.getCached("nonexistent"), null);
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("getCached: returns cached recipe", () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "alpha", { name: "alpha", description: "cached" });
+
+  try {
+    const client = new CatalogClient({ cacheDir });
+    const result = client.getCached("alpha");
+    assert.ok(result);
+    assert.equal(result.name, "alpha");
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("listCached: returns array of cached recipe names", () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "alpha", { name: "alpha" });
+  seedCache(cacheDir, "beta", { name: "beta" });
+
+  try {
+    const client = new CatalogClient({ cacheDir });
+    const names = client.listCached().sort();
+    assert.deepEqual(names, ["alpha", "beta"]);
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("listCached: returns empty array when cache dir does not exist", () => {
+  const client = new CatalogClient({ cacheDir: "/tmp/nonexistent-catalog-" + Date.now() });
+  assert.deepEqual(client.listCached(), []);
+});
+
+// ── Offline fallback ─────────────────────────────────────────────────────────
+
+test("resolve: falls back to cache when catalog is unreachable", async () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "offline-srv", { name: "offline-srv", description: "cached" });
+
+  const restore = mockFetch(async () => {
+    throw new Error("Network error: ECONNREFUSED");
+  });
+
+  try {
+    const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
+    const result = await client.resolve("offline-srv");
+
+    assert.equal(result.name, "offline-srv");
+    assert.equal(result.description, "cached");
+  } finally {
+    restore();
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("resolve: throws CatalogError when catalog unreachable and no cache", async () => {
+  const cacheDir = makeTmpDir();
+
+  const restore = mockFetch(async () => {
+    throw new Error("Network error: ECONNREFUSED");
+  });
+
+  try {
+    const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
+    await assert.rejects(
+      () => client.resolve("missing-srv"),
+      (err: any) => {
+        assert.ok(err instanceof CatalogError);
+        assert.match(err.message, /Cannot resolve recipe "missing-srv"/);
+        return true;
+      },
+    );
+  } finally {
+    restore();
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("resolve: throws CatalogError on 404 even with cache", async () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "gone-srv", { name: "gone-srv" });
+
+  const restore = mockFetch(async (url) => {
+    if (url.includes("/api/recipes/gone-srv/download")) {
+      return {
+        ok: false,
+        status: 404,
+        headers: new Headers(),
+        text: async () => "not found",
+      };
+    }
+    return { ok: false, status: 500, headers: new Headers(), text: async () => "" };
+  });
+
+  try {
+    const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
+    await assert.rejects(
+      () => client.resolve("gone-srv"),
+      (err: any) => {
+        assert.ok(err instanceof CatalogError);
+        assert.match(err.message, /Recipe not found/);
+        return true;
+      },
+    );
+  } finally {
+    restore();
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+// ── bootstrap ────────────────────────────────────────────────────────────────
+
+test("bootstrap: downloads top recipes and returns names", async () => {
+  const cacheDir = makeTmpDir();
+
+  const restore = mockFetch(async (url) => {
+    if (url.includes("/api/recipes?")) {
+      return {
+        ok: true,
+        status: 200,
         headers: new Headers({ "content-type": "application/json" }),
         json: async () => ({
-          jsonrpc: "2.0",
-          id: body.id,
-          result: { content: [{ type: "text", text: JSON.stringify(recipe) }] },
+          results: [
+            { name: "srv-a", description: "A" },
+            { name: "srv-b", description: "B" },
+            { name: "srv-c", description: "C" },
+          ],
+          total: 3,
         }),
       };
     }
-
-    return { ok: true, headers: new Headers(), json: async () => ({}) };
-  };
-
-  try {
-    const client = new CatalogClient("https://mock-catalog/mcp");
-    const result = await client.download("fetched-server");
-
-    assert.equal(result.name, "fetched-server");
-    assert.equal(result.description, "Fetched");
-    assert.ok(callCount >= 2, "should have made at least 2 fetch calls (init + tool call)");
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("CatalogClient.download handles SSE response", async () => {
-  const recipe: CatalogRecipe = { name: "sse-server" };
-
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (_url: any, init: any): Promise<any> => {
-    const body = JSON.parse(init.body ?? "{}");
-
-    if (body.method === "initialize") {
+    if (url.includes("/download")) {
+      const name = url.split("/api/recipes/")[1].split("/download")[0];
       return {
         ok: true,
-        headers: new Headers({ "content-type": "application/json", "mcp-session-id": "s1" }),
-        json: async () => ({ jsonrpc: "2.0", id: body.id, result: { capabilities: {} } }),
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ name, description: `recipe ${name}` }),
       };
     }
+    return { ok: false, status: 404, headers: new Headers(), text: async () => "not found" };
+  });
 
-    if (body.method === "notifications/initialized") {
-      return { ok: true, headers: new Headers(), json: async () => ({}) };
-    }
+  try {
+    const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
+    const names = await client.bootstrap(3);
 
-    if (body.method === "tools/call") {
-      const rpcResponse = {
-        jsonrpc: "2.0",
-        id: body.id,
-        result: { content: [{ type: "text", text: JSON.stringify(recipe) }] },
-      };
+    assert.deepEqual(names.sort(), ["srv-a", "srv-b", "srv-c"]);
+    // Verify all were cached
+    assert.ok(existsSync(join(cacheDir, "srv-a", "recipe.json")));
+    assert.ok(existsSync(join(cacheDir, "srv-b", "recipe.json")));
+    assert.ok(existsSync(join(cacheDir, "srv-c", "recipe.json")));
+  } finally {
+    restore();
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("bootstrap: skips already-cached fresh recipes", async () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "srv-a", { name: "srv-a", description: "already cached" });
+
+  let downloadCalls = 0;
+  const restore = mockFetch(async (url) => {
+    if (url.includes("/api/recipes?")) {
       return {
         ok: true,
-        headers: new Headers({ "content-type": "text/event-stream" }),
-        text: async () => `event: message\ndata: ${JSON.stringify(rpcResponse)}\n\n`,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({
+          results: [{ name: "srv-a" }, { name: "srv-b" }],
+          total: 2,
+        }),
       };
     }
-
-    return { ok: true, headers: new Headers(), json: async () => ({}) };
-  };
+    if (url.includes("/download")) {
+      downloadCalls++;
+      const name = url.split("/api/recipes/")[1].split("/download")[0];
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ name }),
+      };
+    }
+    return { ok: false, status: 404, headers: new Headers(), text: async () => "" };
+  });
 
   try {
-    const client = new CatalogClient("https://mock-catalog/mcp");
-    const result = await client.download("sse-server");
-    assert.equal(result.name, "sse-server");
+    const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
+    const names = await client.bootstrap(2);
+
+    assert.deepEqual(names.sort(), ["srv-a", "srv-b"]);
+    // Only srv-b should have been downloaded (srv-a was fresh in cache)
+    assert.equal(downloadCalls, 1);
   } finally {
-    globalThis.fetch = originalFetch;
+    restore();
+    rmSync(cacheDir, { recursive: true, force: true });
   }
-});
-
-// ── Singleton helpers ───────────────────────────────────────────────────────
-
-test("getCatalogClient returns singleton, resetCatalogClient clears it", () => {
-  resetCatalogClient();
-  const a = getCatalogClient();
-  const b = getCatalogClient();
-  assert.equal(a, b);
-
-  resetCatalogClient();
-  const c = getCatalogClient();
-  assert.notEqual(a, c);
-});
-
-// ── RecipeCache tests ───────────────────────────────────────────────────────
-
-test("RecipeCache: put and get", () => {
-  const dir = mkdtempSync(join(tmpdir(), "recipe-cache-"));
-  try {
-    const cache = new RecipeCache(dir);
-    const recipe: CatalogRecipe = { name: "test-server", description: "desc" };
-
-    cache.put("test-server", recipe, "v1");
-    const cached = cache.get("test-server");
-
-    assert.ok(cached);
-    assert.equal(cached.recipe.name, "test-server");
-    assert.equal(cached.catalogVersion, "v1");
-    assert.ok(cached.downloadedAt);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("RecipeCache: has returns false for missing", () => {
-  const dir = mkdtempSync(join(tmpdir(), "recipe-cache-"));
-  try {
-    const cache = new RecipeCache(dir);
-    assert.equal(cache.has("nonexistent"), false);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("RecipeCache: list returns cached names", () => {
-  const dir = mkdtempSync(join(tmpdir(), "recipe-cache-"));
-  try {
-    const cache = new RecipeCache(dir);
-    cache.put("alpha", { name: "alpha" });
-    cache.put("beta", { name: "beta" });
-
-    const names = cache.list().sort();
-    assert.deepEqual(names, ["alpha", "beta"]);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("RecipeCache: clear removes all entries", () => {
-  const dir = mkdtempSync(join(tmpdir(), "recipe-cache-"));
-  try {
-    const cache = new RecipeCache(dir);
-    cache.put("x", { name: "x" });
-    assert.ok(cache.has("x"));
-
-    cache.clear();
-    assert.equal(cache.has("x"), false);
-    assert.deepEqual(cache.list(), []);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("RecipeCache: get returns undefined for missing cache dir", () => {
-  const cache = new RecipeCache("/tmp/nonexistent-recipe-cache-" + Date.now());
-  assert.equal(cache.get("foo"), undefined);
-  assert.deepEqual(cache.list(), []);
 });
