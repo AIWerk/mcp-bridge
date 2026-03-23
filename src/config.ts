@@ -1,9 +1,10 @@
-import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync } from "fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, readdirSync } from "fs";
 import { join, extname } from "path";
 import { homedir } from "os";
-import { BridgeConfig, Logger } from "./types.js";
+import { BridgeConfig, Logger, McpServerConfig } from "./types.js";
 import { resolveEnvVars } from "./transport-base.js";
 import { randomBytes } from "crypto";
+import { CatalogClient } from "./catalog-client.js";
 
 const DEFAULT_CONFIG_DIR = join(homedir(), ".mcp-bridge");
 const DEFAULT_CONFIG_FILE = "config.json";
@@ -227,4 +228,166 @@ export function initConfigDir(logger: Logger): void {
   }
 
   logger.info(`Config directory ready: ${dir}`);
+}
+
+// ── Catalog bootstrap ─────────────────────────────────────────────────────────
+
+const noopLogger: Logger = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+};
+
+/**
+ * Bootstrap the local recipe cache from the catalog.
+ * Downloads top N popular recipes if cache is empty or force=true.
+ * Returns array of recipe names now cached. Never throws on network errors.
+ */
+export async function bootstrapCatalog(options?: {
+  logger?: Logger;
+  cacheDir?: string;
+  catalogUrl?: string;
+  limit?: number;
+  force?: boolean;
+}): Promise<string[]> {
+  const logger = options?.logger ?? noopLogger;
+  const cacheDir = options?.cacheDir ?? join(homedir(), ".mcp-bridge", "recipes");
+  const client = new CatalogClient({
+    baseUrl: options?.catalogUrl,
+    cacheDir,
+    logger,
+  });
+
+  // Check if cache already has recipes
+  if (!options?.force) {
+    const cached = client.listCached();
+    if (cached.length > 0) {
+      logger.debug(`Recipe cache already has ${cached.length} recipes, skipping bootstrap`);
+      return cached;
+    }
+  }
+
+  try {
+    return await client.bootstrap(options?.limit ?? 15);
+  } catch (err) {
+    logger.warn(
+      `Catalog unreachable during bootstrap: ${err instanceof Error ? err.message : err}`,
+    );
+    return [];
+  }
+}
+
+/**
+ * Merge cached catalog recipes into a BridgeConfig.
+ * Only adds recipes whose required env vars are all present in process.env.
+ * Never overwrites manually configured servers.
+ */
+export function mergeRecipesIntoConfig(
+  config: BridgeConfig,
+  options?: { cacheDir?: string; logger?: Logger },
+): BridgeConfig {
+  const logger = options?.logger ?? noopLogger;
+  const cacheDir = options?.cacheDir ?? join(homedir(), ".mcp-bridge", "recipes");
+  const client = new CatalogClient({ cacheDir, logger });
+
+  const names = client.listCached();
+  if (names.length === 0) return config;
+
+  const servers = { ...config.servers };
+
+  for (const name of names) {
+    // Never overwrite manually configured servers
+    if (servers[name]) continue;
+
+    const recipe = client.getCached(name);
+    if (!recipe) continue;
+
+    const converted = recipeToServerConfig(recipe);
+    if (!converted) {
+      logger.debug(`Skipping recipe "${name}": unsupported format`);
+      continue;
+    }
+
+    // Check that all required env vars are available
+    const requiredVars = collectRequiredEnvVars(recipe);
+    const missing = requiredVars.filter((v) => !process.env[v]);
+    if (missing.length > 0) {
+      logger.debug(`Skipping recipe "${name}": missing env vars: ${missing.join(", ")}`);
+      continue;
+    }
+
+    servers[name] = converted;
+    logger.debug(`Added catalog recipe "${name}" to config`);
+  }
+
+  return { ...config, servers };
+}
+
+/** Convert a catalog recipe JSON to McpServerConfig, or null if unsupported. */
+function recipeToServerConfig(recipe: any): McpServerConfig | null {
+  // v2 recipe: has transports array
+  if (Array.isArray(recipe.transports) && recipe.transports.length > 0) {
+    const t = recipe.transports[0];
+    if (t.type === "stdio") {
+      return {
+        transport: "stdio",
+        command: t.command,
+        args: t.args,
+        env: t.env,
+      };
+    }
+    if (t.type === "sse" || t.type === "streamable-http") {
+      return {
+        transport: t.type,
+        url: t.url,
+        headers: t.headers,
+      };
+    }
+    return null;
+  }
+
+  // v1 recipe: has transport string
+  if (recipe.transport === "stdio") {
+    return {
+      transport: "stdio",
+      command: recipe.command,
+      args: recipe.args,
+      env: recipe.env,
+    };
+  }
+  if (recipe.transport === "sse" || recipe.transport === "streamable-http") {
+    return {
+      transport: recipe.transport,
+      url: recipe.url,
+      headers: recipe.headers,
+    };
+  }
+
+  return null;
+}
+
+/** Collect all env var names required by a recipe. */
+function collectRequiredEnvVars(recipe: any): string[] {
+  const vars = new Set<string>();
+
+  // From auth.envVars
+  if (Array.isArray(recipe.auth?.envVars)) {
+    for (const v of recipe.auth.envVars) vars.add(v);
+  }
+
+  // From env object: extract ${VAR} references
+  const envObj = Array.isArray(recipe.transports)
+    ? recipe.transports[0]?.env
+    : recipe.env;
+  if (envObj && typeof envObj === "object") {
+    for (const val of Object.values(envObj)) {
+      if (typeof val === "string") {
+        const matches = val.matchAll(/\$\{([^}]+)\}/g);
+        for (const m of matches) vars.add(m[1]);
+      }
+    }
+  }
+
+  return [...vars];
 }

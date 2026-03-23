@@ -48,7 +48,7 @@ export { convertJsonSchemaToTypeBox, createToolParameters, setTypeBoxLoader, set
 export { initializeProtocol, fetchToolsList, PACKAGE_VERSION } from "./protocol.js";
 
 // Config
-export { loadConfig, parseEnvFile, initConfigDir, getConfigDir } from "./config.js";
+export { loadConfig, parseEnvFile, initConfigDir, getConfigDir, bootstrapCatalog, mergeRecipesIntoConfig } from "./config.js";
 
 // Types
 export type {
