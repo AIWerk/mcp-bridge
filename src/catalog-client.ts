@@ -24,13 +24,27 @@ export interface CatalogSearchResult {
 export interface CatalogRecipe {
   name: string;
   description?: string;
-  transports?: Array<{ type: string; url?: string }>;
+  transport?: "stdio" | "sse" | "streamable-http";
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+  transports?: Array<{
+    type: "stdio" | "sse" | "streamable-http";
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    url?: string;
+    headers?: Record<string, string>;
+  }>;
   install?: {
     npm?: { package: string; version?: string };
     docker?: { image: string };
   };
   auth?: {
     type: string;
+    required?: boolean;
     envVars?: string[];
   };
   [key: string]: unknown;
@@ -48,7 +62,6 @@ export class CatalogError extends Error {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const TIMEOUT_MS = 5_000;
-const STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const noop: Logger = {
   info: () => {},
@@ -59,15 +72,24 @@ const noop: Logger = {
 
 // ── CatalogClient ────────────────────────────────────────────────────────────
 
+/**
+ * CatalogClient — REST client for the AIWerk MCP Catalog API.
+ *
+ * NOTE: File I/O operations (readCache, writeCache, etc.) are intentionally
+ * synchronous. This is acceptable for CLI tools and bridge startup, but
+ * should be converted to async if used in hot paths (e.g., per-request).
+ */
 export class CatalogClient {
   private baseUrl: string;
   private cacheDir: string;
   private logger: Logger;
+  private staleMs: number;
 
-  constructor(opts?: { baseUrl?: string; cacheDir?: string; logger?: Logger }) {
+  constructor(opts?: { baseUrl?: string; cacheDir?: string; logger?: Logger; staleDays?: number }) {
     this.baseUrl = (opts?.baseUrl ?? "https://catalog.aiwerk.ch").replace(/\/+$/, "");
     this.cacheDir = opts?.cacheDir ?? join(homedir(), ".mcp-bridge", "recipes");
     this.logger = opts?.logger ?? noop;
+    this.staleMs = (opts?.staleDays ?? 7) * 24 * 60 * 60 * 1000;
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────
@@ -97,17 +119,17 @@ export class CatalogClient {
     return join(this.cacheDir, name, "recipe.json");
   }
 
-  private readCache(name: string): any | null {
+  private readCache(name: string): CatalogRecipe | null {
     const p = this.cachePath(name);
     if (!existsSync(p)) return null;
     try {
-      return JSON.parse(readFileSync(p, "utf-8"));
+      return JSON.parse(readFileSync(p, "utf-8")) as CatalogRecipe;
     } catch {
       return null;
     }
   }
 
-  private writeCache(name: string, data: any): void {
+  private writeCache(name: string, data: CatalogRecipe): void {
     const dir = join(this.cacheDir, name);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(this.cachePath(name), JSON.stringify(data, null, 2), "utf-8");
@@ -118,7 +140,7 @@ export class CatalogClient {
     if (!existsSync(p)) return true;
     try {
       const stat = statSync(p);
-      return Date.now() - stat.mtimeMs > STALE_MS;
+      return Date.now() - stat.mtimeMs > this.staleMs;
     } catch {
       return true;
     }
@@ -147,8 +169,8 @@ export class CatalogClient {
   }
 
   /** Download a recipe from the catalog and cache it locally. */
-  async download(name: string): Promise<any> {
-    const recipe = await this.fetchJson<any>(`/api/recipes/${encodeURIComponent(name)}/download`);
+  async download(name: string): Promise<CatalogRecipe> {
+    const recipe = await this.fetchJson<CatalogRecipe>(`/api/recipes/${encodeURIComponent(name)}/download`);
     this.writeCache(name, recipe);
     return recipe;
   }
@@ -157,17 +179,17 @@ export class CatalogClient {
    * Resolve a recipe — returns cached if available, otherwise fetches from catalog.
    * Falls back to cache when the catalog is unreachable (offline mode).
    */
-  async resolve(name: string): Promise<any> {
+  async resolve(name: string): Promise<CatalogRecipe> {
     const cached = this.readCache(name);
+    if (cached && !this.isCacheStale(name)) return cached;
     try {
-      const recipe = await this.fetchJson<any>(`/api/recipes/${encodeURIComponent(name)}/download`);
+      const recipe = await this.fetchJson<CatalogRecipe>(`/api/recipes/${encodeURIComponent(name)}/download`);
       this.writeCache(name, recipe);
       return recipe;
     } catch (err) {
       if (err instanceof CatalogError && err.message.startsWith("Recipe not found:")) {
         throw err;
       }
-      // Network or other transient error — fall back to cache
       if (cached) {
         this.logger.warn(`Catalog unreachable for "${name}", using cached version`);
         return cached;
@@ -178,11 +200,12 @@ export class CatalogClient {
 
   /**
    * Bootstrap by downloading the top N most popular recipes.
-   * Skips already-cached recipes unless they are older than 7 days.
+   * Skips already-cached recipes unless they are stale.
    */
   async bootstrap(limit = 15): Promise<string[]> {
     const { results } = await this.list({ limit, sort: "popular" });
     const names: string[] = [];
+    const toDownload: string[] = [];
 
     for (const entry of results) {
       const name = entry.name;
@@ -190,11 +213,25 @@ export class CatalogClient {
         names.push(name);
         continue;
       }
-      try {
-        await this.download(name);
-        names.push(name);
-      } catch (err) {
-        this.logger.warn(`Failed to download recipe "${name}":`, err);
+
+      toDownload.push(name);
+    }
+
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < toDownload.length; i += BATCH_SIZE) {
+      const batch = toDownload.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (name) => {
+          await this.download(name);
+          return name;
+        }),
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled") {
+          names.push(r.value);
+        } else {
+          this.logger.warn(`Failed to download recipe: ${r.reason}`);
+        }
       }
     }
 
@@ -202,7 +239,7 @@ export class CatalogClient {
   }
 
   /** Synchronously read a recipe from local cache. Returns null if not cached. */
-  getCached(name: string): any | null {
+  getCached(name: string): CatalogRecipe | null {
     return this.readCache(name);
   }
 

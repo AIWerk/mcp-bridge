@@ -5,6 +5,7 @@ import { BridgeConfig, Logger, McpServerConfig } from "./types.js";
 import { resolveEnvVars } from "./transport-base.js";
 import { randomBytes } from "crypto";
 import { CatalogClient } from "./catalog-client.js";
+import type { CatalogRecipe } from "./catalog-client.js";
 
 const DEFAULT_CONFIG_DIR = join(homedir(), ".mcp-bridge");
 const DEFAULT_CONFIG_FILE = "config.json";
@@ -282,6 +283,9 @@ export async function bootstrapCatalog(options?: {
  * Merge cached catalog recipes into a BridgeConfig.
  * Only adds recipes whose required env vars are all present in process.env.
  * Never overwrites manually configured servers.
+ *
+ * IMPORTANT: Must be called AFTER loadConfig() / dotenv, since env var
+ * checks rely on process.env being fully populated.
  */
 export function mergeRecipesIntoConfig(
   config: BridgeConfig,
@@ -325,13 +329,14 @@ export function mergeRecipesIntoConfig(
 }
 
 /** Convert a catalog recipe JSON to McpServerConfig, or null if unsupported. */
-function recipeToServerConfig(recipe: any): McpServerConfig | null {
+function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | null {
   // v2 recipe: has transports array
   if (Array.isArray(recipe.transports) && recipe.transports.length > 0) {
     const t = recipe.transports[0];
     if (t.type === "stdio") {
       return {
         transport: "stdio",
+        description: recipe.description,
         command: t.command,
         args: t.args,
         env: t.env,
@@ -340,6 +345,7 @@ function recipeToServerConfig(recipe: any): McpServerConfig | null {
     if (t.type === "sse" || t.type === "streamable-http") {
       return {
         transport: t.type,
+        description: recipe.description,
         url: t.url,
         headers: t.headers,
       };
@@ -351,6 +357,7 @@ function recipeToServerConfig(recipe: any): McpServerConfig | null {
   if (recipe.transport === "stdio") {
     return {
       transport: "stdio",
+      description: recipe.description,
       command: recipe.command,
       args: recipe.args,
       env: recipe.env,
@@ -359,6 +366,7 @@ function recipeToServerConfig(recipe: any): McpServerConfig | null {
   if (recipe.transport === "sse" || recipe.transport === "streamable-http") {
     return {
       transport: recipe.transport,
+      description: recipe.description,
       url: recipe.url,
       headers: recipe.headers,
     };
@@ -368,7 +376,7 @@ function recipeToServerConfig(recipe: any): McpServerConfig | null {
 }
 
 /** Collect all env var names required by a recipe. */
-function collectRequiredEnvVars(recipe: any): string[] {
+function collectRequiredEnvVars(recipe: CatalogRecipe): string[] {
   const vars = new Set<string>();
 
   // From auth.envVars
@@ -387,6 +395,12 @@ function collectRequiredEnvVars(recipe: any): string[] {
         for (const m of matches) vars.add(m[1]);
       }
     }
+  }
+
+  // If auth is explicitly required but no env vars were found,
+  // return a placeholder to prevent auto-registration without credentials
+  if (recipe.auth?.required === true && vars.size === 0) {
+    vars.add("__AUTH_REQUIRED__");
   }
 
   return [...vars];

@@ -56,28 +56,28 @@ test("resolve: fetches from catalog and caches locally", async () => {
   }
 });
 
-test("resolve: returns cached recipe without fetching when cache is present", async () => {
+test("resolve: returns cached recipe without fetching when cache is fresh", async () => {
   const cacheDir = makeTmpDir();
   seedCache(cacheDir, "cached-srv", { name: "cached-srv", description: "from cache" });
 
+  let fetchCalled = false;
   const restore = mockFetch(async (url) => {
-    if (url.includes("/api/recipes/cached-srv/download")) {
-      return {
-        ok: true,
-        status: 200,
-        headers: new Headers({ "content-type": "application/json" }),
-        json: async () => ({ name: "cached-srv", description: "fresh" }),
-      };
-    }
-    return { ok: false, status: 500, headers: new Headers(), text: async () => "error" };
+    fetchCalled = true;
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({ name: "cached-srv", description: "fresh" }),
+    };
   });
 
   try {
     const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
     const result = await client.resolve("cached-srv");
-    // Should return fresh version since catalog is reachable
+    // Cache-first: should return cached version without fetching
     assert.equal(result.name, "cached-srv");
-    assert.equal(result.description, "fresh");
+    assert.equal(result.description, "from cache");
+    assert.equal(fetchCalled, false, "Should not have fetched when cache is fresh");
   } finally {
     restore();
     rmSync(cacheDir, { recursive: true, force: true });
@@ -174,32 +174,22 @@ test("resolve: throws CatalogError when catalog unreachable and no cache", async
   }
 });
 
-test("resolve: throws CatalogError on 404 even with cache", async () => {
+test("resolve: returns cached recipe when cache is fresh, even if catalog would 404", async () => {
+  // Cache-first: if cache is fresh, resolve() returns it without hitting the network
   const cacheDir = makeTmpDir();
   seedCache(cacheDir, "gone-srv", { name: "gone-srv" });
 
-  const restore = mockFetch(async (url) => {
-    if (url.includes("/api/recipes/gone-srv/download")) {
-      return {
-        ok: false,
-        status: 404,
-        headers: new Headers(),
-        text: async () => "not found",
-      };
-    }
-    return { ok: false, status: 500, headers: new Headers(), text: async () => "" };
+  let fetchCalled = false;
+  const restore = mockFetch(async () => {
+    fetchCalled = true;
+    return { ok: false, status: 404, headers: new Headers(), text: async () => "not found" };
   });
 
   try {
     const client = new CatalogClient({ baseUrl: "https://mock.test", cacheDir });
-    await assert.rejects(
-      () => client.resolve("gone-srv"),
-      (err: any) => {
-        assert.ok(err instanceof CatalogError);
-        assert.match(err.message, /Recipe not found/);
-        return true;
-      },
-    );
+    const result = await client.resolve("gone-srv");
+    assert.equal(result.name, "gone-srv");
+    assert.equal(fetchCalled, false, "Should not have fetched when cache is fresh");
   } finally {
     restore();
     rmSync(cacheDir, { recursive: true, force: true });
