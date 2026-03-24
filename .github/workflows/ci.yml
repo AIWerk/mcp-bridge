@@ -23,3 +23,5 @@ jobs:
       - run: npm test
       - name: Validate recipe URLs
         run: bash scripts/validate-recipes.sh --ci
+      - name: Verify recipe signatures
+        run: node scripts/verify-signatures.mjs --ci
