@@ -87,6 +87,30 @@ npx @aiwerk/mcp-bridge validate-recipe ./recipe.json
 
 `config.json` (v1) remains supported, but `recipe.json` (v2) is the recommended format going forward.
 
+## Catalog Integration (v2.8.0+)
+
+mcp-bridge now fetches recipes from [catalog.aiwerk.ch](https://catalog.aiwerk.ch) instead of relying on bundled recipe files.
+
+### How it works
+1. **First run**: Automatically downloads the top 15 most popular recipes
+2. **On-demand**: When you install a server, it checks the catalog first
+3. **Offline**: Falls back to local cache if catalog is unreachable
+
+### API
+```typescript
+import { CatalogClient, bootstrapCatalog, mergeRecipesIntoConfig } from '@aiwerk/mcp-bridge';
+
+// Bootstrap: download top recipes
+await bootstrapCatalog();
+
+// Or use the client directly
+const client = new CatalogClient();
+const recipe = await client.resolve('todoist');
+const results = await client.search('email');
+```
+
+> **Note**: The bundled `servers/` directory is deprecated and will be removed in v3.0.0.
+
 ## Use with Cursor / Windsurf
 
 Add to your MCP config:
@@ -595,7 +619,7 @@ For production deployments with high security requirements, consider adding an e
 | ✅ | OAuth2 Device Code flow (headless) | 2.6.0 |
 | 🔜 | Auto-discovery (zero-config server registration) | planned |
 | 🔜 | Hosted bridge (bridge.aiwerk.ch) | planned |
-| 🔜 | Remote catalog integration | planned |
+| ✅ | Remote catalog integration | 2.8.0 |
 | 🔜 | OpenTelemetry / Prometheus metrics | planned |
 | 🔜 | PII redaction | planned |
 

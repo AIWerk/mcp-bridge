@@ -49,6 +49,24 @@ while [[ $# -gt 0 ]]; do
 done
 
 SERVER_DIR="$SCRIPT_DIR/../servers/$SERVER_NAME"
+
+# v2.8.0: Try catalog first, fall back to bundled servers/
+RECIPE_CACHE_DIR="$HOME/.mcp-bridge/recipes/$SERVER_NAME"
+if [[ -f "$RECIPE_CACHE_DIR/recipe.json" ]]; then
+    echo "[mcp-bridge] Using cached catalog recipe for $SERVER_NAME"
+    SERVER_DIR="$RECIPE_CACHE_DIR"
+elif command -v curl &>/dev/null; then
+    echo "[mcp-bridge] Fetching recipe from catalog..."
+    mkdir -p "$RECIPE_CACHE_DIR"
+    if curl -sf "https://catalog.aiwerk.ch/api/recipes/$SERVER_NAME/download" -o "$RECIPE_CACHE_DIR/recipe.json" 2>/dev/null; then
+        echo "[mcp-bridge] ✓ Recipe downloaded from catalog"
+        SERVER_DIR="$RECIPE_CACHE_DIR"
+    else
+        echo "[mcp-bridge] Catalog unavailable, using bundled recipe"
+        # Fall through to existing SERVER_DIR
+    fi
+fi
+
 if [[ ! -d "$SERVER_DIR" ]]; then
     echo "Error: Server '$SERVER_NAME' not found."
     usage

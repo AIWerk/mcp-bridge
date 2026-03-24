@@ -175,6 +175,21 @@ export function loadConfig(options: LoadConfigOptions = {}): BridgeConfig {
   return config;
 }
 
+/**
+ * Warn about deprecated bundled recipes.
+ * In v2.8.0, bundled servers/ recipes are deprecated in favor of catalog.
+ * They will be removed in v3.0.0.
+ */
+export function warnDeprecatedBundledRecipes(config: BridgeConfig, logger: Logger): void {
+  // Check if install-server.sh was used (it writes source: 'local' or references servers/ path)
+  // For now, just log a general deprecation notice on first run
+  const catalogClient = new CatalogClient({ logger });
+  const cached = catalogClient.listCached();
+  if (cached.length === 0) {
+    logger.info('[mcp-bridge] Tip: Run bootstrapCatalog() to fetch recipes from catalog.aiwerk.ch (replaces bundled servers/)');
+  }
+}
+
 /** Get the default config directory path. */
 export function getConfigDir(configPath?: string): string {
   if (!configPath) return DEFAULT_CONFIG_DIR;

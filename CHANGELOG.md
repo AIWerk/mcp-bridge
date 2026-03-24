@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.8.0] - 2026-03-24
+
+### Features
+- **Catalog-first recipe resolution**: install-server.sh now fetches recipes from catalog.aiwerk.ch before falling back to bundled servers/
+- **Bootstrap & auto-merge**: bootstrapCatalog() downloads top 15 recipes on first run; mergeRecipesIntoConfig() auto-discovers cached recipes
+- **CatalogClient**: New REST client for catalog API with offline cache fallback
+
+### Deprecations
+- **Bundled servers/ directory**: Will be removed in v3.0.0. Use catalog.aiwerk.ch instead. Run `bootstrapCatalog()` to populate local cache.
+
 ## [2.7.6] - 2026-03-22
 
 ### Fixed
