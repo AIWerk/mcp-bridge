@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "google-maps",
   "name": "Google Maps",
-  "description": "Google Maps integration for places search, geocoding, directions, and distance matrix via the official MCP server",
+  "description": "Google Maps integration for places search, geocoding, directions, and distance matrix via the @modelcontextprotocol MCP server",
   "repository": "https://github.com/modelcontextprotocol/servers",
   "transports": [
     {

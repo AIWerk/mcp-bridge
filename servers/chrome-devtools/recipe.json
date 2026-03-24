@@ -41,13 +41,13 @@
     "pricing": "free",
     "maturity": "stable",
     "subcategory": "monitoring",
-    "origin": "community",
+    "origin": "official",
     "countries": [
       "global"
     ],
     "audience": "developer",
     "selfHosted": true,
-    "sideEffects": "read-only",
+    "sideEffects": "read-write",
     "authSummary": "none"
   },
   "capabilities": {

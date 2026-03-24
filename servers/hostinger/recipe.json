@@ -44,7 +44,7 @@
     "pricing": "byok",
     "maturity": "stable",
     "subcategory": "cloud",
-    "origin": "community",
+    "origin": "official",
     "countries": [
       "global"
     ],

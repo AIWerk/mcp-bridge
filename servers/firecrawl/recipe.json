@@ -51,7 +51,7 @@
       "global"
     ],
     "audience": "developer",
-    "selfHosted": true,
+    "selfHosted": false,
     "sideEffects": "read-only",
     "authSummary": "api-key"
   },

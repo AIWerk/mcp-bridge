@@ -17,7 +17,7 @@
     "homepage": "https://github.com/AIWerk/mcp-server-imap",
     "license": "MIT",
     "pricing": "free",
-    "maturity": "beta",
+    "maturity": "stable",
     "subcategory": "email",
     "origin": "aiwerk",
     "countries": [
