@@ -180,9 +180,7 @@ export function loadConfig(options: LoadConfigOptions = {}): BridgeConfig {
  * In v2.8.0, bundled servers/ recipes are deprecated in favor of catalog.
  * They will be removed in v3.0.0.
  */
-export function warnDeprecatedBundledRecipes(config: BridgeConfig, logger: Logger): void {
-  // Check if install-server.sh was used (it writes source: 'local' or references servers/ path)
-  // For now, just log a general deprecation notice on first run
+export function warnDeprecatedBundledRecipes(logger: Logger): void {
   const catalogClient = new CatalogClient({ logger });
   const cached = catalogClient.listCached();
   if (cached.length === 0) {

@@ -5,7 +5,7 @@ import { join, dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
 import { platform, homedir } from "os";
 import { execFileSync } from "child_process";
-import { loadConfig, initConfigDir } from "../src/config.js";
+import { loadConfig, initConfigDir, warnDeprecatedBundledRecipes } from "../src/config.js";
 import { StandaloneServer } from "../src/standalone-server.js";
 import { PACKAGE_VERSION } from "../src/protocol.js";
 import { checkForUpdate, runUpdate } from "../src/update-checker.js";
@@ -583,6 +583,9 @@ async function cmdServe(args: CliArgs, logger: Logger): Promise<void> {
     logger.error("HTTP auth not configured. Set http.auth in config or use stdio mode.");
     process.exit(1);
   }
+
+  // Warn about deprecated bundled recipes (v2.8.0+)
+  warnDeprecatedBundledRecipes(logger);
 
   const server = new StandaloneServer(config, logger);
 
