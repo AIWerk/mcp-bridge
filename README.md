@@ -109,6 +109,34 @@ const recipe = await client.resolve('todoist');
 const results = await client.search('email');
 ```
 
+### Multiple instances of the same server
+
+Auto-discovery uses the recipe name as the config key (e.g., `gohighlevel`). If you need **multiple instances** of the same server with different credentials (e.g., two GoHighLevel subaccounts), configure them manually:
+
+```json
+// config.json or openclaw.json
+{
+  "ghl-client-a": {
+    "transport": "streamable-http",
+    "url": "https://services.leadconnectorhq.com/mcp/",
+    "headers": {
+      "Authorization": "Bearer ${GHL_TOKEN_A}",
+      "locationId": "${GHL_LOCATION_A}"
+    }
+  },
+  "ghl-client-b": {
+    "transport": "streamable-http",
+    "url": "https://services.leadconnectorhq.com/mcp/",
+    "headers": {
+      "Authorization": "Bearer ${GHL_TOKEN_B}",
+      "locationId": "${GHL_LOCATION_B}"
+    }
+  }
+}
+```
+
+Use **unique env var names** (e.g., `GHL_TOKEN_A` instead of `GHL_PIT_TOKEN`) to prevent auto-discovery from adding a duplicate third entry. Manual config always takes priority over auto-discovered recipes.
+
 > **Note**: The bundled `servers/` directory is deprecated and will be removed in v3.0.0.
 
 ## Use with Cursor / Windsurf
