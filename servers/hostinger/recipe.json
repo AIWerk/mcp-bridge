@@ -63,7 +63,7 @@
   "signature": {
     "algorithm": "ed25519",
     "publisherId": "aiwerk",
-    "value": "Btxn49bVCENtq5hgKDhSvYjU8KtbcxFKIAjclBfxl2W87YDFH68q2vkXzkqd1B9QHE74P0djp8KWt5hR0m7lBA==",
+    "value": "7OV7oq85Z/TQkt4GzU82cAUDul+MvWRAqVaNBXY8xjRRsOwBkGTQcWxFo+8ZYbmEH+D8C0wRoragBxSonhXPBQ==",
     "signedFields": [
       "id",
       "name",
@@ -73,6 +73,6 @@
       "install",
       "metadata"
     ],
-    "signedAt": "2026-03-20T14:25:53.457Z"
+    "signedAt": "2026-03-24T18:34:37.697Z"
   }
 }
