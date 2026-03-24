@@ -29,7 +29,7 @@
     },
     "atlassian": {
       "name": "Atlassian (Confluence + Jira)",
-      "description": "Confluence wiki and Jira project management — search, create, and update pages and issues",
+      "description": "Confluence wiki and Jira project management \u2014 search, create, and update pages and issues",
       "category": "productivity",
       "subcategory": "project-management",
       "origin": "community",
@@ -79,7 +79,7 @@
     },
     "github": {
       "name": "GitHub",
-      "description": "GitHub repository management — repos, issues, PRs, code search, and more via the official GitHub MCP server",
+      "description": "GitHub repository management \u2014 repos, issues, PRs, code search, and more via the official GitHub MCP server",
       "category": "development",
       "subcategory": "version-control",
       "origin": "official",
@@ -107,7 +107,7 @@
       "description": "Google Maps integration for places search, geocoding, directions, and distance matrix via the official MCP server",
       "category": "data",
       "subcategory": "search-engine",
-      "origin": "official",
+      "origin": "community",
       "countries": [
         "global"
       ],
@@ -129,7 +129,7 @@
     },
     "hetzner": {
       "name": "Hetzner Cloud",
-      "description": "Manage Hetzner Cloud infrastructure — servers, networks, load balancers, volumes, firewalls, and more via the Hetzner Cloud API",
+      "description": "Manage Hetzner Cloud infrastructure \u2014 servers, networks, load balancers, volumes, firewalls, and more via the Hetzner Cloud API",
       "category": "infrastructure",
       "subcategory": "cloud",
       "origin": "community",
@@ -154,7 +154,7 @@
     },
     "hostinger": {
       "name": "Hostinger",
-      "description": "Web hosting management via Hostinger API — manage domains, hosting plans, email accounts, and website settings",
+      "description": "Web hosting management via Hostinger API \u2014 manage domains, hosting plans, email accounts, and website settings",
       "category": "infrastructure",
       "subcategory": "cloud",
       "origin": "community",
@@ -203,10 +203,10 @@
     },
     "linear": {
       "name": "Linear",
-      "description": "Linear project management — create, update, and search issues, projects, and teams via the Linear API",
+      "description": "Linear project management \u2014 create, update, and search issues, projects, and teams via the Linear API",
       "category": "productivity",
       "subcategory": "project-management",
-      "origin": "official",
+      "origin": "community",
       "countries": [
         "global"
       ],
@@ -228,7 +228,7 @@
     },
     "miro": {
       "name": "Miro",
-      "description": "Collaborative whiteboard — create and manipulate Miro boards, sticky notes, cards, connectors, and shapes via the Miro API",
+      "description": "Collaborative whiteboard \u2014 create and manipulate Miro boards, sticky notes, cards, connectors, and shapes via the Miro API",
       "category": "productivity",
       "subcategory": "whiteboard",
       "origin": "community",
@@ -253,7 +253,7 @@
     },
     "notion": {
       "name": "Notion",
-      "description": "Notion workspace integration — read, create, and update pages, databases, blocks, and comments via the official Notion MCP server",
+      "description": "Notion workspace integration \u2014 read, create, and update pages, databases, blocks, and comments via the official Notion MCP server",
       "category": "productivity",
       "subcategory": "notes",
       "origin": "official",
@@ -278,7 +278,7 @@
     },
     "stripe": {
       "name": "Stripe",
-      "description": "Stripe payments and billing — manage customers, subscriptions, payment intents, invoices, and more via the official Stripe MCP server",
+      "description": "Stripe payments and billing \u2014 manage customers, subscriptions, payment intents, invoices, and more via the official Stripe MCP server",
       "category": "finance",
       "subcategory": "payments",
       "origin": "official",
@@ -303,7 +303,7 @@
     },
     "tavily": {
       "name": "Tavily",
-      "description": "AI-optimized web search — retrieve accurate, real-time search results and extract content from URLs tailored for AI agents",
+      "description": "AI-optimized web search \u2014 retrieve accurate, real-time search results and extract content from URLs tailored for AI agents",
       "category": "search",
       "subcategory": "ai-search",
       "origin": "official",
@@ -328,7 +328,7 @@
     },
     "todoist": {
       "name": "Todoist",
-      "description": "Task management with natural language — create, update, complete, and search tasks and projects in Todoist",
+      "description": "Task management with natural language \u2014 create, update, complete, and search tasks and projects in Todoist",
       "category": "productivity",
       "subcategory": "task-management",
       "origin": "official",
@@ -375,6 +375,32 @@
       "maturity": "stable",
       "toolCount": null,
       "authSummary": "none"
+    },
+    "firecrawl": {
+      "name": "Firecrawl",
+      "description": "Web scraping, crawling, search, and structured data extraction \u2014 turn any website into clean markdown or structured data for AI agents",
+      "category": "data",
+      "subcategory": "web-scraping",
+      "origin": "official",
+      "countries": [
+        "global"
+      ],
+      "tags": [
+        "scraping",
+        "crawling",
+        "web",
+        "extraction",
+        "search",
+        "markdown"
+      ],
+      "authType": "api-key",
+      "transports": [
+        "stdio"
+      ],
+      "installMethod": "npx",
+      "maturity": "stable",
+      "toolCount": null,
+      "authSummary": "api-key"
     }
   }
 }
