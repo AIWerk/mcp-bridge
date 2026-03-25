@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.1] - 2026-03-25
+
+### Features
+- **§2.9 Verification spec** — new spec section for Tier Testing (tier1/tier2 verification block in recipes)
+- **§2.9.3 Dependency Audit spec** — `depAudit` field for npm audit + pip-audit results
+- **Origin cross-check in validator** — warns if `origin: "official"` doesn't match npm scope/author; detects community scopes (@modelcontextprotocol)
+- **Known scope→author mappings** — handles cases like @playwright → Microsoft
+
 ## [2.8.0] - 2026-03-24
 
 ### Features
