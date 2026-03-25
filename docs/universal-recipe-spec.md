@@ -443,8 +443,24 @@ Recipes MAY include a `metadata.verification` block that records the outcome of 
 | `tier2Date` | `string` (ISO date) | Date of last successful Tier 2 test |
 | `tier2Reason` | `string` | Why Tier 2 was skipped: `"auth-required"`, `"draft"` |
 | `tier2Note` | `string` | Additional context, e.g. `"remote-reachable"` for HTTP endpoint ping |
+| `npmAudit` | `"clean"` \| `"has-advisories"` \| `"not-applicable"` \| `"skip"` | npm dependency vulnerability scan result |
+| `npmAuditDate` | `string` (ISO date) | Date of last npm audit |
+| `npmAuditNote` | `string` | Human-readable explanation, especially for `has-advisories` (e.g. "3 high in upstream dependencies — not in recipe code") |
 
-#### 2.9.3 Admission policy
+#### 2.9.3 npm Audit
+
+The catalog operator runs `npm audit` on each recipe's npm package to detect known CVEs in the dependency tree.
+
+| Value | Meaning |
+|-------|---------|
+| `"clean"` | No known vulnerabilities |
+| `"has-advisories"` | Upstream dependency CVEs exist — NOT in recipe code. `npmAuditNote` explains the issue. |
+| `"not-applicable"` | No npm package (remote-only, uvx/Python, git-only servers) |
+| `"skip"` | Dependency resolution failed or audit could not run |
+
+**Important:** `has-advisories` does NOT mean the recipe is malicious. It means the upstream MCP server package uses dependencies with known CVEs. The recipe itself is a JSON config file with no executable code. The note field MUST clarify this distinction.
+
+#### 2.9.4 Admission policy
 
 1. **Tier 1 fail** → recipe is rejected, never enters catalog
 2. **Tier 2 fail** (server crashes, protocol error, not auth-related) → recipe is rejected
