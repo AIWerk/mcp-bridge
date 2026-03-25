@@ -443,13 +443,15 @@ Recipes MAY include a `metadata.verification` block that records the outcome of 
 | `tier2Date` | `string` (ISO date) | Date of last successful Tier 2 test |
 | `tier2Reason` | `string` | Why Tier 2 was skipped: `"auth-required"`, `"draft"` |
 | `tier2Note` | `string` | Additional context, e.g. `"remote-reachable"` for HTTP endpoint ping |
-| `npmAudit` | `"clean"` \| `"has-advisories"` \| `"not-applicable"` \| `"skip"` | npm dependency vulnerability scan result |
-| `npmAuditDate` | `string` (ISO date) | Date of last npm audit |
-| `npmAuditNote` | `string` | Human-readable explanation, especially for `has-advisories` (e.g. "3 high in upstream dependencies — not in recipe code") |
+| `depAudit` | `"clean"` \| `"has-advisories"` \| `"not-applicable"` \| `"skip"` | Dependency vulnerability scan result (npm audit or pip-audit) |
+| `depAuditDate` | `string` (ISO date) | Date of last dependency audit |
+| `depAuditNote` | `string` | Human-readable explanation, especially for `has-advisories` (e.g. "3 high in upstream dependencies — not in recipe code") |
 
-#### 2.9.3 npm Audit
+#### 2.9.3 Dependency Audit
 
-The catalog operator runs `npm audit` on each recipe's npm package to detect known CVEs in the dependency tree.
+The catalog operator runs dependency vulnerability scans on each recipe's package to detect known CVEs:
+- **npm packages** → `npm audit` (GitHub Advisory Database)
+- **Python packages** → `pip-audit` (PyPI/OSV vulnerability database)
 
 | Value | Meaning |
 |-------|---------|
