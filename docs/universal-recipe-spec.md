@@ -409,6 +409,50 @@ Catalog overlay (catalog's responsibility):
 
 When the catalog serves a recipe (via `catalog.info`), it merges the overlay into the response. The raw `recipe.json` in `servers/` never contains quality or promotion fields.
 
+### 2.9 Verification — Tier Testing
+
+Recipes MAY include a `metadata.verification` block that records the outcome of the catalog operator's test pipeline. Unlike quality overlay signals (§2.8), verification results are **written by the catalog operator** (not the recipe author) and are **included in the signed recipe** to provide tamper-proof test provenance.
+
+#### 2.9.1 Tier definitions
+
+| Tier | What it tests | Gate |
+|------|--------------|------|
+| **Tier 1** | Recipe JSON schema validity + Ed25519 signature | **Required** — recipe cannot enter catalog without Tier 1 pass |
+| **Tier 2** | Server actually starts (`initialize` + `tools/list` via MCP protocol) | **Soft gate** — `skip` is acceptable when auth is required and no test credentials are available; `fail` (for non-auth reasons) means the recipe is **excluded** from the catalog |
+
+#### 2.9.2 Schema
+
+```json
+"metadata": {
+  "verification": {
+    "tier1": "pass",
+    "tier2": "pass" | "skip",
+    "tier2Tools": 22,
+    "tier2Date": "2026-03-25",
+    "tier2Reason": "auth-required",
+    "tier2Note": "remote-reachable"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tier1` | `"pass"` | Always `"pass"` — failed Tier 1 recipes are never admitted |
+| `tier2` | `"pass"` \| `"skip"` | Never `"fail"` — Tier 2 failures (non-auth) are excluded from catalog |
+| `tier2Tools` | `number` | Tool count returned by `tools/list` (only when `tier2 = "pass"`) |
+| `tier2Date` | `string` (ISO date) | Date of last successful Tier 2 test |
+| `tier2Reason` | `string` | Why Tier 2 was skipped: `"auth-required"`, `"draft"` |
+| `tier2Note` | `string` | Additional context, e.g. `"remote-reachable"` for HTTP endpoint ping |
+
+#### 2.9.3 Admission policy
+
+1. **Tier 1 fail** → recipe is rejected, never enters catalog
+2. **Tier 2 fail** (server crashes, protocol error, not auth-related) → recipe is rejected
+3. **Tier 2 skip** (auth required, no test credentials) → recipe is admitted with `"tier2": "skip"`
+4. **Tier 2 pass** (with or without auth, server responds correctly) → recipe is admitted with `"tier2": "pass"`
+
+The catalog **never contains** a recipe with `"tier2": "fail"`. If a previously passing recipe fails on re-test, it SHOULD be set to `maturity: "deprecated"` or removed.
+
 ## 3. Taxonomy
 
 ### 3.1 Categories
