@@ -313,6 +313,74 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
     warnings.push("metadata.maturity is set to 'deprecated'");
   }
 
+  // ── §2.9 Origin cross-check ────────────────────────────────────────────
+  // If origin is "official", verify that metadata.author matches the npm package scope/maintainer hint.
+  // This is a heuristic — not all packages have matching names — so it's a warning, not an error.
+  const origin = (recipe.metadata as Record<string, unknown>)?.origin as string | undefined;
+  const author = recipe.metadata?.author;
+  const installPkg = recipe.install?.package;
+
+  if (origin === "official" && typeof author === "string" && typeof installPkg === "string") {
+    // Extract npm scope (e.g., "@cloudflare/mcp-server-cloudflare" → "cloudflare")
+    const scopeMatch = installPkg.match(/^@([^/]+)\//);
+    const scope = scopeMatch ? scopeMatch[1].toLowerCase() : null;
+    const authorLower = author.toLowerCase();
+
+    if (scope) {
+      // Check if the scope relates to the author (heuristic: scope contains author or vice versa)
+      // Known mappings for official packages where scope ≠ author name
+      const knownOfficialMappings: Record<string, string[]> = {
+        "playwright": ["microsoft"],
+        "browserbasehq": ["browserbase"],
+        "anthropic-ai": ["anthropic"],
+      };
+      const knownAliases = knownOfficialMappings[scope] ?? [];
+      const scopeMatchesAuthor =
+        authorLower.includes(scope) ||
+        scope.includes(authorLower.replace(/[^a-z0-9]/g, "")) ||
+        knownAliases.some(alias => authorLower.includes(alias));
+
+      if (!scopeMatchesAuthor) {
+        // Also check common patterns: "modelcontextprotocol" scope = Anthropic community, not official
+        const communityScopes = new Set([
+          "modelcontextprotocol",
+          "anthropic-ai",
+        ]);
+        if (communityScopes.has(scope)) {
+          warnings.push(
+            `origin is "official" but package scope @${scope} is a community/ecosystem scope — verify that ${author} actually maintains this package`
+          );
+        } else {
+          warnings.push(
+            `origin is "official" but npm scope @${scope} does not obviously match author "${author}" — verify npm maintainers`
+          );
+        }
+      }
+    } else {
+      // No scope — unscoped packages are harder to verify, just note it
+      warnings.push(
+        `origin is "official" but package "${installPkg}" is unscoped — verify npm maintainers match "${author}"`
+      );
+    }
+  }
+
+  if (origin === "community" && typeof installPkg === "string") {
+    // If community but package scope matches a well-known official org, warn
+    const scopeMatch = installPkg.match(/^@([^/]+)\//);
+    if (scopeMatch) {
+      const scope = scopeMatch[1].toLowerCase();
+      const officialScopes = new Set([
+        "cloudflare", "stripe", "mongodb", "sentry", "datadog",
+        "supabase", "notion-email", "slack", "linear", "playwright",
+      ]);
+      if (officialScopes.has(scope)) {
+        warnings.push(
+          `origin is "community" but package scope @${scope} looks like an official org — verify origin`
+        );
+      }
+    }
+  }
+
   // ── Build result ───────────────────────────────────────────────────────────
   const valid = errors.length === 0;
 
