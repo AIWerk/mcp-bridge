@@ -27,8 +27,8 @@ function seedCache(cacheDir: string, name: string, recipe: any): void {
   writeFileSync(join(dir, "recipe.json"), JSON.stringify(recipe, null, 2), "utf-8");
 }
 
-function emptyConfig(): BridgeConfig {
-  return { servers: {} };
+function emptyConfig(overrides?: Partial<BridgeConfig>): BridgeConfig {
+  return { servers: {}, autoMerge: true, ...overrides };
 }
 
 // ── bootstrapCatalog ─────────────────────────────────────────────────────────
@@ -226,6 +226,7 @@ test("mergeRecipesIntoConfig: does not overwrite existing config entries", () =>
   });
 
   const config: BridgeConfig = {
+    autoMerge: true,
     servers: {
       "my-server": {
         transport: "stdio",
@@ -260,6 +261,116 @@ test("mergeRecipesIntoConfig: does not mutate original config", () => {
     assert.ok(merged.servers["new-tool"]);
     assert.equal(config.servers["new-tool"], undefined, "original config should not be mutated");
   } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+// ── autoMerge / catalog option tests ─────────────────────────────────────────
+
+test("mergeRecipesIntoConfig: returns unchanged config when autoMerge is false", () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "some-tool", {
+    name: "some-tool",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "some-tool"],
+  });
+
+  try {
+    const config: BridgeConfig = { servers: {}, autoMerge: false };
+    const merged = mergeRecipesIntoConfig(config, { cacheDir });
+    assert.equal(merged.servers["some-tool"], undefined, "should not merge when autoMerge is false");
+    assert.equal(merged, config, "should return the same config object");
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("mergeRecipesIntoConfig: returns unchanged config when autoMerge is undefined (default)", () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "some-tool", {
+    name: "some-tool",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "some-tool"],
+  });
+
+  try {
+    const config: BridgeConfig = { servers: {} };
+    const merged = mergeRecipesIntoConfig(config, { cacheDir });
+    assert.equal(merged.servers["some-tool"], undefined, "should not merge when autoMerge is undefined");
+    assert.equal(merged, config, "should return the same config object");
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("mergeRecipesIntoConfig: merges recipes when autoMerge is true", () => {
+  const cacheDir = makeTmpDir();
+  seedCache(cacheDir, "enabled-tool", {
+    name: "enabled-tool",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "enabled-tool"],
+  });
+
+  try {
+    const config: BridgeConfig = { servers: {}, autoMerge: true };
+    const merged = mergeRecipesIntoConfig(config, { cacheDir });
+    assert.ok(merged.servers["enabled-tool"], "should merge when autoMerge is true");
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("bootstrapCatalog: skips fetch when catalog is false", async () => {
+  const cacheDir = makeTmpDir();
+  let fetchCalled = false;
+  const restore = mockFetch(async () => {
+    fetchCalled = true;
+    return { ok: true, status: 200, headers: new Headers(), json: async () => ({ results: [], total: 0 }) };
+  });
+
+  try {
+    const names = await bootstrapCatalog({ cacheDir, catalog: false });
+    assert.deepEqual(names, [], "should return empty array");
+    assert.equal(fetchCalled, false, "should not call fetch when catalog is false");
+  } finally {
+    restore();
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test("bootstrapCatalog: fetches normally when catalog is true", async () => {
+  const cacheDir = makeTmpDir();
+  const restore = mockFetch(async (url) => {
+    if (url.includes("/api/recipes?")) {
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({
+          results: [{ name: "gamma", description: "G" }],
+          total: 1,
+        }),
+      };
+    }
+    if (url.includes("/download")) {
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ name: "gamma", transport: "stdio", command: "npx", args: ["-y", "gamma"] }),
+      };
+    }
+    return { ok: false, status: 404, headers: new Headers(), text: async () => "not found" };
+  });
+
+  try {
+    const names = await bootstrapCatalog({ cacheDir, catalog: true, limit: 1 });
+    assert.deepEqual(names, ["gamma"]);
+  } finally {
+    restore();
     rmSync(cacheDir, { recursive: true, force: true });
   }
 });

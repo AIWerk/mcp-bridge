@@ -276,7 +276,15 @@ export async function bootstrapCatalog(options?: {
   limit?: number;
   force?: boolean;
   requireCleanAudit?: boolean;
+  catalog?: boolean;
 }): Promise<string[]> {
+  // If catalog is explicitly disabled, skip fetching
+  if (options?.catalog === false) {
+    const logger = options?.logger ?? noopLogger;
+    logger.info("[mcp-bridge] Catalog discovery disabled (catalog: false), skipping bootstrap");
+    return [];
+  }
+
   const logger = options?.logger ?? noopLogger;
   const cacheDir = options?.cacheDir ?? join(homedir(), ".mcp-bridge", "recipes");
   const requireCleanAudit = options?.requireCleanAudit ?? false;
@@ -318,6 +326,13 @@ export function mergeRecipesIntoConfig(
   options?: { cacheDir?: string; logger?: Logger },
 ): BridgeConfig {
   const logger = options?.logger ?? noopLogger;
+
+  // autoMerge defaults to false (opt-in) — only merge when explicitly enabled
+  if (config.autoMerge !== true) {
+    logger.debug("[mcp-bridge] Auto-merge disabled (autoMerge is not true), skipping recipe merge");
+    return config;
+  }
+
   const cacheDir = options?.cacheDir ?? join(homedir(), ".mcp-bridge", "recipes");
   const client = new CatalogClient({ cacheDir, logger });
 

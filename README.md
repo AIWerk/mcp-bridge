@@ -109,6 +109,28 @@ const recipe = await client.resolve('todoist');
 const results = await client.search('email');
 ```
 
+### Catalog & Auto-Merge Options
+
+Two config options control catalog behavior:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `catalog` | `boolean` | `true` | Whether `bootstrapCatalog()` fetches recipes from the remote catalog |
+| `autoMerge` | `boolean` | `false` | Whether `mergeRecipesIntoConfig()` auto-merges cached recipes into your config |
+
+```json
+{
+  "catalog": true,
+  "autoMerge": true,
+  "servers": { ... }
+}
+```
+
+- **`autoMerge` defaults to `false`** (opt-in) — cached recipes are **not** automatically added to your server list unless you explicitly enable it. This prevents servers without required credentials from being silently activated.
+- **`catalog` defaults to `true`** — recipe discovery from [catalog.aiwerk.ch](https://catalog.aiwerk.ch) is enabled by default. Set to `false` to skip all remote fetching.
+
+> **Breaking change (v2.9.0):** Previously, all cached recipes whose env vars were present were auto-merged. Now you must set `"autoMerge": true` to restore that behavior.
+
 ### Multiple instances of the same server
 
 Auto-discovery uses the recipe name as the config key (e.g., `gohighlevel`). If you need **multiple instances** of the same server with different credentials (e.g., two GoHighLevel subaccounts), configure them manually:

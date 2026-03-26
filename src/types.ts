@@ -203,4 +203,14 @@ export interface BridgeConfig extends McpClientConfig {
      */
     requireCleanAudit?: boolean;
   };
+  /**
+   * Whether bootstrapCatalog() fetches recipes from the remote catalog.
+   * Default: true (catalog discovery is enabled).
+   */
+  catalog?: boolean;
+  /**
+   * Whether mergeRecipesIntoConfig() auto-merges cached recipes into config.
+   * Default: false (opt-in). Set to true to enable automatic recipe merging.
+   */
+  autoMerge?: boolean;
 }
