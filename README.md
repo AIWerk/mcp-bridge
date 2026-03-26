@@ -27,7 +27,7 @@ Most AI agents connect to MCP servers one-by-one. With 10+ servers, that's 10+ c
 - **Graceful shutdown**: clean process termination and connection cleanup
 - **Direct mode**: all tools registered individually with automatic prefixing
 - **3 transports**: stdio, SSE, streamable-http
-- **Built-in catalog**: 14 pre-configured servers, install with one command
+- **Built-in catalog**: 14 pre-configured servers, install with one command (bundled servers deprecated — use [MCP Catalog](https://catalog.aiwerk.ch) with 104+ recipes instead)
 - **Zero config secrets in files**: `${ENV_VAR}` resolution from `.env`
 
 ## Install

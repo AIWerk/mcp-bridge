@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.8.2] - 2026-03-26
+
+### Features
+- **security.requireCleanAudit** config option — when true, blocks servers with `depAudit: "has-advisories"` (default: false)
+- **CatalogClient hostedSafe** — passes `hostedSafe=true` query param when requireCleanAudit is enabled
+- **Verification schema warnings** in validate-recipe.ts: tier1, tier2, depAudit field validation
+
+### Fixed
+- `officialScopes` expanded with 18 new scopes (brave, hubspot, twilio-alpha, etc.)
+- `@anthropic-ai` removed from communityScopes (contradiction fix)
+- `KNOWN_CATEGORIES` expanded: +database, +crm
+
 ## [2.8.1] - 2026-03-25
 
 ### Features
