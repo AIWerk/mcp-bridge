@@ -3,9 +3,14 @@
 ## [2.8.2] - 2026-03-26
 
 ### Features
+- **`catalog` config option** (default: `true`) — controls whether recipes are fetched from catalog.aiwerk.ch
+- **`autoMerge` config option** (default: `false`) — controls whether cached catalog recipes are auto-merged into config.servers (GitHub #4)
 - **security.requireCleanAudit** config option — when true, blocks servers with `depAudit: "has-advisories"` (default: false)
 - **CatalogClient hostedSafe** — passes `hostedSafe=true` query param when requireCleanAudit is enabled
 - **Verification schema warnings** in validate-recipe.ts: tier1, tier2, depAudit field validation
+
+### Changed
+- **Breaking:** `autoMerge` now defaults to `false` (was implicitly `true` in v2.8.0). Users who want auto-discovery must explicitly set `autoMerge: true`
 
 ### Fixed
 - `officialScopes` expanded with 18 new scopes (brave, hubspot, twilio-alpha, etc.)
