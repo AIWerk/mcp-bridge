@@ -8,6 +8,8 @@ const KNOWN_CATEGORIES = new Set([
   "development",
   "communication",
   "data",
+  "database",
+  "crm",
   "finance",
   "infrastructure",
   "analytics",
@@ -333,6 +335,12 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
         "playwright": ["microsoft"],
         "browserbasehq": ["browserbase"],
         "anthropic-ai": ["anthropic"],
+        "twilio-alpha": ["twilio"],
+        "perplexity-ai": ["perplexity"],
+        "pinecone-database": ["pinecone"],
+        "neondatabase": ["neon"],
+        "doist": ["todoist"],
+        "webflow-bot": ["webflow"],
       };
       const knownAliases = knownOfficialMappings[scope] ?? [];
       const scopeMatchesAuthor =
@@ -344,7 +352,6 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
         // Also check common patterns: "modelcontextprotocol" scope = Anthropic community, not official
         const communityScopes = new Set([
           "modelcontextprotocol",
-          "anthropic-ai",
         ]);
         if (communityScopes.has(scope)) {
           warnings.push(
@@ -372,6 +379,10 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
       const officialScopes = new Set([
         "cloudflare", "stripe", "mongodb", "sentry", "datadog",
         "supabase", "notion-email", "slack", "linear", "playwright",
+        "brave", "hubspot", "twilio-alpha", "perplexity-ai", "upstash",
+        "pinecone-database", "grafana", "e2b", "browserbasehq", "brightdata",
+        "letta-ai", "sanity", "contentful", "neondatabase",
+        "shortcut", "webflow-bot", "doist", "replicate",
       ]);
       if (officialScopes.has(scope)) {
         warnings.push(
