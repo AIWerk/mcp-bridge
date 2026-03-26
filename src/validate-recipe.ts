@@ -259,6 +259,33 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
 
   // ── §7.2 Warnings ──────────────────────────────────────────────────────────
 
+  // Warning: metadata.verification field validation
+  const verification = (recipe.metadata as Record<string, unknown> | undefined)?.verification as Record<string, unknown> | undefined;
+  if (verification && typeof verification === 'object') {
+    if ('tier1' in verification && verification.tier1 !== 'pass') {
+      warnings.push(
+        `metadata.verification.tier1 should be "pass", got: "${verification.tier1}"`
+      );
+    }
+    if ('tier2' in verification) {
+      const tier2 = verification.tier2;
+      if (tier2 !== 'pass' && tier2 !== 'skip') {
+        warnings.push(
+          `metadata.verification.tier2 should be "pass" or "skip", got: "${tier2}"`
+        );
+      }
+    }
+    if ('depAudit' in verification) {
+      const depAudit = verification.depAudit;
+      const validDepAudit = new Set(['clean', 'has-advisories', 'not-applicable', 'skip']);
+      if (!validDepAudit.has(depAudit as string)) {
+        warnings.push(
+          `metadata.verification.depAudit should be "clean", "has-advisories", "not-applicable", or "skip", got: "${depAudit}"`
+        );
+      }
+    }
+  }
+
   // Warning: metadata.lastVerified older than 90 days
   if (typeof recipe.metadata?.lastVerified === "string") {
     const lastVerified = new Date(recipe.metadata.lastVerified);
