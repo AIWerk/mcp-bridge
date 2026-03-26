@@ -195,4 +195,12 @@ export interface BridgeConfig extends McpClientConfig {
   http?: {
     auth?: HttpAuthConfig;
   };
+  security?: {
+    /**
+     * When true, only load MCP servers whose depAudit is "clean" or "not-applicable".
+     * Servers with "has-advisories", "skip", or other values are blocked at startup.
+     * Default: false (advisories are logged as info, not blocked).
+     */
+    requireCleanAudit?: boolean;
+  };
 }

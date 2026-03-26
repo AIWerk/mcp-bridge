@@ -254,6 +254,17 @@ const noopLogger: Logger = {
 };
 
 /**
+ * Extract the depAudit value from a catalog recipe's metadata.verification field.
+ * Returns null if not present.
+ */
+function getDepAudit(recipe: CatalogRecipe): string | null {
+  const meta = recipe.metadata as Record<string, unknown> | undefined;
+  const verification = meta?.verification as Record<string, unknown> | undefined;
+  const depAudit = verification?.depAudit;
+  return typeof depAudit === "string" ? depAudit : null;
+}
+
+/**
  * Bootstrap the local recipe cache from the catalog.
  * Downloads top N popular recipes if cache is empty or force=true.
  * Returns array of recipe names now cached. Never throws on network errors.
@@ -264,9 +275,11 @@ export async function bootstrapCatalog(options?: {
   catalogUrl?: string;
   limit?: number;
   force?: boolean;
+  requireCleanAudit?: boolean;
 }): Promise<string[]> {
   const logger = options?.logger ?? noopLogger;
   const cacheDir = options?.cacheDir ?? join(homedir(), ".mcp-bridge", "recipes");
+  const requireCleanAudit = options?.requireCleanAudit ?? false;
   const client = new CatalogClient({
     baseUrl: options?.catalogUrl,
     cacheDir,
@@ -283,7 +296,7 @@ export async function bootstrapCatalog(options?: {
   }
 
   try {
-    return await client.bootstrap(options?.limit ?? 15);
+    return await client.bootstrap(options?.limit ?? 15, requireCleanAudit);
   } catch (err) {
     logger.warn(
       `Catalog unreachable during bootstrap: ${err instanceof Error ? err.message : err}`,
@@ -313,12 +326,26 @@ export function mergeRecipesIntoConfig(
 
   const servers = { ...config.servers };
 
+  const requireCleanAudit = config.security?.requireCleanAudit ?? false;
+
   for (const name of names) {
     // Never overwrite manually configured servers
     if (servers[name]) continue;
 
     const recipe = client.getCached(name);
     if (!recipe) continue;
+
+    // Check depAudit security policy
+    const depAudit = getDepAudit(recipe);
+    const auditOk = depAudit === null || depAudit === "clean" || depAudit === "not-applicable";
+    if (!auditOk) {
+      if (requireCleanAudit) {
+        logger.warn(`⚠️ Skipping server "${name}": has known security advisories (depAudit: ${depAudit}). Set security.requireCleanAudit=false to allow.`);
+        continue;
+      } else {
+        logger.info(`ℹ️ Server "${name}" has known advisories (depAudit: ${depAudit}). Set security.requireCleanAudit=true to block.`);
+      }
+    }
 
     const converted = recipeToServerConfig(recipe);
     if (!converted) {

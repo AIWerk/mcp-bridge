@@ -159,11 +159,13 @@ export class CatalogClient {
     limit?: number;
     category?: string;
     sort?: string;
+    hostedSafe?: boolean;
   }): Promise<{ results: CatalogSearchResult[]; total: number }> {
     const params = new URLSearchParams();
     if (opts?.limit != null) params.set("limit", String(opts.limit));
     if (opts?.category) params.set("category", opts.category);
     if (opts?.sort) params.set("sort", opts.sort);
+    if (opts?.hostedSafe) params.set("hostedSafe", "true");
     const qs = params.toString();
     return this.fetchJson(`/api/recipes${qs ? `?${qs}` : ""}`);
   }
@@ -202,8 +204,8 @@ export class CatalogClient {
    * Bootstrap by downloading the top N most popular recipes.
    * Skips already-cached recipes unless they are stale.
    */
-  async bootstrap(limit = 15): Promise<string[]> {
-    const { results } = await this.list({ limit, sort: "popular" });
+  async bootstrap(limit = 15, hostedSafe = false): Promise<string[]> {
+    const { results } = await this.list({ limit, sort: "popular", hostedSafe });
     const names: string[] = [];
     const toDownload: string[] = [];
 
