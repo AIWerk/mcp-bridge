@@ -71,12 +71,17 @@ https://bridge.aiwerk.ch/u/<user-id>/health    — health check
 
 ### 2.2 User Isolation
 
-Each user gets an isolated bridge instance:
-- **Separate process/worker** — one user's crash doesn't affect others
+Each user's **stdio MCP servers** run in isolated Docker containers:
+- **Filesystem isolation** — a stdio server cannot read the DB, .env, or other users' data
+- **Network isolation** — `--network=none` prevents access to Vault, localhost services
+- **Resource limits** — `--memory=1g --cpus=1` per container
 - **Separate secret namespace** — User A cannot access User B's API keys
 - **Separate config** — each user has their own server list, preferences, retry config
 
-Implementation: worker threads (Phase 1) or container-per-user (Phase 2).
+The main bridge process remains a single Node.js app. It handles routing, auth, and API calls (remote MCP servers). Only stdio servers — which spawn real OS processes — run inside Docker containers. This is efficient because:
+- Remote API servers (GitHub, Todoist, Stripe) are just HTTP calls — no isolation needed
+- Docker overhead is only paid when a user actually runs a stdio server
+- Scaling the bridge itself = more instances behind a load balancer, not more containers
 
 ---
 
@@ -413,10 +418,10 @@ Delivery: email (Phase 2), webhook (Phase 2), Slack/Discord (Phase 3).
 
 ### 8.2 Phase 2 (Scale)
 
-- Container-per-user (Docker)
+- Docker isolation for stdio servers (per-server container, not per-user)
 - PostgreSQL (shared DB)
 - Redis (rate limiting, session cache)
-- Horizontal scaling behind load balancer
+- Horizontal scaling: multiple bridge instances behind load balancer
 
 ---
 
