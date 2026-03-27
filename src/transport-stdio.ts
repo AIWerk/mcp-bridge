@@ -153,19 +153,15 @@ export class StdioTransport extends BaseTransport {
       };
 
       const onFirstData = (chunk: Buffer) => {
-        // Validate that first data looks like JSON-RPC (starts with { or Content-Length).
-        // Some servers write banner text to stdout instead of stderr, which would
-        // cause a false-positive connect (we'd think the transport is ready).
+        // Some MCP servers print banner text to stdout before they start speaking JSON-RPC.
+        // We already parse and ignore non-JSON lines later in processStdoutBuffer(), so any
+        // stdout activity means the process is alive and its pipes are working. Resolve here
+        // and let initializeProtocol() validate the connection with an actual initialize request.
         const text = chunk.toString().trim();
-        // Accept empty/whitespace readiness signals (common in lightweight stdio MCP servers),
-        // JSON messages, or LSP framing headers.
-        if (text === "" || text.startsWith("{") || text.startsWith("Content-Length")) {
-          settleResolve();
-        } else {
-          this.logger.warn(`[mcp-bridge] Stdio process sent non-JSON data on stdout: ${text.substring(0, 80)}`);
-          // Still listen for valid data — don't reject yet, the next chunk might be valid
-          this.process?.stdout?.once("data", onFirstData);
+        if (text && !text.startsWith("{") && !text.startsWith("Content-Length")) {
+          this.logger.warn(`[mcp-bridge] Stdio process sent banner/non-JSON data on stdout before ready: ${text.substring(0, 80)}`);
         }
+        settleResolve();
       };
       const onProcessError = (error: Error) => settleReject(error);
       const onProcessExit = () => settleReject(new Error("MCP server exited before stdout became ready"));
