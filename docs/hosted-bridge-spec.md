@@ -83,6 +83,31 @@ The main bridge process remains a single Node.js app. It handles routing, auth, 
 - Docker overhead is only paid when a user actually runs a stdio server
 - Scaling the bridge itself = more instances behind a load balancer, not more containers
 
+### 2.3 Lazy Image Building & Auto-Cleanup
+
+Docker images for stdio servers are built **on demand** and cached:
+
+1. **First install:** When the first user installs a stdio server (e.g. context7), the bridge builds a Docker image with the npm package pre-installed (`aiwerk/mcp-<name>:<version>`). This takes ~30 seconds once.
+2. **Subsequent uses:** Any user installing the same server gets the cached image — container starts in 2-3 seconds.
+3. **Shared across users:** The image is server-specific, not user-specific. 100 users running context7 = 1 image, 100 containers.
+4. **Auto-cleanup:** A daily cron job checks image last-used timestamps. Images not used by any user in 30 days are automatically deleted. If a user requests the server again, the image is rebuilt on demand.
+
+**Disk efficiency:** All images share the `node:22-slim` base layer (~330MB). Each server adds only ~10-50MB on top. 20 different servers ≈ 1.1GB total, not 20×380MB.
+
+**Build process:**
+```
+docker build -t aiwerk/mcp-context7:2.1.4 - <<EOF
+FROM node:22-slim
+RUN npm install -g @upstash/context7-mcp@2.1.4
+ENTRYPOINT ["context7-mcp"]
+EOF
+```
+
+**Cleanup cron (daily):**
+- Track last-used timestamp per image in SQLite
+- Delete images where `last_used < now - 30 days`
+- `docker rmi aiwerk/mcp-<name>:<version>`
+
 ---
 
 ## 3. Authentication & Authorization
