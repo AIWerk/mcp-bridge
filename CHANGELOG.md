@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.3] - 2026-03-28
+
+### Fixed
+- **Stdio banner text** — servers printing non-JSON banner text to stdout on startup (e.g. "Server v2.1.4 running on stdio") no longer cause connection failure. The transport now accepts any stdout activity as readiness and lets `initializeProtocol()` validate the connection.
+
 ## [2.8.2] - 2026-03-26
 
 ### Features

@@ -42,14 +42,28 @@
 - [x] Configurable retries - exponential backoff, per-server override, transient errors only
 - [x] Graceful shutdown - SIGTERM -> wait -> SIGKILL, connection cleanup, cache clear
 
-## Catalog Integration
-- [ ] `mcp-bridge install` falls back to remote catalog when not found locally
+## ✅ Cost & Rate Limiting (complete as of v2.7.4)
+- [x] Per-server rate limit - configurable daily/monthly call limits (`rateLimit: { maxCallsPerDay, maxCallsPerMonth }`)
+- [x] Pre-call budget check - blocks tool call if limit exceeded, returns actionable error to agent
+- [x] File persistence (~/.mcp-bridge/usage/) with daily/monthly reset
+- [x] Warning threshold at 80% usage
+- [x] Only count successful calls (split checkLimit/increment in v2.7.4)
+- [x] Actionable error messages with suggested next limit and reset time
+
+## ✅ Catalog Integration (complete as of v2.8.2)
+- [x] `mcp-bridge install` falls back to remote catalog when not found locally (v2.8.0)
+- [x] CatalogClient with offline cache fallback
+- [x] Bootstrap: `bootstrapCatalog()` downloads top 15 recipes on first run
+- [x] `catalog` config option (default: true) - enable/disable catalog fetch (v2.8.2)
+- [x] `autoMerge` config option (default: false) - opt-in auto-merge of cached recipes (v2.8.2)
+- [x] `security.requireCleanAudit` + `hostedSafe` filter
 - [ ] `mcp-bridge search` queries remote catalog via MCP
-- [ ] Cache invalidation: check `updatedAt` on catalog, refresh if newer
+- [x] Cache invalidation: staleDays (default 7), force refresh, mtime-based stale check
 - [ ] Version pinning with lockfile (`~/.mcp-bridge/lock.json`)
 
 ## CLI Improvements
 - [ ] `mcp-bridge servers` - show status table (connected/idle/degraded/stopped)
+- [ ] `mcp-bridge usage` - show current usage stats per server
 - [ ] `--log-file` option for HTTP mode
 - [ ] `mcp-bridge update --catalog-only` - catalog-only update
 
@@ -65,20 +79,13 @@
 - [x] Remove leftover v1 config.json files (v2.3.0)
 - [ ] Server icons (§2.1) - icon.svg/png per recipe directory
 
-## 🔴 Cost Limit / Rate Limit (HIGH PRIORITY)
-- [ ] Per-server cost/rate limit in Smart Router - configurable daily/monthly call limits
-- [ ] Pre-call budget check - block tool call if it would exceed the limit, return error to agent
-- [ ] Config: `costLimit: { daily: 100, monthly: 1000 }` and/or `rateLimit: { maxCallsPerDay: 500 }` per server
-- [ ] In-memory counter with optional file persistence (~/.mcp-bridge/usage/)
-- [ ] CLI: `mcp-bridge usage` - show current usage stats per server
-- [ ] Bridge-level global limit as fallback (all servers combined)
-- [ ] Actionable error message: "Cost limit reached for server X. Daily limit: Y calls. Resets in Zh."
-- [ ] Background: Google Maps MCP server did 56K Text Search calls in 1 day → 1,615 CHF damage. Bridge is the only safe enforcement point.
-
 ## Future
-- [ ] Hosted bridge mode (bridge.aiwerk.ch) - multi-tenant, per-user isolation (spec: docs/hosted-bridge-spec.md)
+- [ ] Hosted bridge mode (bridge.aiwerk.ch) - multi-tenant, per-user isolation (spec: docs/hosted-bridge-spec.md, code: @aiwerk/hosted-bridge@0.2.0)
+- [ ] npm publish v2.8.2 (autoMerge fix for users)
+- [ ] CD pipeline - git push -> auto deploy VPS
 - [ ] Transport integration tests - E2E for SSE, stdio, streamable-http
 - [ ] Router edge case tests - connection drops mid-call, concurrent requests
 - [ ] Local script wrapper MCP server - shell/Python scripts as typed MCP tools
 - [ ] PII redaction in request/response
 - [ ] OpenTelemetry / Prometheus metrics export
+- [ ] Bridge-level global rate limit as fallback (all servers combined)
