@@ -173,6 +173,10 @@ servers/<server-id>/
     "toolExamples": [                    // Example tools (helps discovery & smart routing)
       { "name": "create_task", "description": "Create a new task in Todoist" },
       { "name": "find_tasks", "description": "Search tasks by filter" }
+    ],
+    "resourceExamples": [               // Example MCP resources (optional, for servers with capabilities.resources=true)
+      { "uri": "todoist://projects", "description": "List of all projects" },
+      { "uri": "todoist://today", "description": "Today's tasks" }
     ]
   },
 

@@ -570,3 +570,4 @@ POST   /admin/users/:id/limit  — override rate limits
 - **Plugin marketplace** — user-contributed MCP server recipes, one-click install
 - **REST-to-MCP virtualization** — wrap existing REST APIs as MCP tools via config
 - **Semantic caching** — cache similar (not just identical) tool calls
+- **MCP Resource routing** — the bridge currently only routes tools; resource routing would allow clients to auto-load data from backend servers (e.g. `hackernews://top`, `grafana://dashboard/main`). Resources are static data sources that clients load at conversation start, unlike tools which agents invoke on demand. Implementation: the bridge aggregates `resources/list` from all connected servers and exposes them as namespaced resources to the client.
