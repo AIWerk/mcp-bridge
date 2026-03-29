@@ -578,6 +578,10 @@ async function cmdServe(args: CliArgs, logger: Logger): Promise<void> {
     process.exit(1);
   }
 
+  if (args.debug) {
+    config.debug = true;
+  }
+
   // HTTP modes: require auth
   if ((args.sse || args.http) && !config.http?.auth) {
     logger.error("HTTP auth not configured. Set http.auth in config or use stdio mode.");

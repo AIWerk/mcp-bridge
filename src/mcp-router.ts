@@ -274,7 +274,10 @@ export class McpRouter {
               results[idx] = {
                 server: callServer,
                 tool: callTool,
-                result: "result" in response ? response.result : response
+                result: "result" in response ? response.result : response,
+                ...(this.clientConfig.debug && "result" in response && "_debug" in response ? {
+                  _debug: response._debug
+                } : {})
               };
             }
           }
@@ -359,6 +362,8 @@ export class McpRouter {
         return this.error("invalid_params", "tool is required for action=call");
       }
 
+      const startTime = Date.now();
+
       let targetServer = server;
       if (!targetServer) {
         await this.primeToolResolutionIndex();
@@ -405,7 +410,21 @@ export class McpRouter {
             this.promotion.recordCall(server, tool);
           }
           this.toolResolver.recordCall(server, tool);
-          return { server, action: "call", tool, result: cachedResult };
+          return {
+            server,
+            action: "call",
+            tool,
+            result: cachedResult,
+            ...(this.clientConfig.debug ? {
+              _debug: {
+                server,
+                tool,
+                transport: serverConfig.transport,
+                latencyMs: Date.now() - startTime,
+                cached: true,
+              }
+            } : {})
+          };
         }
       }
 
@@ -442,6 +461,14 @@ export class McpRouter {
         action: "call",
         tool,
         result,
+        ...(this.clientConfig.debug ? {
+          _debug: {
+            server,
+            tool,
+            transport: serverConfig.transport,
+            latencyMs: Date.now() - startTime,
+          }
+        } : {}),
         ...(rateLimitIncrement.warning ? { warning: rateLimitIncrement.warning } : {}),
         ...(callOutcome.retries > 0 ? { retries: callOutcome.retries } : {})
       };

@@ -118,6 +118,8 @@ export interface McpClientConfig {
     // Per-tool TTL override keyed by "server:tool"
     cacheTtl?: Record<string, number>;
   };
+  /** When true, tool call responses include a _debug object with routing metadata. */
+  debug?: boolean;
 }
 
 export interface McpTool {
