@@ -1264,11 +1264,127 @@ When multiple limits are configured, the **most restrictive** applies:
 4. No limit                         ← if nothing configured
 ```
 
-## 11. Future Work (deferred from v2.0)
+## 11. Skills — Bridge-Injected MCP Prompts
+
+### 11.1 Problem
+
+MCP servers expose tools (what to call) and optionally resources (what to read), but most do NOT provide prompts (how to use the tools effectively). The MCP spec defines the `prompts/list` and `prompts/get` primitives for this purpose, yet in practice fewer than 5% of MCP servers implement them.
+
+Without prompts, agents discover tool behavior through trial and error — wasting tokens, hitting gotchas (e.g., Todoist priority is string "p1", not number 1), and missing efficient patterns (e.g., batch multiple tasks in one call instead of N separate calls).
+
+### 11.2 Solution: Recipe Skills
+
+A **skill** is a structured set of domain knowledge about a service, stored in the recipe and served by the bridge as MCP prompts on behalf of servers that don't provide their own.
+
+The skill does NOT duplicate tool definitions (the server provides those via `tools/list`). Instead, it provides:
+
+- **Gotchas** — non-obvious behavior that causes errors (parameter format surprises, naming conventions, undocumented constraints)
+- **Workflows** — step-by-step patterns for common tasks ("create a project with sections and tasks")
+- **Best practices** — efficiency tips (batch, filter selection, pagination strategies)
+
+### 11.3 Skill Field in recipe.json
+
+```json
+{
+  "id": "todoist",
+  "name": "Todoist",
+  "skill": {
+    "gotchas": [
+      {
+        "id": "priority-format",
+        "summary": "Priority is a string 'p1'-'p4', not a number. 'p1' = most urgent.",
+        "tools": ["add-tasks", "update-task"]
+      },
+      {
+        "id": "recurring-complete",
+        "summary": "Completing a recurring task automatically creates the next occurrence. Do not create a new task manually.",
+        "tools": ["complete-task"]
+      }
+    ],
+    "workflows": [
+      {
+        "id": "project-setup",
+        "name": "Set up a new project with sections and tasks",
+        "steps": [
+          "Create the project with add-project",
+          "Add sections with add-sections (batch in one call)",
+          "Add tasks with add-tasks, referencing section_id from the previous response"
+        ]
+      }
+    ],
+    "bestPractices": [
+      "Use add-tasks (plural) to batch multiple tasks in a single call",
+      "Use find-tasks-by-filter for complex queries, not find-tasks-by-date",
+      "The Todoist filter syntax uses & for AND, | for OR — e.g., 'today & p1'"
+    ]
+  }
+}
+```
+
+### 11.4 Skill Schema
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `gotchas` | `array` | no | Non-obvious behaviors that cause errors |
+| `gotchas[].id` | `string` | yes | Unique identifier (kebab-case) |
+| `gotchas[].summary` | `string` | yes | One-line description of the gotcha |
+| `gotchas[].tools` | `string[]` | no | Which tools are affected |
+| `workflows` | `array` | no | Step-by-step patterns for common tasks |
+| `workflows[].id` | `string` | yes | Unique identifier |
+| `workflows[].name` | `string` | yes | Human-readable workflow name |
+| `workflows[].steps` | `string[]` | yes | Ordered steps |
+| `bestPractices` | `string[]` | no | General efficiency tips |
+
+### 11.5 Bridge Prompt Injection
+
+When a client sends `prompts/list`, the bridge:
+
+1. Forwards the request to the upstream MCP server
+2. If the server returns prompts, uses those (server-provided prompts take priority)
+3. If the server returns NO prompts (or the capability is missing), and the recipe has a `skill` field, the bridge generates MCP prompts from the skill
+
+Generated prompt format:
+
+```json
+{
+  "name": "todoist-skill",
+  "description": "Best practices and gotchas for using Todoist tools effectively",
+  "arguments": []
+}
+```
+
+When the client calls `prompts/get` for the generated prompt, the bridge returns the skill content formatted as a prompt message:
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": {
+        "type": "text",
+        "text": "## Todoist — Gotchas\n\n- Priority is a string 'p1'-'p4', not a number...\n\n## Workflows\n\n### Set up a new project...\n\n## Best Practices\n\n- Use add-tasks (plural) to batch..."
+      }
+    }
+  ]
+}
+```
+
+### 11.6 Catalog Integration
+
+The catalog stores skills as part of the recipe. When `catalog.info("todoist")` is called, the response includes the skill field. The bridge's CatalogClient fetches and caches this alongside the recipe config (cache-first, same staleness rules as recipes).
+
+### 11.7 Design Principles
+
+- **Skills are transport-independent.** A gotcha about Todoist priority format is true whether you use MCP, CLI, or API. Skills describe the SERVICE, not the protocol.
+- **Skills do NOT duplicate tool definitions.** The MCP server's `tools/list` provides the schema. The skill provides the "how" and "when", not the "what".
+- **Server prompts take priority.** If an MCP server provides its own prompts, the bridge uses those. Skills are a fallback for servers that don't.
+- **Skills are part of the signed recipe.** The `skill` field is included in `SIGNED_FIELDS`, so skills are tamper-evident.
+
+## 12. Future Work (deferred from v2.0)
 
 The following topics are recognized as valuable but intentionally deferred. They will be addressed in future spec revisions when real-world usage provides clearer requirements.
 
-### 11.1 Capability Registry (v2.1+)
+### 12.1 Capability Registry (v2.1+)
 
 For advanced smart routing and agent-driven discovery, recipes may need richer tool metadata beyond `toolExamples`:
 
@@ -1279,7 +1395,7 @@ For advanced smart routing and agent-driven discovery, recipes may need richer t
 
 This would transform the catalog from a curated app directory into a runtime-usable capability registry. Deferred because the schema needs to be driven by actual smart routing implementation, not speculation.
 
-### 11.2 Runtime Execution Hints (v2.1+)
+### 12.2 Runtime Execution Hints (v2.1+)
 
 Some server properties affect how a bridge runtime should manage them:
 
@@ -1291,7 +1407,7 @@ Some server properties affect how a bridge runtime should manage them:
 
 These are bridge runtime concerns (see §1.1.1) but could benefit from recipe-level hints. Deferred until the bridge runtime spec matures.
 
-### 11.3 Enhanced Adapter Override Mechanism (v2.1+)
+### 12.3 Enhanced Adapter Override Mechanism (v2.1+)
 
 The current array-replace merge semantics (§4.5) are simple but blunt. A future revision may introduce:
 
@@ -1301,11 +1417,11 @@ The current array-replace merge semantics (§4.5) are simple but blunt. A future
 
 Deferred because the current model covers all existing recipes without issues.
 
-### 11.4 Full OAuth2 Integration Spec
+### 12.4 Full OAuth2 Integration Spec
 
 A standalone spec for OAuth2 credential bootstrap, token storage, and refresh across adapters. See §2.5.1.
 
-### 11.5 Auto-Discovery (v2.8+)
+### 12.5 Auto-Discovery (v2.8+)
 
 **Problem:** Users must manually add server entries to their bridge config even when a recipe exists and the required env vars are already set. This is unnecessary friction.
 
