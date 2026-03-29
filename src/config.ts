@@ -384,7 +384,7 @@ export function mergeRecipesIntoConfig(
 }
 
 /** Convert a catalog recipe JSON to McpServerConfig, or null if unsupported. */
-function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | null {
+export function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | null {
   // v2 recipe: has transports array
   if (Array.isArray(recipe.transports) && recipe.transports.length > 0) {
     const t = recipe.transports[0];
@@ -431,7 +431,7 @@ function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | null {
 }
 
 /** Collect all env var names required by a recipe. */
-function collectRequiredEnvVars(recipe: CatalogRecipe): string[] {
+export function collectRequiredEnvVars(recipe: CatalogRecipe): string[] {
   const vars = new Set<string>();
 
   // From auth.envVars

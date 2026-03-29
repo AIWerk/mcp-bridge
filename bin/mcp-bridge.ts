@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync } from "fs";
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
 import { platform, homedir } from "os";
 import { execFileSync } from "child_process";
-import { loadConfig, initConfigDir, warnDeprecatedBundledRecipes } from "../src/config.js";
+import { loadConfig, initConfigDir, warnDeprecatedBundledRecipes, recipeToServerConfig, collectRequiredEnvVars } from "../src/config.js";
 import { StandaloneServer } from "../src/standalone-server.js";
 import { PACKAGE_VERSION } from "../src/protocol.js";
 import { checkForUpdate, runUpdate } from "../src/update-checker.js";
 import { FileTokenStore } from "../src/token-store.js";
 import { performAuthCodeLogin, performDeviceCodeLogin } from "../src/cli-auth.js";
 import { RateLimiter } from "../src/rate-limiter.js";
+import { CatalogClient } from "../src/catalog-client.js";
 import type { Logger, HttpAuthConfig } from "../src/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -391,28 +392,75 @@ function cmdLimit(args: CliArgs, logger: Logger): void {
   }
 }
 
-function cmdInstall(serverName: string, logger: Logger): void {
-  const scriptDir = join(PACKAGE_ROOT, "scripts");
+async function cmdInstall(serverName: string, args: CliArgs, logger: Logger): Promise<void> {
+  const configPath = resolveConfigPath(args.configPath);
+  const configDir = dirname(configPath);
+  
+  // Ensure config dir exists
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true });
+  }
+  
+  // Ensure config file exists
+  if (!existsSync(configPath)) {
+    writeFileSync(configPath, JSON.stringify({ servers: {} }, null, 2) + "\n", "utf-8");
+    logger.info(`Created config: ${configPath}`);
+  }
 
+  // Read current config
+  const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+  if (!raw.servers) raw.servers = {};
+  
+  // Check if already configured
+  if (raw.servers[serverName]) {
+    process.stdout.write(`Server "${serverName}" is already configured.\n`);
+    process.stdout.write(`Config: ${configPath}\n`);
+    return;
+  }
+
+  // Fetch recipe from catalog
+  process.stdout.write(`Fetching recipe for ${serverName}...\n`);
+  const cacheDir = join(configDir, "recipes");
+  const client = new CatalogClient({ cacheDir, logger });
+  
+  let recipe;
   try {
-    if (platform() === "win32") {
-      const psScript = join(scriptDir, "install-server.ps1");
-      if (!existsSync(psScript)) {
-        logger.error("Install script not found (install-server.ps1)");
-        process.exit(1);
-      }
-      execFileSync("powershell", ["-ExecutionPolicy", "Bypass", "-File", psScript, serverName], { stdio: "inherit" });
-    } else {
-      const scriptPath = join(scriptDir, "install-server.sh");
-      if (!existsSync(scriptPath)) {
-        logger.error("Install script not found (install-server.sh)");
-        process.exit(1);
-      }
-      execFileSync("bash", [scriptPath, serverName], { stdio: "inherit" });
-    }
+    recipe = await client.resolve(serverName);
   } catch (err) {
-    logger.error("Install failed:", err instanceof Error ? err.message : String(err));
+    logger.error(`Recipe not found: ${serverName}`);
     process.exit(1);
+  }
+
+  // Convert recipe to server config
+  const serverConfig = recipeToServerConfig(recipe);
+  if (!serverConfig) {
+    logger.error(`Unsupported recipe format for "${serverName}"`);
+    process.exit(1);
+  }
+
+  // Check required env vars
+  const requiredVars = collectRequiredEnvVars(recipe);
+  const missing = requiredVars.filter(v => !process.env[v]);
+
+  // Add to config
+  raw.servers[serverName] = serverConfig;
+  writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+
+  process.stdout.write(`\n✓ Added "${serverName}" to ${configPath}\n\n`);
+
+  if (missing.length > 0) {
+    process.stdout.write(`⚠ Missing environment variables:\n`);
+    for (const v of missing) {
+      process.stdout.write(`  ${v}\n`);
+    }
+    // Show credentials URL if available
+    const credUrl = (recipe.auth as any)?.credentialsUrl;
+    if (credUrl) {
+      process.stdout.write(`\nGet credentials: ${credUrl}\n`);
+    }
+    process.stdout.write(`\nSet them in your environment or ~/.mcp-bridge/.env before starting the bridge.\n`);
+  } else {
+    process.stdout.write(`All required environment variables are set. Ready to use.\n`);
   }
 }
 
@@ -652,7 +700,7 @@ async function main(): Promise<void> {
         process.stderr.write("Usage: mcp-bridge install <server>\n");
         process.exit(1);
       }
-      cmdInstall(args.positional[0], logger);
+      await cmdInstall(args.positional[0], args, logger);
       break;
     case "update":
       await cmdUpdate(logger, args.checkOnly);
