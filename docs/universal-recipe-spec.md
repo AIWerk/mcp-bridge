@@ -1290,6 +1290,8 @@ The skill does NOT duplicate tool definitions (the server provides those via `to
   "id": "todoist",
   "name": "Todoist",
   "skill": {
+    "apiVersion": "v2",
+    "apiVersionNote": "Todoist REST API v2 (2024-)",
     "gotchas": [
       {
         "id": "priority-format",
@@ -1326,6 +1328,8 @@ The skill does NOT duplicate tool definitions (the server provides those via `to
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `apiVersion` | `string` | no | Upstream API version this skill was written for (e.g., `"v2"`, `"2024-06-20"`) |
+| `apiVersionNote` | `string` | no | Human-readable context (e.g., `"Todoist REST API v2 (2024-)"`) |
 | `gotchas` | `array` | no | Non-obvious behaviors that cause errors |
 | `gotchas[].id` | `string` | yes | Unique identifier (kebab-case) |
 | `gotchas[].summary` | `string` | yes | One-line description of the gotcha |
@@ -1335,6 +1339,8 @@ The skill does NOT duplicate tool definitions (the server provides those via `to
 | `workflows[].name` | `string` | yes | Human-readable workflow name |
 | `workflows[].steps` | `string[]` | yes | Ordered steps |
 | `bestPractices` | `string[]` | no | General efficiency tips |
+
+When `apiVersion` is present and the health monitor detects a new upstream API version, the skill is automatically flagged for review. This makes skill staleness explicitly trackable rather than silently degrading.
 
 ### 11.5 Bridge Prompt Injection
 
