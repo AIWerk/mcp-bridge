@@ -939,6 +939,7 @@ The validator MUST emit warnings (not errors) for:
 - Non-empty `preInstall` or `postInstall` arrays: `Recipe contains preInstall/postInstall commands - review before executing`
 - Missing `metadata.homepage` when `repository` is also absent
 - `metadata.maturity` set to `deprecated`
+- Malformed `skill` entries (missing required fields, invalid structure) — see §11
 
 ### 7.3 ID Format Examples
 
@@ -1328,7 +1329,7 @@ The skill does NOT duplicate tool definitions (the server provides those via `to
 | `gotchas` | `array` | no | Non-obvious behaviors that cause errors |
 | `gotchas[].id` | `string` | yes | Unique identifier (kebab-case) |
 | `gotchas[].summary` | `string` | yes | One-line description of the gotcha |
-| `gotchas[].tools` | `string[]` | no | Which tools are affected |
+| `gotchas[].tools` | `string[]` | no | Which tools are affected (informational — a tool name not found in the running server SHOULD trigger a warning, not an error) |
 | `workflows` | `array` | no | Step-by-step patterns for common tasks |
 | `workflows[].id` | `string` | yes | Unique identifier |
 | `workflows[].name` | `string` | yes | Human-readable workflow name |

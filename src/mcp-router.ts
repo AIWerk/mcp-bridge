@@ -35,6 +35,14 @@ interface RouterBatchCall {
   params?: any;
 }
 
+interface DebugMetadata {
+  server: string;
+  tool: string;
+  transport: string;
+  latencyMs: number;
+  cached?: boolean;
+}
+
 interface RouterBatchResult {
   server: string;
   tool: string;
@@ -45,6 +53,7 @@ interface RouterBatchResult {
     available?: string[];
     code?: number;
   };
+  _debug?: DebugMetadata;
 }
 
 export interface RouterToolHint {
@@ -64,7 +73,7 @@ export interface RouterServerStatus {
 export type RouterDispatchResponse =
   | { server: string; action: "list"; tools: RouterToolHint[] }
   | { server: string; action: "refresh"; refreshed: true; tools: RouterToolHint[] }
-  | { server: string; action: "call"; tool: string; result: any; retries?: number; warning?: string }
+  | { server: string; action: "call"; tool: string; result: any; retries?: number; warning?: string; _debug?: DebugMetadata }
   | { server: string; action: "schema"; tool: string; schema: any; description: string }
   | { action: "status"; servers: RouterServerStatus[] }
   | { action: "batch"; results: RouterBatchResult[] }
