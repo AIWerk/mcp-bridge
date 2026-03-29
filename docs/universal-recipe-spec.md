@@ -1374,7 +1374,22 @@ When the client calls `prompts/get` for the generated prompt, the bridge returns
 
 The catalog stores skills as part of the recipe. When `catalog.info("todoist")` is called, the response includes the skill field. The bridge's CatalogClient fetches and caches this alongside the recipe config (cache-first, same staleness rules as recipes).
 
-### 11.7 Design Principles
+### 11.7 Consumption Modes
+
+Skills are structured data — they can be consumed in multiple ways, not only as MCP prompts:
+
+| Mode | Consumer | How |
+|------|----------|-----|
+| **MCP Prompt Injection** | Bridge | Generates `prompts/list` + `prompts/get` responses from skill (§11.5) |
+| **Smart Router Enhancement** | Bridge | Router uses gotchas and workflows to improve tool selection accuracy |
+| **Parameter Pre-validation** | Bridge | Validates tool call arguments against gotcha constraints before forwarding (e.g., reject `priority: 5` when skill says valid range is "p1"-"p4") |
+| **Catalog Search** | Catalog API | `catalog.search` matches against skill content — richer results than description-only search |
+| **External Clients** | mcporter, Claude Desktop, Cursor, etc. | Fetch skill via `catalog.info()` API and use it however they want — no bridge required |
+| **Documentation** | aiwerkmcp.com, README | Display gotchas, workflows, best practices on recipe detail pages for human readers |
+
+The bridge implements the first three modes natively. The remaining modes are enabled by the skill being part of the recipe data served by the catalog API.
+
+### 11.8 Design Principles
 
 - **Skills are transport-independent.** A gotcha about Todoist priority format is true whether you use MCP, CLI, or API. Skills describe the SERVICE, not the protocol.
 - **Skills do NOT duplicate tool definitions.** The MCP server's `tools/list` provides the schema. The skill provides the "how" and "when", not the "what".
