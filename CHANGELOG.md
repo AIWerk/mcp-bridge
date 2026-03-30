@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.5] - 2026-03-30
+
+### Features
+- **Init onboarding**: `mcp-bridge init` prints copy-pasteable client config snippet for any MCP client
+- **Empty server guide**: When no servers configured, tool description guides agents to search/install from catalog
+
 ## [2.8.4] - 2026-03-30
 
 ### Features
