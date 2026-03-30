@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.6] - 2026-03-30
+
+### Features
+- **Router search/catalog/install actions**: Agents can now search, browse, and install MCP servers from the catalog directly through the mcp tool at runtime
+
 ## [2.8.5] - 2026-03-30
 
 ### Features
