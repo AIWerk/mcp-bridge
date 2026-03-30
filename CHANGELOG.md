@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.20] - 2026-03-30
+
+### Fixed
+- Router install action now persists server to config file (not just runtime)
+
 ## [2.8.19] - 2026-03-30
 
 ### Features

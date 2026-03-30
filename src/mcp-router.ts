@@ -312,7 +312,7 @@ export class McpRouter {
         }
       }
 
-      // Install server from catalog (runtime only, not persisted to config file)
+      // Install server from catalog (runtime + persisted to config file)
       if (normalizedAction === "install") {
         const serverName = server || params?.server;
         if (!serverName) {
@@ -336,16 +336,36 @@ export class McpRouter {
           
           // Add to runtime config
           this.servers[serverName] = serverConfig;
-          // Also update clientConfig.servers so generateDescription includes it
           this.clientConfig.servers[serverName] = serverConfig;
+
+          // Persist to config file
+          try {
+            const os = await import("os");
+            const fs = await import("fs");
+            const path = await import("path");
+            const configPath = path.join(os.homedir(), ".mcp-bridge", "config.json");
+            if (fs.existsSync(configPath)) {
+              const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+              if (!raw.servers) raw.servers = {};
+              if (!raw.servers[serverName]) {
+                raw.servers[serverName] = serverConfig;
+                fs.writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+                this.logger.info(`Persisted "${serverName}" to ${configPath}`);
+              }
+            }
+          } catch (persistErr) {
+            this.logger.warn(`Could not persist "${serverName}" to config: ${persistErr instanceof Error ? persistErr.message : String(persistErr)}`);
+          }
           
+          const credUrl = (recipe as any).auth?.credentialsUrl;
           if (missing.length > 0) {
             return {
               action: "install",
               server: serverName,
               installed: true,
-              message: `Server "${serverName}" added (runtime). Missing env vars: ${missing.join(", ")}. Set them before calling.`,
+              message: `Server "${serverName}" installed. Missing env vars: ${missing.join(", ")}. Set them before calling.`,
               missingEnvVars: missing,
+              ...(credUrl ? { credentialsUrl: credUrl } : {}),
             };
           }
           return {
