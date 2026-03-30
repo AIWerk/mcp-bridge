@@ -268,12 +268,32 @@ function cmdInit(logger: Logger): void {
     }
   }
 
+  // Codex (OpenAI)
+  if (whichCmd("codex")) {
+    const codexConfigPath = join(homedir(), ".codex", "config.toml");
+    try {
+      const codexConfig = existsSync(codexConfigPath) ? readFileSync(codexConfigPath, "utf-8") : "";
+      if (codexConfig.includes("[mcp_servers.mcp-bridge]") || codexConfig.includes("[mcp_servers.aiwerk-bridge]")) {
+        registered = true;
+        // Silent - already configured
+      } else {
+        execFileSync("codex", ["mcp", "add", "mcp-bridge", "--", bridgeCmd, ...bridgeArgs], { stdio: "pipe" });
+        process.stdout.write(`✓ Registered with Codex → ${codexConfigPath}\n  Restart Codex to activate.\n`);
+        registered = true;
+      }
+    } catch {
+      process.stdout.write("⚠ Codex detected but registration failed. Manual setup:\n");
+      process.stdout.write(`  codex mcp add mcp-bridge -- ${bridgeCmd} ${bridgeArgs.join(" ")}\n\n`);
+    }
+  }
+
   if (!registered) {
     const cmd = isGlobal ? "mcp-bridge" : `node ${join(__dirname, "..", "bin", "mcp-bridge.js")}`;
     process.stdout.write(`
 No supported MCP client detected. Add manually:
 
   Claude Code:    claude mcp add -s user mcp-bridge -- ${cmd} serve
+  Codex:          codex mcp add mcp-bridge -- ${cmd} serve
   Cursor:         Add to ~/.cursor/mcp.json
   Claude Desktop: Add to claude_desktop_config.json
   OpenClaw:       openclaw plugins install @aiwerk/openclaw-mcp-bridge

@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.13] - 2026-03-30
+
+### Features
+- Init auto-detects and registers with Codex (OpenAI) via codex mcp add
+
 ## [2.8.12] - 2026-03-30
 
 ### Fixed
