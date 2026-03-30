@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.17] - 2026-03-30
+
+### Fixed
+- Search and catalog actions return actual auth info from catalog API instead of hardcoded "none"
+
 ## [2.8.16] - 2026-03-30
 
 ### Fixed

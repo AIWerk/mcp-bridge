@@ -272,7 +272,7 @@ export class McpRouter {
               name: r.name,
               description: r.description || "",
               category: r.category,
-              auth: "none", // Search results don't include auth info
+              auth: r.authSummary || (r.authRequired ? "required" : "none"),
             }))
           };
         } catch (err) {
@@ -289,12 +289,12 @@ export class McpRouter {
           const recipeList = await this.catalogClient.list({ limit: 200 });
           return {
             action: "catalog",
-            recipes: recipeList.results.map(r => ({
+            recipes: recipeList.results.map((r: any) => ({
               id: r.name,
               name: r.name,
               description: r.description || "",
               category: r.category,
-              auth: "none", // List results don't include auth info
+              auth: r.authSummary || (r.authRequired ? "required" : "none"),
             }))
           };
         } catch (err) {
