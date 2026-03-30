@@ -218,7 +218,7 @@ export class McpRouter {
       })
       .join(", ");
 
-    return `Call any MCP server tool. Servers: ${serverList}. Use action='list' to discover tools and required parameters, action='call' to execute a tool, action='batch' to execute multiple calls in one round-trip, action='refresh' to clear cache and re-discover tools, and action='status' to check server connection states. If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
+    return `MCP server multiplexer with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. To add new servers: 'search' to find servers in the catalog (100+ available), 'install' to add a server by name. If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
   }
 
   async dispatch(server?: string, action: string = "call", tool?: string, params?: any): Promise<RouterDispatchResponse> {

@@ -304,9 +304,11 @@ test("generateDescription includes configured servers", () => {
 
   assert.match(description, /hetzner/);
   assert.match(description, /github/);
-  assert.match(description, /action='list'/);
-  assert.match(description, /action='call'/);
-  assert.match(description, /action='refresh'/);
+  assert.match(description, /\'list\'/);
+  assert.match(description, /\'call\'/);
+  assert.match(description, /\'refresh\'/);
+  assert.match(description, /\'search\'/);
+  assert.match(description, /\'install\'/);
 });
 
 test("status action returns all servers with connection state", async () => {
@@ -360,7 +362,7 @@ test("generateDescription includes status action", () => {
   const description = McpRouter.generateDescription({
     test: { transport: "stdio", command: "node", args: [] }
   });
-  assert.match(description, /action='status'/);
+  assert.match(description, /\'status\'/);
 });
 
 test("action=schema returns full schema and description", async () => {
