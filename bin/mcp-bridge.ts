@@ -182,6 +182,28 @@ All logs go to stderr. Stdout is reserved for the MCP protocol (stdio mode).
 
 function cmdInit(logger: Logger): void {
   initConfigDir(logger);
+
+  // Check if installed globally
+  const isGlobal = __dirname.includes("node_modules") && !__dirname.includes(homedir());
+
+  process.stdout.write(`
+Next step: add mcp-bridge to your MCP client.
+
+Add this to your client's MCP server config:
+
+  {
+    "mcp-bridge": {
+      "command": "${isGlobal ? "mcp-bridge" : "node"}",
+      "args": ${isGlobal ? '["serve"]' : `["${join(__dirname, "..", "bin", "mcp-bridge.js")}", "serve"]`}
+    }
+  }
+
+Supported clients: Claude Code (~/.claude/settings.json),
+  Cursor (~/.cursor/mcp.json), Claude Desktop, Windsurf, OpenClaw, etc.
+${!isGlobal ? "\nTip: Install globally for a cleaner setup:\n  npm install -g @aiwerk/mcp-bridge\n" : ""}
+After adding, restart your client. The bridge will appear as an 'mcp' tool
+with search, install, and catalog actions to discover and add MCP servers.
+`);
 }
 
 function cmdCatalog(logger: Logger): void {
