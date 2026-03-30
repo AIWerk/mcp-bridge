@@ -305,26 +305,28 @@ function registerClient(client: string, bridgeCmd: string, bridgeArgs: string[],
   }
 }
 
-function cmdCatalog(logger: Logger): void {
-  const catalogPath = join(PACKAGE_ROOT, "servers", "index.json");
-  if (!existsSync(catalogPath)) {
-    logger.error("Server catalog not found");
+async function cmdCatalog(logger: Logger, offline: boolean): Promise<void> {
+  const client = new CatalogClient({ logger });
+  try {
+    const result = await client.list({ limit: 200 });
+    const recipes = result.results || [];
+
+    process.stdout.write(`\nAvailable servers (${recipes.length} from catalog.aiwerk.ch):\n\n`);
+    process.stdout.write("  Server                Auth        Category         Description\n");
+    process.stdout.write("  " + "─".repeat(90) + "\n");
+
+    for (const r of recipes as any[]) {
+      const name = (r.name || "").padEnd(22);
+      const auth = (r.authSummary || "none").padEnd(12);
+      const cat = (r.category || "").padEnd(17);
+      const desc = (r.description || "").slice(0, 60);
+      process.stdout.write(`  ${name}${auth}${cat}${desc}\n`);
+    }
+    process.stdout.write("\n");
+  } catch (err) {
+    logger.error(`Failed to fetch catalog: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
-
-  const catalog = JSON.parse(readFileSync(catalogPath, "utf-8"));
-  const servers = catalog.recipes || catalog.servers || {};
-
-  process.stdout.write("\nAvailable servers:\n\n");
-  process.stdout.write("  Server          Transport    Description\n");
-  process.stdout.write("  " + "─".repeat(60) + "\n");
-
-  for (const [name, info] of Object.entries(servers) as [string, any][]) {
-    const padded = name.padEnd(16);
-    const transport = (info.transport || "stdio").padEnd(13);
-    process.stdout.write(`  ${padded}${transport}${info.description || ""}\n`);
-  }
-  process.stdout.write("\n");
 }
 
 function cmdServers(logger: Logger, configPath?: string): void {
@@ -354,32 +356,27 @@ function cmdServers(logger: Logger, configPath?: string): void {
   }
 }
 
-function cmdSearch(query: string, logger: Logger): void {
-  const catalogPath = join(PACKAGE_ROOT, "servers", "index.json");
-  if (!existsSync(catalogPath)) {
-    logger.error("Server catalog not found");
+async function cmdSearch(query: string, logger: Logger): Promise<void> {
+  const client = new CatalogClient({ logger });
+  try {
+    const searchResponse = await client.search(query);
+    const results = Array.isArray(searchResponse) ? searchResponse : (searchResponse as any).results || [];
+
+    if (results.length === 0) {
+      process.stdout.write(`No servers matching "${query}"\n`);
+      return;
+    }
+
+    process.stdout.write(`\nSearch results for "${query}" (${results.length} found):\n\n`);
+    for (const [i, r] of (results as any[]).entries()) {
+      const auth = r.authSummary || (r.authRequired ? "required" : "none");
+      process.stdout.write(`  ${i + 1}  ${(r.name || "").padEnd(22)}[${auth}] ${r.description || ""}\n`);
+    }
+    process.stdout.write("\n");
+  } catch (err) {
+    logger.error(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
-
-  const catalog = JSON.parse(readFileSync(catalogPath, "utf-8"));
-  const servers = catalog.recipes || catalog.servers || {};
-  const lowerQuery = query.toLowerCase();
-
-  const matches = Object.entries(servers).filter(([name, info]: [string, any]) => {
-    return name.toLowerCase().includes(lowerQuery) ||
-      (info.description || "").toLowerCase().includes(lowerQuery);
-  });
-
-  if (matches.length === 0) {
-    process.stdout.write(`No servers matching "${query}"\n`);
-    return;
-  }
-
-  process.stdout.write(`\nSearch results for "${query}":\n\n`);
-  matches.forEach(([name, info], i) => {
-    process.stdout.write(`  ${i + 1}  ${name.padEnd(16)}${(info as any).description || ""}\n`);
-  });
-  process.stdout.write("\n");
 }
 
 function resolveConfigPath(configPath?: string): string {
@@ -804,7 +801,7 @@ async function main(): Promise<void> {
       cmdInit(logger, args.register);
       break;
     case "catalog":
-      cmdCatalog(logger);
+      await cmdCatalog(logger, args.offline);
       break;
     case "servers":
       cmdServers(logger, args.configPath);
@@ -814,7 +811,7 @@ async function main(): Promise<void> {
         process.stderr.write("Usage: mcp-bridge search <query>\n");
         process.exit(1);
       }
-      cmdSearch(args.positional[0], logger);
+      await cmdSearch(args.positional[0], logger);
       break;
     case "usage":
       cmdUsage(args.configPath, logger);

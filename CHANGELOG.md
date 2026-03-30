@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.23] - 2026-03-31
+
+### Changed
+- CLI catalog and search commands now use online catalog API (100+ recipes) instead of bundled servers/index.json (16 recipes)
+
 ## [2.8.22] - 2026-03-30
 
 ### Changed
