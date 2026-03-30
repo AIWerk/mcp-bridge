@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.15] - 2026-03-30
+
+### Fixed
+- Search action handles both array and {results:[]} response formats from catalog API
+
 ## [2.8.14] - 2026-03-30
 
 ### Changed

@@ -261,11 +261,13 @@ export class McpRouter {
           return this.error("mcp_error", "Catalog client not available");
         }
         try {
-          const results = await this.catalogClient.search(query);
+          const searchResponse = await this.catalogClient.search(query);
+          // search() may return array or {results: [...]} depending on catalog API version
+          const results = Array.isArray(searchResponse) ? searchResponse : (searchResponse as any).results || [];
           return {
             action: "search",
             query,
-            results: results.map(r => ({
+            results: results.map((r: any) => ({
               id: r.name,
               name: r.name,
               description: r.description || "",
