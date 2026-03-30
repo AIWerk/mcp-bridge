@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.7] - 2026-03-30
+
+### Fixed
+- **Init onboarding**: Per-client setup commands (Claude Code: `claude mcp add`, Cursor/Desktop: JSON, OpenClaw: plugin install)
+- **Global install detection**: Fixed detection for nvm-based global installs
+
 ## [2.8.6] - 2026-03-30
 
 ### Features

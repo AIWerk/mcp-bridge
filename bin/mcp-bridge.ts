@@ -183,13 +183,24 @@ All logs go to stderr. Stdout is reserved for the MCP protocol (stdio mode).
 function cmdInit(logger: Logger): void {
   initConfigDir(logger);
 
-  // Check if installed globally
-  const isGlobal = __dirname.includes("node_modules") && !__dirname.includes(homedir());
+  // Detect global install: check if we're in a global node_modules (not under a project)
+  // Global paths: ~/.nvm/.../lib/node_modules, /usr/lib/node_modules, etc.
+  // Local paths: ~/projects/.../node_modules, ~/node_modules/
+  const isGlobal = __dirname.includes("node_modules") && (
+    __dirname.includes("/lib/node_modules/") || __dirname.includes("\\lib\\node_modules\\")
+  );
+  const cmd = isGlobal ? "mcp-bridge" : `node ${join(__dirname, "..", "bin", "mcp-bridge.js")}`;
 
   process.stdout.write(`
 Next step: add mcp-bridge to your MCP client.
 
-Add this to your client's MCP server config:
+  Claude Code:    claude mcp add -s user mcp-bridge -- ${cmd} serve
+  Cursor:         Add to ~/.cursor/mcp.json
+  Claude Desktop: Add to claude_desktop_config.json
+  Windsurf:       Add to ~/.windsurf/mcp.json
+  OpenClaw:       openclaw plugins install @aiwerk/openclaw-mcp-bridge
+
+For Cursor/Claude Desktop/Windsurf, add this JSON block:
 
   {
     "mcp-bridge": {
@@ -197,9 +208,6 @@ Add this to your client's MCP server config:
       "args": ${isGlobal ? '["serve"]' : `["${join(__dirname, "..", "bin", "mcp-bridge.js")}", "serve"]`}
     }
   }
-
-Supported clients: Claude Code (~/.claude/settings.json),
-  Cursor (~/.cursor/mcp.json), Claude Desktop, Windsurf, OpenClaw, etc.
 ${!isGlobal ? "\nTip: Install globally for a cleaner setup:\n  npm install -g @aiwerk/mcp-bridge\n" : ""}
 After adding, restart your client. The bridge will appear as an 'mcp' tool
 with search, install, and catalog actions to discover and add MCP servers.
