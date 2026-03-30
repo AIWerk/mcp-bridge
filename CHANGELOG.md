@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.21] - 2026-03-30
+
+### Fixed
+- Install action accepts server name from params.name in addition to server field
+
 ## [2.8.20] - 2026-03-30
 
 ### Fixed

@@ -314,9 +314,9 @@ export class McpRouter {
 
       // Install server from catalog (runtime + persisted to config file)
       if (normalizedAction === "install") {
-        const serverName = server || params?.server;
+        const serverName = server || params?.server || params?.name;
         if (!serverName) {
-          return this.error("invalid_params", "server name is required for action=install");
+          return this.error("invalid_params", "server name is required for action=install (pass as server field or params.name)");
         }
         if (this.servers[serverName]) {
           return { action: "install", server: serverName, installed: true, message: `Server "${serverName}" is already configured.` };
