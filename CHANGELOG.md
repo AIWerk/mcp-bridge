@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.18] - 2026-03-30
+
+### Features
+- Search and catalog actions return origin, maturity, sideEffects, pricing from catalog metadata
+
 ## [2.8.17] - 2026-03-30
 
 ### Fixed

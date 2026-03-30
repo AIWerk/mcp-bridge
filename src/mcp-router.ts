@@ -80,8 +80,8 @@ export type RouterDispatchResponse =
   | { action: "status"; servers: RouterServerStatus[] }
   | { action: "batch"; results: RouterBatchResult[] }
   | { action: "promotions"; promoted: Array<{ server: string; tool: string; callCount: number }>; stats: Array<{ server: string; tool: string; callCount: number; lastCall: string }> }
-  | { action: "search"; query: string; results: Array<{ id: string; name: string; description: string; category?: string; auth?: string }> }
-  | { action: "catalog"; recipes: Array<{ id: string; name: string; description: string; category?: string; auth?: string }> }
+  | { action: "search"; query: string; results: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string }> }
+  | { action: "catalog"; recipes: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string }> }
   | { action: "install"; server: string; installed: boolean; message: string; missingEnvVars?: string[]; credentialsUrl?: string }
   | {
       action: "intent";
@@ -273,6 +273,10 @@ export class McpRouter {
               description: r.description || "",
               category: r.category,
               auth: r.authSummary || (r.authRequired ? "required" : "none"),
+              origin: r.origin,
+              maturity: r.maturity,
+              sideEffects: r.sideEffects,
+              pricing: r.pricing,
             }))
           };
         } catch (err) {
@@ -295,6 +299,10 @@ export class McpRouter {
               description: r.description || "",
               category: r.category,
               auth: r.authSummary || (r.authRequired ? "required" : "none"),
+              origin: r.origin,
+              maturity: r.maturity,
+              sideEffects: r.sideEffects,
+              pricing: r.pricing,
             }))
           };
         } catch (err) {
