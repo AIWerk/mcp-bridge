@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.8.4] - 2026-03-30
+
+### Features
+- **Debug mode**: `debug: true` config option adds `_debug` metadata to tool call responses (server, tool, transport, latencyMs, cached flag)
+- **Skill spec (§11)**: Recipe skills with gotchas, workflows, bestPractices, apiVersion - bridge-injected MCP prompts
+- **Install refactor**: `mcp-bridge install` writes config directly via CatalogClient, no bash script dependency
+- **Tool description**: search/install/catalog actions visible in tool description for agent discoverability
+- **Empty server guide**: When no servers configured, tool description guides agents to search/install from catalog
+
+### Fixed
+- Debug type safety improvements, spec §7/§11 clarifications
+
 ## [Unreleased]
 
 ### Features
