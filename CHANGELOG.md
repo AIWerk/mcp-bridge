@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.22] - 2026-03-30
+
+### Changed
+- Tool description emphasizes using bridge catalog first for new servers (verified, signed, security-audited)
+
 ## [2.8.21] - 2026-03-30
 
 ### Fixed
