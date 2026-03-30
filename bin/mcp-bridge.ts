@@ -206,7 +206,7 @@ function cmdInit(logger: Logger): void {
     try {
       const addArgs = ["mcp", "add", "-s", "user", "mcp-bridge", "--", bridgeCmd, ...bridgeArgs];
       execFileSync("claude", addArgs, { stdio: "pipe" });
-      process.stdout.write("✓ Registered with Claude Code (user scope)\n");
+      process.stdout.write("✓ Registered with Claude Code (user scope) → ~/.claude.json\n  Restart Claude Code to activate.\n");
       registered = true;
     } catch {
       process.stdout.write("⚠ Claude Code detected but registration failed. Manual setup:\n");
@@ -226,10 +226,10 @@ function cmdInit(logger: Logger): void {
       if (!cursorConfig.mcpServers["mcp-bridge"]) {
         cursorConfig.mcpServers["mcp-bridge"] = { command: bridgeCmd, args: bridgeArgs };
         writeFileSync(cursorConfigPath, JSON.stringify(cursorConfig, null, 2) + "\n", "utf-8");
-        process.stdout.write("✓ Registered with Cursor\n");
+        process.stdout.write(`✓ Registered with Cursor → ${cursorConfigPath}\n  Restart Cursor to activate.\n`);
         registered = true;
       } else {
-        process.stdout.write("✓ Cursor already configured\n");
+        process.stdout.write(`✓ Cursor already configured → ${cursorConfigPath}\n`);
         registered = true;
       }
     } catch {
@@ -249,10 +249,10 @@ function cmdInit(logger: Logger): void {
       if (!wsConfig.mcpServers["mcp-bridge"]) {
         wsConfig.mcpServers["mcp-bridge"] = { command: bridgeCmd, args: bridgeArgs };
         writeFileSync(windsurfConfigPath, JSON.stringify(wsConfig, null, 2) + "\n", "utf-8");
-        process.stdout.write("✓ Registered with Windsurf\n");
+        process.stdout.write(`✓ Registered with Windsurf → ${windsurfConfigPath}\n  Restart Windsurf to activate.\n`);
         registered = true;
       } else {
-        process.stdout.write("✓ Windsurf already configured\n");
+        process.stdout.write(`✓ Windsurf already configured → ${windsurfConfigPath}\n`);
         registered = true;
       }
     } catch {

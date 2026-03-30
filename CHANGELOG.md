@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.10] - 2026-03-30
+
+### Fixed
+- Init output shows exact file paths where registration was written
+
 ## [2.8.9] - 2026-03-30
 
 ### Features
