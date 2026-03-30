@@ -269,7 +269,7 @@ export class StandaloneServer {
               type: "object",
               properties: {
                 server: { type: "string", description: "Server name" },
-                action: { type: "string", description: "list | call | batch | refresh | status | intent | schema | promotions" },
+                action: { type: "string", description: "list | call | batch | refresh | status | intent | schema | promotions | search | catalog | install" },
                 tool: { type: "string", description: "Tool name for action=call/schema" },
                 params: { type: "object", description: "Tool arguments" },
                 calls: {

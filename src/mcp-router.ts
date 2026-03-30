@@ -21,6 +21,8 @@ import { ToolResolver } from "./tool-resolution.js";
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import { FileTokenStore } from "./token-store.js";
 import { RateLimiter } from "./rate-limiter.js";
+import { CatalogClient } from "./catalog-client.js";
+import { recipeToServerConfig, collectRequiredEnvVars } from "./config.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -78,6 +80,9 @@ export type RouterDispatchResponse =
   | { action: "status"; servers: RouterServerStatus[] }
   | { action: "batch"; results: RouterBatchResult[] }
   | { action: "promotions"; promoted: Array<{ server: string; tool: string; callCount: number }>; stats: Array<{ server: string; tool: string; callCount: number; lastCall: string }> }
+  | { action: "search"; query: string; results: Array<{ id: string; name: string; description: string; category?: string; auth?: string }> }
+  | { action: "catalog"; recipes: Array<{ id: string; name: string; description: string; category?: string; auth?: string }> }
+  | { action: "install"; server: string; installed: boolean; message: string; missingEnvVars?: string[]; credentialsUrl?: string }
   | {
       action: "intent";
       intent: string;
@@ -168,6 +173,7 @@ export class McpRouter {
   private readonly tokenManager: OAuth2TokenManager;
   private readonly rateLimiter: RateLimiter;
   private readonly requestIdState: RequestIdState = { value: 0 };
+  private readonly catalogClient: CatalogClient | null;
   private intentRouter: IntentRouter | null = null;
   private promotion: AdaptivePromotion | null = null;
 
@@ -199,6 +205,7 @@ export class McpRouter {
     this.toolResolver = new ToolResolver(Object.keys(servers));
     this.tokenManager = new OAuth2TokenManager(logger, new FileTokenStore());
     this.rateLimiter = new RateLimiter();
+    this.catalogClient = new CatalogClient({ logger });
 
     if (clientConfig.adaptivePromotion?.enabled) {
       this.promotion = new AdaptivePromotion(clientConfig.adaptivePromotion, logger);
@@ -242,6 +249,102 @@ export class McpRouter {
           return this.error("invalid_params", "intent string is required for action=intent");
         }
         return this.resolveIntent(intent);
+      }
+
+      // Search catalog
+      if (normalizedAction === "search") {
+        const query = params?.query || server || tool;
+        if (!query) {
+          return this.error("invalid_params", "query is required for action=search (pass as params.query or server field)");
+        }
+        if (!this.catalogClient) {
+          return this.error("mcp_error", "Catalog client not available");
+        }
+        try {
+          const results = await this.catalogClient.search(query);
+          return {
+            action: "search",
+            query,
+            results: results.map(r => ({
+              id: r.name,
+              name: r.name,
+              description: r.description || "",
+              category: r.category,
+              auth: "none", // Search results don't include auth info
+            }))
+          };
+        } catch (err) {
+          return this.error("mcp_error", `Catalog search failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      // Browse catalog
+      if (normalizedAction === "catalog") {
+        if (!this.catalogClient) {
+          return this.error("mcp_error", "Catalog client not available");
+        }
+        try {
+          const recipeList = await this.catalogClient.list();
+          return {
+            action: "catalog",
+            recipes: recipeList.results.map(r => ({
+              id: r.name,
+              name: r.name,
+              description: r.description || "",
+              category: r.category,
+              auth: "none", // List results don't include auth info
+            }))
+          };
+        } catch (err) {
+          return this.error("mcp_error", `Catalog browse failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      // Install server from catalog (runtime only, not persisted to config file)
+      if (normalizedAction === "install") {
+        const serverName = server || params?.server;
+        if (!serverName) {
+          return this.error("invalid_params", "server name is required for action=install");
+        }
+        if (this.servers[serverName]) {
+          return { action: "install", server: serverName, installed: true, message: `Server "${serverName}" is already configured.` };
+        }
+        if (!this.catalogClient) {
+          return this.error("mcp_error", "Catalog client not available");
+        }
+        try {
+          const recipe = await this.catalogClient.resolve(serverName);
+          const serverConfig = recipeToServerConfig(recipe);
+          if (!serverConfig) {
+            return this.error("mcp_error", `Unsupported recipe format for "${serverName}"`);
+          }
+          // Check env vars
+          const requiredVars = collectRequiredEnvVars(recipe);
+          const missing = requiredVars.filter(v => !process.env[v]);
+          
+          // Add to runtime config
+          this.servers[serverName] = serverConfig;
+          // Also update clientConfig.servers so generateDescription includes it
+          this.clientConfig.servers[serverName] = serverConfig;
+          
+          if (missing.length > 0) {
+            return {
+              action: "install",
+              server: serverName,
+              installed: true,
+              message: `Server "${serverName}" added (runtime). Missing env vars: ${missing.join(", ")}. Set them before calling.`,
+              missingEnvVars: missing,
+            };
+          }
+          return {
+            action: "install",
+            server: serverName,
+            installed: true,
+            message: `Server "${serverName}" installed and ready to use.`
+          };
+        } catch (err) {
+          return this.error("mcp_error", `Install failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
 
       if (normalizedAction === "batch") {
@@ -364,7 +467,7 @@ export class McpRouter {
       }
 
       if (normalizedAction !== "call") {
-        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions`);
+        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions, search, catalog, install`);
       }
 
       if (!tool) {
