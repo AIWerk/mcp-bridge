@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.9] - 2026-03-30
+
+### Features
+- **Postinstall auto-init**: `npm install -g` automatically runs `mcp-bridge init`, creating config and registering with detected MCP clients (Claude Code, Cursor, Windsurf). Zero manual steps.
+
 ## [2.8.8] - 2026-03-30
 
 ### Features
