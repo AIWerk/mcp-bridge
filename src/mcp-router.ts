@@ -208,7 +208,7 @@ export class McpRouter {
   static generateDescription(servers: Record<string, McpServerConfig>): string {
     const serverNames = Object.keys(servers);
     if (serverNames.length === 0) {
-      return "Call MCP server tools. No servers configured.";
+      return "MCP server multiplexer with no servers configured yet. Use action='search' to find servers in the catalog (100+ available), action='install' to add a server by name, action='catalog' to browse all available servers.";
     }
 
     const serverList = serverNames
