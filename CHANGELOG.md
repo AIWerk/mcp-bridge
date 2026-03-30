@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.19] - 2026-03-30
+
+### Features
+- Search/catalog actions include signed field (Ed25519 signature status)
+
 ## [2.8.18] - 2026-03-30
 
 ### Features
