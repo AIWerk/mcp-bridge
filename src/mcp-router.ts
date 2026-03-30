@@ -286,7 +286,7 @@ export class McpRouter {
           return this.error("mcp_error", "Catalog client not available");
         }
         try {
-          const recipeList = await this.catalogClient.list();
+          const recipeList = await this.catalogClient.list({ limit: 200 });
           return {
             action: "catalog",
             recipes: recipeList.results.map(r => ({
