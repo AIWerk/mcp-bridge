@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.12] - 2026-03-30
+
+### Fixed
+- Init only prints messages for newly registered clients, silent for already-configured ones
+
 ## [2.8.11] - 2026-03-30
 
 ### Fixed

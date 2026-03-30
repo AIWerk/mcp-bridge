@@ -211,8 +211,8 @@ function cmdInit(logger: Logger): void {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("already exists")) {
-        process.stdout.write("✓ Claude Code already configured → ~/.claude.json\n");
         registered = true;
+        // Silent - already configured, no need to print
       } else {
         process.stdout.write("⚠ Claude Code detected but registration failed. Manual setup:\n");
         process.stdout.write(`  claude mcp add -s user mcp-bridge -- ${bridgeCmd} ${bridgeArgs.join(" ")}\n\n`);
@@ -235,7 +235,8 @@ function cmdInit(logger: Logger): void {
         process.stdout.write(`✓ Registered with Cursor → ${cursorConfigPath}\n  Restart Cursor to activate.\n`);
         registered = true;
       } else {
-        process.stdout.write(`✓ Cursor already configured → ${cursorConfigPath}\n`);
+        registered = true;
+        // Silent - already configured
         registered = true;
       }
     } catch {
@@ -258,7 +259,8 @@ function cmdInit(logger: Logger): void {
         process.stdout.write(`✓ Registered with Windsurf → ${windsurfConfigPath}\n  Restart Windsurf to activate.\n`);
         registered = true;
       } else {
-        process.stdout.write(`✓ Windsurf already configured → ${windsurfConfigPath}\n`);
+        registered = true;
+        // Silent - already configured
         registered = true;
       }
     } catch {
