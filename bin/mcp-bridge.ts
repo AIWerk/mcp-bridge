@@ -4,7 +4,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs";
 import { join, dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
 import { platform, homedir } from "os";
-import { execFileSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
 import { loadConfig, initConfigDir, warnDeprecatedBundledRecipes, recipeToServerConfig, collectRequiredEnvVars } from "../src/config.js";
 import { StandaloneServer } from "../src/standalone-server.js";
 import { PACKAGE_VERSION } from "../src/protocol.js";
@@ -180,38 +180,112 @@ All logs go to stderr. Stdout is reserved for the MCP protocol (stdio mode).
 `);
 }
 
+function whichCmd(name: string): boolean {
+  try {
+    execSync(`which ${name}`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function cmdInit(logger: Logger): void {
   initConfigDir(logger);
 
-  // Detect global install: check if we're in a global node_modules (not under a project)
-  // Global paths: ~/.nvm/.../lib/node_modules, /usr/lib/node_modules, etc.
-  // Local paths: ~/projects/.../node_modules, ~/node_modules/
   const isGlobal = __dirname.includes("node_modules") && (
     __dirname.includes("/lib/node_modules/") || __dirname.includes("\\lib\\node_modules\\")
   );
-  const cmd = isGlobal ? "mcp-bridge" : `node ${join(__dirname, "..", "bin", "mcp-bridge.js")}`;
+  const bridgeCmd = isGlobal ? "mcp-bridge" : "node";
+  const bridgeArgs = isGlobal ? ["serve"] : [join(__dirname, "..", "bin", "mcp-bridge.js"), "serve"];
 
-  process.stdout.write(`
-Next step: add mcp-bridge to your MCP client.
+  // Auto-detect and register with known clients
+  let registered = false;
+
+  // Claude Code
+  if (whichCmd("claude")) {
+    try {
+      const addArgs = ["mcp", "add", "-s", "user", "mcp-bridge", "--", bridgeCmd, ...bridgeArgs];
+      execFileSync("claude", addArgs, { stdio: "pipe" });
+      process.stdout.write("✓ Registered with Claude Code (user scope)\n");
+      registered = true;
+    } catch {
+      process.stdout.write("⚠ Claude Code detected but registration failed. Manual setup:\n");
+      process.stdout.write(`  claude mcp add -s user mcp-bridge -- ${bridgeCmd} ${bridgeArgs.join(" ")}\n\n`);
+    }
+  }
+
+  // Cursor
+  const cursorConfigPath = join(homedir(), ".cursor", "mcp.json");
+  if (existsSync(join(homedir(), ".cursor"))) {
+    try {
+      let cursorConfig: any = {};
+      if (existsSync(cursorConfigPath)) {
+        cursorConfig = JSON.parse(readFileSync(cursorConfigPath, "utf-8"));
+      }
+      if (!cursorConfig.mcpServers) cursorConfig.mcpServers = {};
+      if (!cursorConfig.mcpServers["mcp-bridge"]) {
+        cursorConfig.mcpServers["mcp-bridge"] = { command: bridgeCmd, args: bridgeArgs };
+        writeFileSync(cursorConfigPath, JSON.stringify(cursorConfig, null, 2) + "\n", "utf-8");
+        process.stdout.write("✓ Registered with Cursor\n");
+        registered = true;
+      } else {
+        process.stdout.write("✓ Cursor already configured\n");
+        registered = true;
+      }
+    } catch {
+      process.stdout.write("⚠ Cursor detected but registration failed.\n");
+    }
+  }
+
+  // Windsurf
+  const windsurfConfigPath = join(homedir(), ".windsurf", "mcp.json");
+  if (existsSync(join(homedir(), ".windsurf"))) {
+    try {
+      let wsConfig: any = {};
+      if (existsSync(windsurfConfigPath)) {
+        wsConfig = JSON.parse(readFileSync(windsurfConfigPath, "utf-8"));
+      }
+      if (!wsConfig.mcpServers) wsConfig.mcpServers = {};
+      if (!wsConfig.mcpServers["mcp-bridge"]) {
+        wsConfig.mcpServers["mcp-bridge"] = { command: bridgeCmd, args: bridgeArgs };
+        writeFileSync(windsurfConfigPath, JSON.stringify(wsConfig, null, 2) + "\n", "utf-8");
+        process.stdout.write("✓ Registered with Windsurf\n");
+        registered = true;
+      } else {
+        process.stdout.write("✓ Windsurf already configured\n");
+        registered = true;
+      }
+    } catch {
+      process.stdout.write("⚠ Windsurf detected but registration failed.\n");
+    }
+  }
+
+  if (!registered) {
+    const cmd = isGlobal ? "mcp-bridge" : `node ${join(__dirname, "..", "bin", "mcp-bridge.js")}`;
+    process.stdout.write(`
+No supported MCP client detected. Add manually:
 
   Claude Code:    claude mcp add -s user mcp-bridge -- ${cmd} serve
   Cursor:         Add to ~/.cursor/mcp.json
   Claude Desktop: Add to claude_desktop_config.json
-  Windsurf:       Add to ~/.windsurf/mcp.json
   OpenClaw:       openclaw plugins install @aiwerk/openclaw-mcp-bridge
 
-For Cursor/Claude Desktop/Windsurf, add this JSON block:
+JSON config block (Cursor/Claude Desktop/Windsurf):
 
   {
     "mcp-bridge": {
       "command": "${isGlobal ? "mcp-bridge" : "node"}",
-      "args": ${isGlobal ? '["serve"]' : `["${join(__dirname, "..", "bin", "mcp-bridge.js")}", "serve"]`}
+      "args": ${JSON.stringify(bridgeArgs)}
     }
   }
-${!isGlobal ? "\nTip: Install globally for a cleaner setup:\n  npm install -g @aiwerk/mcp-bridge\n" : ""}
-After adding, restart your client. The bridge will appear as an 'mcp' tool
-with search, install, and catalog actions to discover and add MCP servers.
 `);
+  }
+
+  if (!isGlobal) {
+    process.stdout.write("\nTip: Install globally for a cleaner setup:\n  npm install -g @aiwerk/mcp-bridge\n");
+  }
+
+  process.stdout.write("\nRestart your client. The bridge appears as an 'mcp' tool with\nsearch, install, and catalog actions to discover and add MCP servers.\n");
 }
 
 function cmdCatalog(logger: Logger): void {
@@ -648,6 +722,12 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
 }
 
 async function cmdServe(args: CliArgs, logger: Logger): Promise<void> {
+  // Auto-create config if missing (don't crash on first run)
+  const configPath = resolveConfigPath(args.configPath);
+  if (!existsSync(configPath)) {
+    initConfigDir(logger);
+  }
+
   let config;
   try {
     config = loadConfig({ configPath: args.configPath, logger });

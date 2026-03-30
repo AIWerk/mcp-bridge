@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.8] - 2026-03-30
+
+### Features
+- **Init auto-registration**: `mcp-bridge init` detects installed clients (Claude Code, Cursor, Windsurf) and registers automatically
+- **Serve auto-init**: `mcp-bridge serve` creates config directory if missing instead of crashing
+
 ## [2.8.7] - 2026-03-30
 
 ### Fixed
