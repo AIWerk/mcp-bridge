@@ -208,9 +208,15 @@ function cmdInit(logger: Logger): void {
       execFileSync("claude", addArgs, { stdio: "pipe" });
       process.stdout.write("✓ Registered with Claude Code (user scope) → ~/.claude.json\n  Restart Claude Code to activate.\n");
       registered = true;
-    } catch {
-      process.stdout.write("⚠ Claude Code detected but registration failed. Manual setup:\n");
-      process.stdout.write(`  claude mcp add -s user mcp-bridge -- ${bridgeCmd} ${bridgeArgs.join(" ")}\n\n`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("already exists")) {
+        process.stdout.write("✓ Claude Code already configured → ~/.claude.json\n");
+        registered = true;
+      } else {
+        process.stdout.write("⚠ Claude Code detected but registration failed. Manual setup:\n");
+        process.stdout.write(`  claude mcp add -s user mcp-bridge -- ${bridgeCmd} ${bridgeArgs.join(" ")}\n\n`);
+      }
     }
   }
 

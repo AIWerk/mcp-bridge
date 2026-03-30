@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.11] - 2026-03-30
+
+### Fixed
+- Init handles "already exists" from claude mcp add gracefully (shows success instead of error)
+
 ## [2.8.10] - 2026-03-30
 
 ### Fixed
