@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.14] - 2026-03-30
+
+### Changed
+- Init no longer auto-registers with all clients. Use --register <client> to explicitly choose (claude-code, codex, cursor, windsurf)
+- Unknown client shows generic JSON snippet instead of error
+
 ## [2.8.13] - 2026-03-30
 
 ### Features
