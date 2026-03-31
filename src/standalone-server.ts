@@ -672,7 +672,7 @@ export class StandaloneServer {
   private createTransport(serverName: string, serverConfig: McpServerConfig): McpTransport {
     const onReconnected = async () => {
       this.logger.info(`[mcp-bridge] ${serverName} reconnected, refreshing tools`);
-      await this.discoverDirectTools(true);
+      await this.discoverSingleServer(serverName);
     };
 
     switch (serverConfig.transport) {

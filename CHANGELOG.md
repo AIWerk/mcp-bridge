@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.29] - 2026-03-31
+
+### Fixed
+- Direct mode: reconnect handler now refreshes only the reconnected server (was triggering full discovery of all servers, causing cascade npx startups)
+
 ## [2.8.28] - 2026-03-31
 
 ### Fixed
