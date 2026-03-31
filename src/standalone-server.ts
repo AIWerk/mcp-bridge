@@ -293,15 +293,35 @@ export class StandaloneServer {
       };
     }
 
-    // Direct mode: discover all tools from all servers
-    await this.discoverDirectTools();
-    const tools = this.directTools.map(t => ({
-      name: t.registeredName,
-      description: t.description,
-      inputSchema: t.inputSchema
-    }));
+    // Direct mode: return tools lazily
+    // If already discovered, use real tool list. Otherwise, generate placeholder
+    // tools from config descriptions (no child process startup on tools/list).
+    if (this.directTools.length > 0) {
+      const tools = this.directTools.map(t => ({
+        name: t.registeredName,
+        description: t.description,
+        inputSchema: t.inputSchema
+      }));
+      return { jsonrpc: "2.0", id, result: { tools } };
+    }
 
-    return { jsonrpc: "2.0", id, result: { tools } };
+    // Lazy: generate tool entries from server config (no connect yet)
+    const placeholderTools: Array<{ name: string; description: string; inputSchema: any }> = [];
+    const globalNames = new Set<string>();
+    for (const [serverName, serverConfig] of Object.entries(this.config.servers)) {
+      const desc = serverConfig.description || serverName;
+      const registeredName = pickRegisteredToolName(
+        serverName, "call", this.config.toolPrefix,
+        new Set<string>(), globalNames, this.logger
+      );
+      globalNames.add(registeredName);
+      placeholderTools.push({
+        name: registeredName,
+        description: `[${serverName}] ${desc} — tools will be discovered on first call. Use this tool to trigger discovery.`,
+        inputSchema: { type: "object", properties: { _discover: { type: "boolean", description: "Set to true to discover all tools from this server" } } }
+      });
+    }
+    return { jsonrpc: "2.0", id, result: { tools: placeholderTools } };
   }
 
   private async handleToolsCall(id: number, params: any): Promise<McpResponse> {
@@ -358,7 +378,31 @@ export class StandaloneServer {
     }
 
     // Direct mode: find and call the tool
-    const entry = this.directTools.find(t => t.registeredName === toolName);
+    let entry = this.directTools.find(t => t.registeredName === toolName);
+
+    // Lazy discovery: if tool not found, maybe we haven't connected yet
+    if (!entry) {
+      // Check if this looks like a placeholder tool (serverName_call pattern) or just unknown
+      // Try full discovery if we haven't done it yet
+      if (this.directTools.length === 0 || toolArgs?._discover) {
+        this.logger.info(`[mcp-bridge] Lazy discovery triggered by tool call: ${toolName}`);
+        await this.discoverDirectTools();
+        entry = this.directTools.find(t => t.registeredName === toolName);
+
+        // If the original call was a placeholder, send back the discovered tools list
+        if (!entry && toolArgs?._discover) {
+          const discovered = this.directTools.map(t => `${t.registeredName}: ${t.description}`);
+          return {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [{ type: "text", text: `Discovered ${this.directTools.length} tools:\n${discovered.join("\n")}` }]
+            }
+          };
+        }
+      }
+    }
+
     if (!entry) {
       return {
         jsonrpc: "2.0",
@@ -372,7 +416,31 @@ export class StandaloneServer {
     }
 
     try {
-      const conn = this.directConnections.get(entry.serverName);
+      let conn = this.directConnections.get(entry.serverName);
+      // Lazy connect: if server not connected yet, connect now
+      if (!conn || !conn.transport.isConnected()) {
+        const serverConfig = this.config.servers[entry.serverName];
+        if (serverConfig) {
+          try {
+            this.logger.info(`[mcp-bridge] Lazy connecting to ${entry.serverName}...`);
+            const transport = this.createTransport(entry.serverName, serverConfig);
+            await transport.connect();
+            await initializeProtocol(transport, PACKAGE_VERSION);
+            conn = { transport, initialized: true };
+            this.directConnections.set(entry.serverName, conn);
+          } catch (connErr) {
+            return {
+              jsonrpc: "2.0",
+              id,
+              error: {
+                code: -32001,
+                message: `Failed to connect to ${entry.serverName}: ${connErr instanceof Error ? connErr.message : String(connErr)}`,
+                data: { errorType: "connection_failed", server: entry.serverName, retriable: true }
+              }
+            };
+          }
+        }
+      }
       if (!conn || !conn.transport.isConnected()) {
         return {
           jsonrpc: "2.0",

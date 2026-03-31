@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.27] - 2026-03-31
+
+### Fixed
+- Direct mode: lazy start - servers only connect on first tool call, not on tools/list (prevents CPU spike from eager npx startup)
+- Direct mode: lazy per-server connect on tool call if not yet connected
+
 ## [2.8.26] - 2026-03-31
 
 ### Changed
