@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.8.42] - 2026-03-31
+
+### Fixed
+- **Remove action** handler in router dispatch (was broken - "invalid action")
+- **Connection leak** in discoverSingleServer (directConnections.set after fetchToolsList)
+- **Prefix collision** in guessServerFromToolName (longest name first)
+- **Action description** includes remove, set-mode, set-env in router mode inputSchema
+
+### Added
+- **Direct mode idle timeout** (5 min) with lastUsed tracking and interval cleanup
+- **Cache TTL** (24h) with cachedAt wrapper, corrupt JSON handling, path sanitization
+- 8 new tests (remove action + cache validation), total 337
+
 ## [2.8.41] - 2026-03-31
 
 ### Fixed

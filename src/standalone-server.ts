@@ -276,7 +276,7 @@ export class StandaloneServer {
               type: "object",
               properties: {
                 server: { type: "string", description: "Server name" },
-                action: { type: "string", description: "list | call | batch | refresh | status | intent | schema | promotions | search | catalog | install" },
+                action: { type: "string", description: "list | call | batch | refresh | status | intent | schema | promotions | search | catalog | install | remove | set-mode | set-env" },
                 tool: { type: "string", description: "Tool name for action=call/schema" },
                 params: { type: "object", description: "Tool arguments" },
                 calls: {
@@ -720,8 +720,9 @@ export class StandaloneServer {
 
   /** Extract server name from a tool name like "todoist_call" or "github_call" */
   private guessServerFromToolName(toolName: string): string | null {
-    // Try exact match with placeholder pattern: serverName_call
-    for (const serverName of Object.keys(this.config.servers)) {
+    // Sort by longest name first to avoid prefix collisions (e.g. "github" before "git")
+    const serverNames = Object.keys(this.config.servers).sort((a, b) => b.length - a.length);
+    for (const serverName of serverNames) {
       if (toolName.startsWith(serverName + "_") || toolName === serverName) {
         return serverName;
       }
