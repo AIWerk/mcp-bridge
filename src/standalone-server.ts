@@ -46,6 +46,7 @@ export class StandaloneServer {
   // Direct mode state
   private directTools: DirectToolEntry[] = [];
   private directConnections = new Map<string, { transport: McpTransport; initialized: boolean }>();
+  private stdoutRef: NodeJS.WriteStream | null = null;
 
   constructor(config: BridgeConfig, logger: Logger) {
     this.config = config;
@@ -77,6 +78,7 @@ export class StandaloneServer {
   async startStdio(): Promise<void> {
     const stdin = process.stdin;
     const stdout = process.stdout;
+    this.stdoutRef = stdout;
 
     let buffer = Buffer.alloc(0);
     // LSP framing state
@@ -416,16 +418,20 @@ export class StandaloneServer {
         this.logger.info(`[mcp-bridge] Lazy discovery for server: ${serverName} (triggered by ${toolName})`);
         await this.discoverSingleServer(serverName);
 
-        // After discovery, the placeholder tool no longer exists - return discovered tools
-        const serverTools = this.directTools.filter(t => t.serverName === serverName);
-        const discovered = serverTools.map(t => `${t.registeredName}: ${t.description}`);
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            content: [{ type: "text", text: `Discovered ${serverTools.length} tools from ${serverName}. Available tools:\n\n${discovered.join("\n")}\n\nCall any of these tools directly by name.` }]
-          }
-        };
+        // After discovery, try to find the real tool
+        entry = this.directTools.find(t => t.registeredName === toolName);
+        if (!entry) {
+          // Placeholder was called — return discovered tools list and notify client to refresh
+          const serverTools = this.directTools.filter(t => t.serverName === serverName);
+          const discovered = serverTools.map(t => `${t.registeredName}: ${t.description}`);
+          return {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [{ type: "text", text: `Server "${serverName}" is now connected with ${serverTools.length} tools. The tool list has been updated — please retry your request. Available tools:\n\n${discovered.join("\n")}` }]
+            }
+          };
+        }
       }
     }
 
@@ -582,6 +588,14 @@ export class StandaloneServer {
     }
   }
 
+  /** Send notifications/tools/list_changed to the client via stdout */
+  private sendToolsChanged(): void {
+    if (!this.stdoutRef) return;
+    const notification = { jsonrpc: "2.0", method: "notifications/tools/list_changed" };
+    this.writeResponse(this.stdoutRef, notification);
+    this.logger.info("[mcp-bridge] Sent notifications/tools/list_changed");
+  }
+
   /** Extract server name from a tool name like "todoist_call" or "github_call" */
   private guessServerFromToolName(toolName: string): string | null {
     // Try exact match with placeholder pattern: serverName_call
@@ -636,6 +650,9 @@ export class StandaloneServer {
       this.saveToolCache(serverName, tools);
 
       this.logger.info(`[mcp-bridge] Discovered ${tools.length} tools from ${serverName}`);
+
+      // Notify client that tool list changed (MCP spec: notifications/tools/list_changed)
+      this.sendToolsChanged();
     } catch (err) {
       this.logger.error(`[mcp-bridge] Failed to discover ${serverName}:`, err);
     }

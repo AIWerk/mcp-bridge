@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.31] - 2026-03-31
+
+### Fixed
+- Direct mode: sends notifications/tools/list_changed after discovery so clients refresh tool list
+- Direct mode: placeholder tool call returns success with discovered tools instead of MCP error
+
 ## [2.8.30] - 2026-03-31
 
 ### Fixed
