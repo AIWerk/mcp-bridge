@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.26] - 2026-03-31
+
+### Changed
+- Tool description: "MCP server multiplexer" → "MCP server manager" (better reflects install/search/config capabilities)
+
 ## [2.8.25] - 2026-03-31
 
 ### Added

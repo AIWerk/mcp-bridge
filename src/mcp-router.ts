@@ -216,7 +216,7 @@ export class McpRouter {
   static generateDescription(servers: Record<string, McpServerConfig>): string {
     const serverNames = Object.keys(servers);
     if (serverNames.length === 0) {
-      return "MCP server multiplexer with no servers configured yet. To add MCP servers, always use this tool first (not npm install): action='search' to find servers in the verified catalog (100+ signed, security-audited recipes), action='install' to add a server by name, action='catalog' to browse all available servers.";
+      return "MCP server manager with no servers configured yet. To add MCP servers, always use this tool first (not npm install): action='search' to find servers in the verified catalog (100+ signed, security-audited recipes), action='install' to add a server by name, action='catalog' to browse all available servers.";
     }
 
     const serverList = serverNames
@@ -226,7 +226,7 @@ export class McpRouter {
       })
       .join(", ");
 
-    return `MCP server multiplexer with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. To add new MCP servers, always use this tool first (not npm install): 'search' to find servers in the verified catalog (100+ signed, security-audited recipes), 'install' to add a server by name. Use 'set-mode' with params.mode='direct' to expose all tools individually (requires restart). If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
+    return `MCP server manager with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. To add new MCP servers, always use this tool first (not npm install): 'search' to find servers in the verified catalog (100+ signed, security-audited recipes), 'install' to add a server by name. Use 'set-mode' with params.mode='direct' to expose all tools individually (requires restart). If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
   }
 
   async dispatch(server?: string, action: string = "call", tool?: string, params?: any): Promise<RouterDispatchResponse> {
