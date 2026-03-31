@@ -310,9 +310,11 @@ export class StandaloneServer {
       return { jsonrpc: "2.0", id, result: { tools } };
     }
 
-    // Lazy: try cache first, then placeholder
+    // Lazy: try cache first, add discover tool for uncached servers
     const lazyTools: Array<{ name: string; description: string; inputSchema: any }> = [];
     const globalNames = new Set<string>();
+    const uncachedServers: string[] = [];
+
     for (const [serverName, serverConfig] of Object.entries(this.config.servers)) {
       const cached = this.loadToolCache(serverName);
       if (cached && cached.length > 0) {
@@ -326,31 +328,39 @@ export class StandaloneServer {
           localNames.add(registeredName);
           globalNames.add(registeredName);
           lazyTools.push({ name: registeredName, description: tool.description, inputSchema: tool.inputSchema });
-          // Also populate directTools so call works with lazy connect
           this.directTools.push({
             serverName, originalName: tool.name, registeredName,
             description: tool.description, inputSchema: tool.inputSchema
           });
         }
       } else {
-        // No cache: single placeholder per server
-        const desc = serverConfig.description || serverName;
-        const registeredName = pickRegisteredToolName(
-          serverName, "call", this.config.toolPrefix,
-          new Set<string>(), globalNames, this.logger
-        );
-        globalNames.add(registeredName);
-        lazyTools.push({
-          name: registeredName,
-          description: `[${serverName}] ${desc} — call this tool to discover all available tools from this server.`,
-          inputSchema: { type: "object", properties: { _discover: { type: "boolean", description: "Set to true to discover all tools" } } }
-        });
-        this.directTools.push({
-          serverName, originalName: "call", registeredName,
-          description: `[${serverName}] ${desc}`, inputSchema: {}
-        });
+        uncachedServers.push(serverName);
       }
     }
+
+    // Add a single discover tool if there are uncached servers
+    if (uncachedServers.length > 0) {
+      const serverDescs = uncachedServers.map(name => {
+        const desc = this.config.servers[name]?.description || name;
+        return `${name} (${desc})`;
+      });
+      lazyTools.push({
+        name: "mcp_discover",
+        description: `Connect to MCP servers and discover their tools. Servers not yet connected: ${serverDescs.join(", ")}. Call this before using any of these servers.`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            server: {
+              type: "string",
+              description: `Server to discover. Available: ${uncachedServers.join(", ")}`,
+              enum: uncachedServers
+            }
+          },
+          required: ["server"]
+        }
+      });
+    }
+
     return { jsonrpc: "2.0", id, result: { tools: lazyTools } };
   }
 
@@ -407,31 +417,36 @@ export class StandaloneServer {
       };
     }
 
+    // Handle mcp_discover tool
+    if (toolName === "mcp_discover") {
+      const serverName = toolArgs?.server as string;
+      if (!serverName || !this.config.servers[serverName]) {
+        const available = Object.keys(this.config.servers).join(", ");
+        return {
+          jsonrpc: "2.0", id,
+          result: { content: [{ type: "text", text: `Please specify a server. Available: ${available}` }] }
+        };
+      }
+      this.logger.info(`[mcp-bridge] Discovering server: ${serverName}`);
+      await this.discoverSingleServer(serverName);
+      const serverTools = this.directTools.filter(t => t.serverName === serverName);
+      const discovered = serverTools.map(t => `${t.registeredName}: ${t.description}`);
+      return {
+        jsonrpc: "2.0", id,
+        result: { content: [{ type: "text", text: `Connected to "${serverName}". Discovered ${serverTools.length} tools:\n\n${discovered.join("\n")}\n\nThese tools are now available. Call them directly by name.` }] }
+      };
+    }
+
     // Direct mode: find and call the tool
     let entry = this.directTools.find(t => t.registeredName === toolName);
 
-    // Lazy discovery: if tool not found, discover only the relevant server (not all)
+    // Lazy discovery: if tool not found, try to discover the relevant server
     if (!entry) {
-      // Extract server name from tool name (prefix_toolname pattern)
       const serverName = this.guessServerFromToolName(toolName);
-      if (serverName) {
-        this.logger.info(`[mcp-bridge] Lazy discovery for server: ${serverName} (triggered by ${toolName})`);
+      if (serverName && !this.directConnections.get(serverName)?.initialized) {
+        this.logger.info(`[mcp-bridge] Auto-discovering server: ${serverName} (triggered by ${toolName})`);
         await this.discoverSingleServer(serverName);
-
-        // After discovery, try to find the real tool
         entry = this.directTools.find(t => t.registeredName === toolName);
-        if (!entry) {
-          // Placeholder was called — return discovered tools list and notify client to refresh
-          const serverTools = this.directTools.filter(t => t.serverName === serverName);
-          const discovered = serverTools.map(t => `${t.registeredName}: ${t.description}`);
-          return {
-            jsonrpc: "2.0",
-            id,
-            result: {
-              content: [{ type: "text", text: `Server "${serverName}" is now connected with ${serverTools.length} tools. The tool list has been updated — please retry your request. Available tools:\n\n${discovered.join("\n")}` }]
-            }
-          };
-        }
       }
     }
 

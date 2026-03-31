@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.32] - 2026-03-31
+
+### Changed
+- Direct mode: single `mcp_discover` tool replaces per-server placeholders. Agent calls `mcp_discover(server="todoist")` to connect and discover tools — no more fake tool names that cause errors.
+- Cached servers show real tools immediately, only uncached ones need discovery.
+
 ## [2.8.31] - 2026-03-31
 
 ### Fixed
