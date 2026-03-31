@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.35] - 2026-03-31
+
+### Added
+- CLI `mcp-bridge remove <server>` (alias: `uninstall`) — removes server from config and deletes tool cache
+
 ## [2.8.34] - 2026-03-31
 
 ### Fixed

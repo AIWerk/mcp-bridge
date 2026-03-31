@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs";
+import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
 import { join, dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
 import { platform, homedir } from "os";
@@ -51,7 +51,7 @@ function createLogger(level: LogLevel): Logger {
 // -- Arg parsing ----------------------------------------------------------
 
 interface CliArgs {
-  command: "serve" | "init" | "install" | "catalog" | "servers" | "search" | "update" | "version" | "help" | "auth" | "usage" | "limit";
+  command: "serve" | "init" | "install" | "remove" | "catalog" | "servers" | "search" | "update" | "version" | "help" | "auth" | "usage" | "limit";
   authSubcommand?: "login" | "logout" | "status";
   sse: boolean;
   http: boolean;
@@ -125,6 +125,7 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "init": args.command = "init"; break;
       case "install": args.command = "install"; break;
+      case "remove": case "uninstall": args.command = "remove"; break;
       case "catalog": args.command = "catalog"; break;
       case "servers": args.command = "servers"; break;
       case "search": args.command = "search"; break;
@@ -170,6 +171,7 @@ Usage:
   mcp-bridge --http --port 3000     Start as streamable-http server
   mcp-bridge init [--register <client>] [--mode router|direct]  Create config + optionally register
   mcp-bridge install <server>       Install a server from the catalog
+  mcp-bridge remove <server>        Remove a configured server
   mcp-bridge catalog [--offline]    List available servers
   mcp-bridge servers                List configured servers
   mcp-bridge search <query>         Search catalog by keyword
@@ -649,6 +651,37 @@ async function cmdInstall(serverName: string, args: CliArgs, logger: Logger): Pr
   }
 }
 
+function cmdRemove(serverName: string, args: CliArgs, logger: Logger): void {
+  const configPath = resolveConfigPath(args.configPath);
+  if (!existsSync(configPath)) {
+    logger.error("No config file found.");
+    process.exit(1);
+  }
+
+  const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+  if (!raw.servers || !raw.servers[serverName]) {
+    process.stdout.write(`Server "${serverName}" is not configured.\n`);
+    const available = Object.keys(raw.servers || {});
+    if (available.length > 0) {
+      process.stdout.write(`Configured servers: ${available.join(", ")}\n`);
+    }
+    process.exit(1);
+  }
+
+  // Remove from config
+  delete raw.servers[serverName];
+  writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+  process.stdout.write(`✓ Removed "${serverName}" from ${configPath}\n`);
+
+  // Remove tool cache
+  const cacheDir = join(dirname(configPath), "cache");
+  const cachePath = join(cacheDir, `${serverName}-tools.json`);
+  if (existsSync(cachePath)) {
+    unlinkSync(cachePath);
+    process.stdout.write(`✓ Removed tool cache for "${serverName}"\n`);
+  }
+}
+
 async function cmdUpdate(logger: Logger, checkOnly: boolean): Promise<void> {
   if (checkOnly) {
     const info = await checkForUpdate(logger);
@@ -892,6 +925,13 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       await cmdInstall(args.positional[0], args, logger);
+      break;
+    case "remove":
+      if (args.positional.length === 0) {
+        process.stderr.write("Usage: mcp-bridge remove <server>\n");
+        process.exit(1);
+      }
+      cmdRemove(args.positional[0], args, logger);
       break;
     case "update":
       await cmdUpdate(logger, args.checkOnly);
