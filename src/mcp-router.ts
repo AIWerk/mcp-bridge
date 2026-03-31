@@ -84,6 +84,7 @@ export type RouterDispatchResponse =
   | { action: "catalog"; recipes: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string; signed?: boolean }> }
   | { action: "install"; server: string; installed: boolean; message: string; missingEnvVars?: string[]; credentialsUrl?: string }
   | { action: "set-mode"; mode: string; message: string; requiresRestart?: boolean }
+  | { action: "set-env"; key: string; message: string }
   | {
       action: "intent";
       intent: string;
@@ -226,7 +227,7 @@ export class McpRouter {
       })
       .join(", ");
 
-    return `MCP server manager with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. To add new MCP servers, always use this tool first (not npm install): 'search' to find servers in the verified catalog (100+ signed, security-audited recipes), 'install' to add a server by name. Use 'set-mode' with params.mode='direct' to expose all tools individually (requires restart). If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
+    return `MCP server manager with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. To add new MCP servers, always use this tool first (not npm install): 'search' to find servers in the verified catalog (100+ signed, security-audited recipes), 'install' to add a server by name. Use 'set-env' with params.key and params.value to configure API keys (stored in ~/.mcp-bridge/.env). If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
   }
 
   async dispatch(server?: string, action: string = "call", tool?: string, params?: any): Promise<RouterDispatchResponse> {
@@ -504,6 +505,43 @@ export class McpRouter {
       }
 
       // Set mode (persists to config, requires bridge restart to take effect)
+      // Set environment variable in ~/.mcp-bridge/.env
+      if (normalizedAction === "set-env") {
+        const key = params?.key as string;
+        const value = params?.value as string;
+        if (!key || !value) {
+          return this.error("invalid_params", "Both 'key' and 'value' are required for set-env");
+        }
+        if (!/^[A-Z][A-Z0-9_]*$/.test(key)) {
+          return this.error("invalid_params", `Invalid key format: "${key}". Use UPPER_SNAKE_CASE.`);
+        }
+        try {
+          const os = await import("os");
+          const fs = await import("fs");
+          const path = await import("path");
+          const envPath = path.join(os.homedir(), ".mcp-bridge", ".env");
+          let envContent = "";
+          if (fs.existsSync(envPath)) {
+            envContent = fs.readFileSync(envPath, "utf-8");
+          }
+          const lines = envContent.split("\n");
+          const keyLine = `${key}=${value}`;
+          const idx = lines.findIndex((l: string) => l.startsWith(`${key}=`));
+          if (idx >= 0) { lines[idx] = keyLine; } else { lines.push(keyLine); }
+          const newContent = lines.filter((l: string) => l.trim() !== "").join("\n") + "\n";
+          fs.writeFileSync(envPath, newContent, { mode: 0o600 });
+          process.env[key] = value;
+          this.logger.info(`Set env var ${key} in ${envPath}`);
+          return {
+            action: "set-env" as any,
+            key,
+            message: `✓ Set ${key} in ~/.mcp-bridge/.env. ⚠️ Security: stored in plaintext, file permissions 600.`,
+          };
+        } catch (err) {
+          return this.error("mcp_error", `Failed to set env: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
       if (normalizedAction === "set-mode") {
         const newMode = params?.mode as string;
         if (newMode !== "router" && newMode !== "direct") {
@@ -537,7 +575,7 @@ export class McpRouter {
       }
 
       if (normalizedAction !== "call") {
-        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions, search, catalog, install, set-mode`);
+        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions, search, catalog, install, set-mode, set-env`);
       }
 
       if (!tool) {

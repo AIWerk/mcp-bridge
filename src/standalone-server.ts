@@ -439,6 +439,42 @@ export class StandaloneServer {
         return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `Discovered ${serverTools.length} tools from "${server}":\n\n${serverTools.map(t => `${t.registeredName}: ${t.description}`).join("\n")}` }] } };
       }
 
+      if (action === "set-env") {
+        const key = toolArgs?.key as string;
+        const value = toolArgs?.value as string;
+        if (!key || !value) {
+          return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Both 'key' and 'value' are required for set-env." }] } };
+        }
+        // Validate key format (only uppercase letters, digits, underscores)
+        if (!/^[A-Z][A-Z0-9_]*$/.test(key)) {
+          return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `Invalid key format: "${key}". Use UPPER_SNAKE_CASE (e.g. TODOIST_API_TOKEN).` }] } };
+        }
+        try {
+          const envPath = join(homedir(), ".mcp-bridge", ".env");
+          let envContent = "";
+          if (existsSync(envPath)) {
+            envContent = readFileSync(envPath, "utf-8");
+          }
+          // Replace existing key or append
+          const lines = envContent.split("\n");
+          const keyLine = `${key}=${value}`;
+          const idx = lines.findIndex(l => l.startsWith(`${key}=`));
+          if (idx >= 0) {
+            lines[idx] = keyLine;
+          } else {
+            lines.push(keyLine);
+          }
+          const newContent = lines.filter(l => l.trim() !== "").join("\n") + "\n";
+          writeFileSync(envPath, newContent, { mode: 0o600 });
+          // Also set in current process env so it's available immediately
+          process.env[key] = value;
+          this.logger.info(`Set env var ${key} in ${envPath}`);
+          return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `✓ Set ${key} in ~/.mcp-bridge/.env (file permissions: 600). The value is now available. ⚠️ Security note: this API key is stored in plaintext in ~/.mcp-bridge/.env. Ensure this file has restricted permissions (chmod 600).` }] } };
+        } catch (err) {
+          return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `Failed to set env var: ${err instanceof Error ? err.message : String(err)}` }] } };
+        }
+      }
+
       if (action === "search" || action === "install" || action === "catalog" || action === "set-mode" || action === "remove") {
         // Delegate to router dispatch (create a temporary router for management actions)
         if (!this.router) {
@@ -652,14 +688,16 @@ export class StandaloneServer {
     const serverNames = Object.keys(this.config.servers);
     return {
       name: "mcp_manage",
-      description: `MCP server manager. Actions: 'search' to find servers in the verified catalog (100+ signed recipes), 'install' to add a server by name, 'remove' to remove a server, 'catalog' to browse all, 'status' to check connections, 'servers' to list configured servers, 'discover' to connect a server and discover its tools, 'set-mode' to switch between router/direct mode. Connected servers: ${serverNames.join(", ") || "none"}.`,
+      description: `MCP server manager. Actions: 'search' to find servers in the verified catalog (100+ signed recipes), 'install' to add a server by name, 'remove' to remove a server, 'catalog' to browse all, 'status' to check connections, 'servers' to list configured servers, 'discover' to connect a server and discover its tools, 'set-mode' to switch between router/direct mode, 'set-env' to configure API keys in ~/.mcp-bridge/.env. Connected servers: ${serverNames.join(", ") || "none"}.`,
       inputSchema: {
         type: "object",
         properties: {
-          action: { type: "string", description: "search | install | remove | catalog | status | servers | discover | set-mode", enum: ["search", "install", "remove", "catalog", "status", "servers", "discover", "set-mode"] },
+          action: { type: "string", description: "search | install | remove | catalog | status | servers | discover | set-mode | set-env", enum: ["search", "install", "remove", "catalog", "status", "servers", "discover", "set-mode", "set-env"] },
           server: { type: "string", description: "Server name (for install, remove, discover)" },
           query: { type: "string", description: "Search query (for action=search)" },
-          mode: { type: "string", description: "Mode (for action=set-mode): router or direct", enum: ["router", "direct"] }
+          mode: { type: "string", description: "Mode (for action=set-mode): router or direct", enum: ["router", "direct"] },
+          key: { type: "string", description: "Environment variable name for action=set-env (e.g. TODOIST_API_TOKEN)" },
+          value: { type: "string", description: "Environment variable value for action=set-env" }
         },
         required: ["action"]
       }

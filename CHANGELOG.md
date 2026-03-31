@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.38] - 2026-03-31
+
+### Added
+- `set-env` action in both router and direct mode: configure API keys via `mcp(action="set-env", params={key: "TODOIST_API_TOKEN", value: "..."})`
+- Writes to ~/.mcp-bridge/.env with chmod 600, sets in current process env immediately
+- Security warning in response about plaintext storage
+
 ## [2.8.37] - 2026-03-31
 
 ### Added
