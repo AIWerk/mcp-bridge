@@ -601,9 +601,12 @@ async function cmdInstall(serverName: string, args: CliArgs, logger: Logger): Pr
     process.stdout.write(`\nSet them in your environment or ~/.mcp-bridge/.env before starting the bridge.\n`);
   } else {
     process.stdout.write(`All required environment variables are set. Ready to use.\n`);
+  }
 
-    // Pre-discover tools and cache them (so direct mode has tools on first start)
-    process.stdout.write(`\nDiscovering tools...\n`);
+  // Pre-discover tools and cache them (so direct mode has tools on first start)
+  // Try even with missing env vars — many servers respond to tools/list without auth
+  process.stdout.write(`\nDiscovering tools...\n`);
+  {
     try {
       const { StdioTransport } = await import("../src/transport-stdio.js");
       const { SseTransport } = await import("../src/transport-sse.js");

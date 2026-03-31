@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.34] - 2026-03-31
+
+### Fixed
+- Install-time tool discovery runs regardless of missing env vars (many servers respond to tools/list without auth)
+
 ## [2.8.33] - 2026-03-31
 
 ### Added
