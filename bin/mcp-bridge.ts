@@ -724,9 +724,29 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
       return;
     }
 
+    // Load .env to check which env vars are set
+    const envPath = join(homedir(), ".mcp-bridge", ".env");
+    const envVars = new Map<string, boolean>();
+    try {
+      if (existsSync(envPath)) {
+        const envContent = readFileSync(envPath, "utf-8");
+        for (const line of envContent.split("\n")) {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith("#")) {
+            const eq = trimmed.indexOf("=");
+            if (eq > 0) envVars.set(trimmed.slice(0, eq), true);
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Determine max name length
+    const serverNames = config ? Object.keys(config.servers) : [];
+    const maxName = Math.max(8, ...serverNames.map(n => n.length)) + 2;
+
     process.stdout.write("\nAuth status:\n\n");
-    process.stdout.write("  Server          Auth Type              Token Status\n");
-    process.stdout.write("  " + "\u2500".repeat(60) + "\n");
+    process.stdout.write(`  ${"Server".padEnd(maxName)}${"Auth".padEnd(14)}${"Env Vars".padEnd(28)}Status\n`);
+    process.stdout.write("  " + "\u2500".repeat(maxName + 14 + 28 + 20) + "\n");
 
     // Show configured servers
     const shown = new Set<string>();
@@ -738,23 +758,49 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
           : serverConfig.auth?.type === "oauth2" ? "client_credentials" : "";
         const label = authType === "oauth2" ? `oauth2 (${grantType})` : authType;
 
+        // Find required env vars from raw config (before env var resolution)
+        const envKeys: string[] = [];
+        try {
+          const rawConfigPath = resolveConfigPath(args.configPath);
+          const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8"));
+          const rawEnv = rawConfig?.servers?.[name]?.env || {};
+          for (const val of Object.values(rawEnv)) {
+            const match = String(val).match(/\$\{([^}]+)\}/);
+            if (match) envKeys.push(match[1]);
+          }
+        } catch { /* ignore */ }
+
+        let envStatus = "-";
+        if (envKeys.length > 0) {
+          const setKeys = envKeys.filter(k => envVars.has(k) || process.env[k]);
+          const missingKeys = envKeys.filter(k => !envVars.has(k) && !process.env[k]);
+          if (missingKeys.length === 0) {
+            envStatus = envKeys.map(k => `${k} \u2713`).join(", ");
+          } else {
+            envStatus = missingKeys.map(k => `${k} \u2717`).join(", ");
+          }
+        }
+
         const token = tokenStore.load(name);
         let status: string;
         if (token) {
           const now = Date.now();
           if (token.expiresAt > now) {
             const mins = Math.round((token.expiresAt - now) / 60000);
-            status = `valid (expires in ${mins}m)`;
+            status = `valid (${mins}m)`;
           } else {
-            status = token.refreshToken ? "expired (refresh available)" : "expired";
+            status = token.refreshToken ? "expired (refresh)" : "expired";
           }
         } else if (grantType === "authorization_code" || grantType === "device_code") {
           status = "not authenticated";
+        } else if (envKeys.length > 0) {
+          const allSet = envKeys.every(k => envVars.has(k) || process.env[k]);
+          status = allSet ? "ready" : "missing env vars";
         } else {
-          status = "-";
+          status = "ready";
         }
 
-        process.stdout.write(`  ${name.padEnd(16)}${label.padEnd(23)}${status}\n`);
+        process.stdout.write(`  ${name.padEnd(maxName)}${label.padEnd(14)}${envStatus.slice(0, 27).padEnd(28)}${status}\n`);
         shown.add(name);
       }
     }

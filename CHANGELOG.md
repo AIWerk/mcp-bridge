@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.39] - 2026-03-31
+
+### Fixed
+- CLI `auth status` shows env var status for stdio servers (was showing "none" even when API keys were required)
+- Reads raw config to detect ${VAR} references before env var resolution
+
 ## [2.8.38] - 2026-03-31
 
 ### Added
