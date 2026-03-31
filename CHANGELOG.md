@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.37] - 2026-03-31
+
+### Added
+- Direct mode: `mcp_manage` tool — search, install, remove, catalog, status, servers, discover, set-mode. Bridge management is now accessible in direct mode too.
+
 ## [2.8.36] - 2026-03-31
 
 ### Fixed

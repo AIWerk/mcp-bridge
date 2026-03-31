@@ -307,6 +307,7 @@ export class StandaloneServer {
         description: t.description,
         inputSchema: t.inputSchema
       }));
+      tools.push(this.getMcpManageTool());
       return { jsonrpc: "2.0", id, result: { tools } };
     }
 
@@ -361,6 +362,7 @@ export class StandaloneServer {
       });
     }
 
+    lazyTools.push(this.getMcpManageTool());
     return { jsonrpc: "2.0", id, result: { tools: lazyTools } };
   }
 
@@ -417,7 +419,49 @@ export class StandaloneServer {
       };
     }
 
-    // Handle mcp_discover tool
+    // Handle mcp_manage tool (direct mode management)
+    if (toolName === "mcp_manage") {
+      const action = toolArgs?.action as string;
+      const server = toolArgs?.server as string;
+      const query = toolArgs?.query as string;
+
+      if (action === "servers" || action === "status") {
+        const entries = Object.entries(this.config.servers).map(([name, cfg]) => {
+          const connected = this.directConnections.get(name)?.initialized ? "connected" : "not connected";
+          return `${name} (${cfg.transport}, ${connected}): ${cfg.description || ""}`;
+        });
+        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: entries.length > 0 ? `Configured servers:\n\n${entries.join("\n")}` : "No servers configured." }] } };
+      }
+
+      if (action === "discover" && server) {
+        await this.discoverSingleServer(server);
+        const serverTools = this.directTools.filter(t => t.serverName === server);
+        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `Discovered ${serverTools.length} tools from "${server}":\n\n${serverTools.map(t => `${t.registeredName}: ${t.description}`).join("\n")}` }] } };
+      }
+
+      if (action === "search" || action === "install" || action === "catalog" || action === "set-mode" || action === "remove") {
+        // Delegate to router dispatch (create a temporary router for management actions)
+        if (!this.router) {
+          const { McpRouter } = await import("./mcp-router.js");
+          this.router = new McpRouter(this.config.servers, this.config, this.logger);
+        }
+        const params: Record<string, unknown> = {};
+        if (query) params.query = query;
+        if (server) params.server = server;
+        if (server) params.name = server;
+        if (toolArgs?.mode) params.mode = toolArgs.mode;
+        const result = await this.router.dispatch(server, action, undefined, params);
+        // If install succeeded, notify about new tools
+        if (action === "install" && "installed" in result && (result as any).installed) {
+          this.sendToolsChanged();
+        }
+        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result) }] } };
+      }
+
+      return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Unknown action. Use: search, install, remove, catalog, status, servers, discover, set-mode" }] } };
+    }
+
+    // Handle mcp_discover tool (legacy, kept for backward compatibility)
     if (toolName === "mcp_discover") {
       const serverName = toolArgs?.server as string;
       if (!serverName || !this.config.servers[serverName]) {
@@ -601,6 +645,25 @@ export class StandaloneServer {
         this.logger.error(`[mcp-bridge] Failed to connect to ${serverName}:`, err);
       }
     }
+  }
+
+  /** The mcp_manage tool definition for direct mode */
+  private getMcpManageTool() {
+    const serverNames = Object.keys(this.config.servers);
+    return {
+      name: "mcp_manage",
+      description: `MCP server manager. Actions: 'search' to find servers in the verified catalog (100+ signed recipes), 'install' to add a server by name, 'remove' to remove a server, 'catalog' to browse all, 'status' to check connections, 'servers' to list configured servers, 'discover' to connect a server and discover its tools, 'set-mode' to switch between router/direct mode. Connected servers: ${serverNames.join(", ") || "none"}.`,
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", description: "search | install | remove | catalog | status | servers | discover | set-mode", enum: ["search", "install", "remove", "catalog", "status", "servers", "discover", "set-mode"] },
+          server: { type: "string", description: "Server name (for install, remove, discover)" },
+          query: { type: "string", description: "Search query (for action=search)" },
+          mode: { type: "string", description: "Mode (for action=set-mode): router or direct", enum: ["router", "direct"] }
+        },
+        required: ["action"]
+      }
+    };
   }
 
   /** Send notifications/tools/list_changed to the client via stdout */
