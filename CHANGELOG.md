@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.25] - 2026-03-31
+
+### Added
+- Runtime set-mode action: agents can switch between router/direct mode via mcp(action="set-mode", params={mode: "direct"})
+- Init supports --mode and --register in combination
+
 ## [2.8.24] - 2026-03-31
 
 ### Added

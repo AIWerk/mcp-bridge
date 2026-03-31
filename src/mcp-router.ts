@@ -83,6 +83,7 @@ export type RouterDispatchResponse =
   | { action: "search"; query: string; results: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string; signed?: boolean }> }
   | { action: "catalog"; recipes: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string; signed?: boolean }> }
   | { action: "install"; server: string; installed: boolean; message: string; missingEnvVars?: string[]; credentialsUrl?: string }
+  | { action: "set-mode"; mode: string; message: string; requiresRestart?: boolean }
   | {
       action: "intent";
       intent: string;
@@ -225,7 +226,7 @@ export class McpRouter {
       })
       .join(", ");
 
-    return `MCP server multiplexer with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. To add new MCP servers, always use this tool first (not npm install): 'search' to find servers in the verified catalog (100+ signed, security-audited recipes), 'install' to add a server by name. If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
+    return `MCP server multiplexer with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. To add new MCP servers, always use this tool first (not npm install): 'search' to find servers in the verified catalog (100+ signed, security-audited recipes), 'install' to add a server by name. Use 'set-mode' with params.mode='direct' to expose all tools individually (requires restart). If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
   }
 
   async dispatch(server?: string, action: string = "call", tool?: string, params?: any): Promise<RouterDispatchResponse> {
@@ -502,8 +503,41 @@ export class McpRouter {
         }
       }
 
+      // Set mode (persists to config, requires bridge restart to take effect)
+      if (normalizedAction === "set-mode") {
+        const newMode = params?.mode as string;
+        if (newMode !== "router" && newMode !== "direct") {
+          return this.error("invalid_params", "mode must be 'router' or 'direct'");
+        }
+        try {
+          const os = await import("os");
+          const fs = await import("fs");
+          const path = await import("path");
+          const configPath = path.join(os.homedir(), ".mcp-bridge", "config.json");
+          if (fs.existsSync(configPath)) {
+            const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+            const oldMode = raw.mode || "router";
+            if (oldMode === newMode) {
+              return { action: "set-mode", mode: newMode, message: `Already in "${newMode}" mode.` };
+            }
+            raw.mode = newMode;
+            fs.writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+            this.logger.info(`Mode changed from "${oldMode}" to "${newMode}" in ${configPath}`);
+            return {
+              action: "set-mode",
+              mode: newMode,
+              message: `Mode changed to "${newMode}". Restart the bridge for changes to take effect.`,
+              requiresRestart: true,
+            };
+          }
+          return this.error("mcp_error", "Config file not found");
+        } catch (err) {
+          return this.error("mcp_error", `Failed to set mode: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
       if (normalizedAction !== "call") {
-        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions, search, catalog, install`);
+        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions, search, catalog, install, set-mode`);
       }
 
       if (!tool) {

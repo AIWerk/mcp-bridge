@@ -204,7 +204,7 @@ function whichCmd(name: string): boolean {
 function cmdInit(logger: Logger, register?: string, mode?: "router" | "direct"): void {
   initConfigDir(logger);
 
-  // Apply --mode if config exists and mode was specified
+  // Apply --mode to config
   if (mode) {
     const configPath = join(homedir(), ".mcp-bridge", "config.json");
     if (existsSync(configPath)) {
@@ -219,6 +219,7 @@ function cmdInit(logger: Logger, register?: string, mode?: "router" | "direct"):
     }
   }
 
+  // If --register is specified, do both mode + register
   const isGlobal = __dirname.includes("node_modules") && (
     __dirname.includes("/lib/node_modules/") || __dirname.includes("\\lib\\node_modules\\")
   );
