@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.36] - 2026-03-31
+
+### Fixed
+- CLI `servers` command: dynamic column width based on longest server name, description truncated to 60 chars
+
 ## [2.8.35] - 2026-03-31
 
 ### Added

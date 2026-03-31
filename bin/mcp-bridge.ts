@@ -364,14 +364,17 @@ function cmdServers(logger: Logger, configPath?: string): void {
       return;
     }
 
-    process.stdout.write("\nConfigured servers:\n\n");
-    process.stdout.write("  Server          Transport    Description\n");
-    process.stdout.write("  " + "─".repeat(60) + "\n");
+    const maxName = Math.max(8, ...entries.map(([n]) => n.length)) + 2;
+
+    process.stdout.write(`\nConfigured servers (${entries.length}):\n\n`);
+    process.stdout.write(`  ${"Server".padEnd(maxName)}${"Transport".padEnd(14)}Description\n`);
+    process.stdout.write("  " + "─".repeat(maxName + 14 + 40) + "\n");
 
     for (const [name, serverConfig] of entries) {
-      const padded = name.padEnd(16);
-      const transport = serverConfig.transport.padEnd(13);
-      process.stdout.write(`  ${padded}${transport}${serverConfig.description || ""}\n`);
+      const padded = name.padEnd(maxName);
+      const transport = serverConfig.transport.padEnd(14);
+      const desc = (serverConfig.description || "").slice(0, 60);
+      process.stdout.write(`  ${padded}${transport}${desc}\n`);
     }
     process.stdout.write("\n");
   } catch (err) {
