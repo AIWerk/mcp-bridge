@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.44] - 2026-03-31
+
+### Added
+- CLI `servers` command shows current mode (router/direct)
+
 ## [2.8.43] - 2026-03-31
 
 ### Added
@@ -17,6 +22,11 @@
 - **Direct mode idle timeout** (5 min) with lastUsed tracking and interval cleanup
 - **Cache TTL** (24h) with cachedAt wrapper, corrupt JSON handling, path sanitization
 - 8 new tests (remove action + cache validation), total 337
+
+## [2.8.44] - 2026-03-31
+
+### Added
+- CLI `servers` command shows current mode (router/direct)
 
 ## [2.8.43] - 2026-03-31
 

@@ -368,7 +368,8 @@ function cmdServers(logger: Logger, configPath?: string): void {
 
     const maxName = Math.max(8, ...entries.map(([n]) => n.length)) + 2;
 
-    process.stdout.write(`\nConfigured servers (${entries.length}):\n\n`);
+    const mode = config.mode ?? "router";
+    process.stdout.write(`\nMode: ${mode}\nConfigured servers (${entries.length}):\n\n`);
     process.stdout.write(`  ${"Server".padEnd(maxName)}${"Transport".padEnd(14)}Description\n`);
     process.stdout.write("  " + "─".repeat(maxName + 14 + 40) + "\n");
 
