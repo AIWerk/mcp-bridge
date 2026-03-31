@@ -8,7 +8,7 @@
 
 🌐 **[aiwerkmcp.com](https://aiwerkmcp.com)** — Learn more about the AIWerk MCP Platform
 
-Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, **OpenClaw**, or any MCP client.
+Works with **Claude Code**, **Codex (OpenAI)**, **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, **OpenClaw**, or any MCP client.
 
 ## Why?
 
@@ -39,8 +39,8 @@ npm install -g @aiwerk/mcp-bridge
 ## Quick Start
 
 ```bash
-# 1. Initialize config
-mcp-bridge init
+# 1. Initialize config and register with Claude Code
+mcp-bridge init --register claude-code
 
 # 2. Install a server from the catalog
 mcp-bridge install todoist
@@ -48,8 +48,7 @@ mcp-bridge install todoist
 # 3. Add your API key
 echo "TODOIST_API_TOKEN=your-token" >> ~/.mcp-bridge/.env
 
-# 4. Start (stdio mode — connects to any MCP client)
-mcp-bridge
+# 4. Restart Claude Code — bridge is ready
 ```
 
 ## Use with Claude Desktop
@@ -558,12 +557,16 @@ mcp-bridge                        # Start in stdio mode (default)
 mcp-bridge --sse --port 3000      # Start as SSE server
 mcp-bridge --http --port 3000     # Start as HTTP server
 mcp-bridge --verbose              # Info-level logs to stderr
-mcp-bridge --debug                # Full protocol logs to stderr
+mcp-bridge --debug                # Full debug metadata in tool responses
 mcp-bridge --config ./my.json     # Custom config file
 
-mcp-bridge init                   # Create ~/.mcp-bridge/ with template
-mcp-bridge install <server>       # Install from catalog
-mcp-bridge catalog                # List available servers
+mcp-bridge init                   # Create ~/.mcp-bridge/ with template config
+mcp-bridge init --register claude-code  # Init + register with Claude Code
+mcp-bridge init --register codex        # Init + register with Codex
+mcp-bridge init --register cursor       # Init + register with Cursor
+mcp-bridge init --register windsurf     # Init + register with Windsurf
+mcp-bridge install <server>       # Install from online catalog
+mcp-bridge catalog                # Browse 100+ available servers
 mcp-bridge servers                # List configured servers
 mcp-bridge search <query>         # Search catalog by keyword
 mcp-bridge update [--check]       # Check for / install updates
@@ -574,32 +577,35 @@ mcp-bridge auth logout <server>   # Remove stored token
 mcp-bridge auth status            # Show auth status for all servers
 ```
 
+## Agent Integration
+
+When connected to an MCP client (Claude Code, Codex, Cursor, etc.), the bridge exposes a single `mcp` meta-tool. Agents can discover and install servers at runtime:
+
+```
+mcp(action="search", params={query: "task management"})  # Search catalog
+mcp(action="install", params={name: "todoist"})           # Install server (persisted to config)
+mcp(action="catalog")                                      # Browse all servers
+mcp(action="list", server="todoist")                       # Discover tools on a server
+mcp(action="call", server="todoist", tool="find-tasks", params={query: "today"})
+```
+
+The tool description automatically includes all connected servers with their descriptions, so agents know which server to use for what. New servers installed via the bridge are persisted to `~/.mcp-bridge/config.json` and survive restarts.
+
 ## Server Catalog
 
-Built-in catalog with pre-configured servers:
-
-| Server | Transport | Description |
-|--------|-----------|-------------|
-| todoist | stdio | Task management |
-| github | stdio | Repos, issues, PRs |
-| notion | stdio | Pages and databases |
-| stripe | stdio | Payments and billing |
-| linear | stdio | Project management |
-| google-maps | stdio | Places, geocoding, directions |
-| hetzner | stdio | Cloud infrastructure |
-| miro | stdio | Collaborative whiteboard |
-| wise | stdio | International payments |
-| tavily | stdio | AI-optimized web search |
-| apify | streamable-http | Web scraping and automation |
-| atlassian | stdio | Confluence and Jira |
-| chrome-devtools | stdio | Chrome browser automation |
-| hostinger | sse | Web hosting management |
+Browse and install from the [AIWerk MCP Catalog](https://catalog.aiwerk.ch) with 100+ verified, signed recipes:
 
 ```bash
-mcp-bridge install todoist    # Interactive setup with API key prompt
-mcp-bridge catalog            # Full list
-mcp-bridge search payments    # Search by keyword
+mcp-bridge catalog                # Browse all 100+ servers
+mcp-bridge search payments        # Search by keyword
+mcp-bridge install todoist        # Install from catalog
 ```
+
+Popular servers include: todoist, github, notion, stripe, linear, google-maps, slack, supabase, mongodb, playwright, docker, and many more.
+
+All catalog recipes are Ed25519 signed and security-audited. The bridge verifies signatures before installation.
+
+> **Note**: The bundled `servers/` directory is deprecated. All servers now come from the online catalog.
 
 ## Library Usage
 
@@ -667,11 +673,14 @@ For production deployments with high security requirements, consider adding an e
 | ✅ | OAuth2 Client Credentials | 2.1.0 |
 | ✅ | OAuth2 Authorization Code + PKCE | 2.5.0 |
 | ✅ | OAuth2 Device Code flow (headless) | 2.6.0 |
-| 🔜 | Auto-discovery (zero-config server registration) | planned |
+| ✅ | Agent-driven discovery (search/install at runtime) | 2.8.6 |
 | 🔜 | Hosted bridge (bridge.aiwerk.ch) | planned |
 | ✅ | Remote catalog integration | 2.8.0 |
+| ✅ | CLI online catalog | 2.8.23 |
+| ✅ | Debug mode (_debug metadata) | 2.8.4 |
 | 🔜 | OpenTelemetry / Prometheus metrics | planned |
 | 🔜 | PII redaction | planned |
+| 🔜 | Skill system (recipe.json skills for agents) | planned |
 
 See [docs/hosted-bridge-spec.md](docs/hosted-bridge-spec.md) for the hosted bridge architecture.
 
