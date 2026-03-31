@@ -428,11 +428,13 @@ export class StandaloneServer {
       const query = toolArgs?.query as string;
 
       if (action === "servers" || action === "status") {
+        const mode = this.config.mode ?? "router";
         const entries = Object.entries(this.config.servers).map(([name, cfg]) => {
           const connected = this.directConnections.get(name)?.initialized ? "connected" : "not connected";
           return `${name} (${cfg.transport}, ${connected}): ${cfg.description || ""}`;
         });
-        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: entries.length > 0 ? `Configured servers:\n\n${entries.join("\n")}` : "No servers configured." }] } };
+        const header = `Mode: ${mode}\n\n`;
+        return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: entries.length > 0 ? `${header}Configured servers:\n\n${entries.join("\n")}` : `${header}No servers configured.` }] } };
       }
 
       if (action === "discover" && server) {

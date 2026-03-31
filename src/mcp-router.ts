@@ -78,7 +78,7 @@ export type RouterDispatchResponse =
   | { server: string; action: "refresh"; refreshed: true; tools: RouterToolHint[] }
   | { server: string; action: "call"; tool: string; result: any; retries?: number; warning?: string; _debug?: DebugMetadata }
   | { server: string; action: "schema"; tool: string; schema: any; description: string }
-  | { action: "status"; servers: RouterServerStatus[] }
+  | { action: "status"; mode: string; servers: RouterServerStatus[] }
   | { action: "batch"; results: RouterBatchResult[] }
   | { action: "promotions"; promoted: Array<{ server: string; tool: string; callCount: number }>; stats: Array<{ server: string; tool: string; callCount: number; lastCall: string }> }
   | { action: "search"; query: string; results: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string; signed?: boolean }> }
@@ -871,7 +871,7 @@ export class McpRouter {
         ...(state?.lastUsedAt ? { lastUsed: new Date(state.lastUsedAt).toISOString() } : {})
       };
     });
-    return { action: "status", servers: serverStatuses };
+    return { action: "status", mode: this.clientConfig.mode ?? "router", servers: serverStatuses };
   }
 
   getPromotedTools(): Array<{ server: string; tool: string; toolHint: RouterToolHint; inputSchema: any }> {
