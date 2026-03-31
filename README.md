@@ -417,9 +417,24 @@ Returns promoted tools (sorted by frequency) and full usage stats. All tracking 
 | Mode | Tools exposed | Best for |
 |------|--------------|----------|
 | `router` (default) | Single `mcp` meta-tool | 3+ servers, token-conscious agents |
-| `direct` | All tools individually | Few servers, simple agents |
+| `direct` | All tools individually | Clients with deferred/lazy tool loading (Claude Code), few servers |
 
-**Router mode** — the agent calls `mcp(server="todoist", action="list")` to discover, then `mcp(server="todoist", tool="find-tasks", params={...})` to execute.
+Switch modes via CLI or config:
+
+```bash
+mcp-bridge init --mode direct    # all tools exposed individually
+mcp-bridge init --mode router    # single mcp meta-tool (default)
+```
+
+Or set in `~/.mcp-bridge/config.json`:
+
+```json
+{ "mode": "direct" }
+```
+
+**Router mode** — the agent calls `mcp(server="todoist", action="list")` to discover, then `mcp(server="todoist", tool="find-tasks", params={...})` to execute. Best when you have many servers and want minimal token usage.
+
+**Direct mode** — all tools from all servers are registered individually as `todoist_find_tasks`, `github_list_repos`, etc. The bridge still provides unified config, catalog install, OAuth2, security, retries, and reconnection. Ideal for clients that support deferred/lazy tool loading, where tools are registered but not loaded into context until needed.
 
 ### Multi-Server Tool Resolution
 
