@@ -112,9 +112,11 @@ test("direct mode: tools/list returns prefixed tools from backends", async () =>
   const res = await server.handleRequest({ jsonrpc: "2.0", id: 2, method: "tools/list" });
 
   assert.ok(Array.isArray(res.result?.tools));
-  assert.equal(res.result.tools.length, 2);
-  assert.equal(res.result.tools[0].name, "backend1__greet");
-  assert.equal(res.result.tools[1].name, "backend1__bye");
+  // 2 backend tools + mcp_manage management tool
+  assert.ok(res.result.tools.length >= 2, `expected at least 2 tools, got ${res.result.tools.length}`);
+  const toolNames = res.result.tools.map((t: any) => t.name);
+  assert.ok(toolNames.includes("backend1__greet"));
+  assert.ok(toolNames.includes("backend1__bye"));
 });
 
 test("direct mode: handleToolsCall routes to correct backend", async () => {

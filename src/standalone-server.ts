@@ -45,7 +45,9 @@ export class StandaloneServer {
 
   // Direct mode state
   private directTools: DirectToolEntry[] = [];
-  private directConnections = new Map<string, { transport: McpTransport; initialized: boolean }>();
+  private directConnections = new Map<string, { transport: McpTransport; initialized: boolean; lastUsed: number }>();
+  private directIdleTimer: ReturnType<typeof setInterval> | null = null;
+  private static readonly DIRECT_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
   private stdoutRef: NodeJS.WriteStream | null = null;
 
   constructor(config: BridgeConfig, logger: Logger) {
@@ -553,7 +555,7 @@ export class StandaloneServer {
             const transport = this.createTransport(entry.serverName, serverConfig);
             await transport.connect();
             await initializeProtocol(transport, PACKAGE_VERSION);
-            conn = { transport, initialized: true };
+            conn = { transport, initialized: true, lastUsed: Date.now() };
             this.directConnections.set(entry.serverName, conn);
           } catch (connErr) {
             return {
@@ -579,6 +581,10 @@ export class StandaloneServer {
           }
         };
       }
+
+      // Mark connection as recently used + start idle timer
+      conn.lastUsed = Date.now();
+      this.startDirectIdleTimer();
 
       const response = await conn.transport.sendRequest({
         jsonrpc: "2.0",
@@ -650,7 +656,7 @@ export class StandaloneServer {
         await transport.connect();
         await initializeProtocol(transport, PACKAGE_VERSION);
 
-        this.directConnections.set(serverName, { transport, initialized: true });
+        this.directConnections.set(serverName, { transport, initialized: true, lastUsed: Date.now() });
 
         const tools = await fetchToolsList(transport);
         const localNames = new Set<string>();
@@ -736,9 +742,11 @@ export class StandaloneServer {
       const transport = this.createTransport(serverName, serverConfig);
       await transport.connect();
       await initializeProtocol(transport, PACKAGE_VERSION);
-      this.directConnections.set(serverName, { transport, initialized: true });
 
       const tools = await fetchToolsList(transport);
+
+      // Only add to connections AFTER successful tool fetch (prevents leak on partial failure)
+      this.directConnections.set(serverName, { transport, initialized: true, lastUsed: Date.now() });
       const globalNames = new Set(this.directTools.map(t => t.registeredName));
       const localNames = new Set<string>();
 
@@ -771,28 +779,51 @@ export class StandaloneServer {
       this.sendToolsChanged();
     } catch (err) {
       this.logger.error(`[mcp-bridge] Failed to discover ${serverName}:`, err);
+      // Clean up partial connection to allow retry
+      const partial = this.directConnections.get(serverName);
+      if (partial?.transport) {
+        try { await partial.transport.disconnect(); } catch { /* ignore */ }
+      }
+      this.directConnections.delete(serverName);
     }
   }
 
-  /** Save discovered tools to disk cache */
+  private static readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  /** Save discovered tools to disk cache with timestamp */
   private saveToolCache(serverName: string, tools: McpTool[]): void {
     try {
+      // Sanitize server name for filesystem safety
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(serverName)) return;
       const cacheDir = join(homedir(), ".mcp-bridge", "cache");
       mkdirSync(cacheDir, { recursive: true });
       const cachePath = join(cacheDir, `${serverName}-tools.json`);
-      writeFileSync(cachePath, JSON.stringify(tools, null, 2), "utf-8");
+      writeFileSync(cachePath, JSON.stringify({ cachedAt: Date.now(), tools }, null, 2), "utf-8");
     } catch { /* ignore cache write errors */ }
   }
 
-  /** Load cached tools from disk */
+  /** Load cached tools from disk (with TTL validation) */
   private loadToolCache(serverName: string): McpTool[] | null {
     try {
+      // Sanitize server name for filesystem safety
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(serverName)) return null;
       const cachePath = join(homedir(), ".mcp-bridge", "cache", `${serverName}-tools.json`);
-      if (existsSync(cachePath)) {
-        return JSON.parse(readFileSync(cachePath, "utf-8"));
+      if (!existsSync(cachePath)) return null;
+      const raw = JSON.parse(readFileSync(cachePath, "utf-8"));
+      // Support both old format (array) and new format ({cachedAt, tools})
+      if (Array.isArray(raw)) return raw; // legacy format, no TTL
+      if (raw && typeof raw === "object" && Array.isArray(raw.tools)) {
+        // Check TTL
+        if (raw.cachedAt && (Date.now() - raw.cachedAt > StandaloneServer.CACHE_TTL_MS)) {
+          this.logger.info(`[mcp-bridge] Cache expired for ${serverName}, will re-discover`);
+          return null;
+        }
+        return raw.tools;
       }
-    } catch { /* ignore cache read errors */ }
-    return null;
+      return null; // malformed cache
+    } catch {
+      return null; // corrupt/unreadable cache
+    }
   }
 
   private nextRequestId(): number {
@@ -826,8 +857,29 @@ export class StandaloneServer {
   }
 
   /** Graceful shutdown: disconnect all backend servers. */
+  /** Start idle connection cleanup timer for direct mode */
+  private startDirectIdleTimer(): void {
+    if (this.directIdleTimer) return;
+    this.directIdleTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [name, conn] of this.directConnections) {
+        if (now - conn.lastUsed > StandaloneServer.DIRECT_IDLE_TIMEOUT_MS) {
+          this.logger.info(`[mcp-bridge] Disconnecting idle server: ${name}`);
+          conn.transport.disconnect().catch(() => {});
+          this.directConnections.delete(name);
+        }
+      }
+    }, 60_000); // Check every minute
+    this.directIdleTimer.unref(); // Don't keep process alive
+  }
+
   async shutdown(): Promise<void> {
     this.logger.info("[mcp-bridge] Shutting down...");
+
+    if (this.directIdleTimer) {
+      clearInterval(this.directIdleTimer);
+      this.directIdleTimer = null;
+    }
 
     if (this.router) {
       await this.router.shutdown(this.config.shutdownTimeoutMs);

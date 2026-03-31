@@ -764,7 +764,7 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
           }
         } catch { /* ignore */ }
 
-        const authType = serverConfig.auth?.type ?? (envKeys.length > 0 ? "env-key" : "none");
+        const authType = serverConfig.auth?.type ?? (envKeys.length > 0 ? "api-key" : "none");
         const grantType = serverConfig.auth?.type === "oauth2" && "grantType" in serverConfig.auth
           ? (serverConfig.auth as any).grantType
           : serverConfig.auth?.type === "oauth2" ? "client_credentials" : "";

@@ -29,7 +29,8 @@ type RouterErrorCode =
   | "unknown_tool"
   | "connection_failed"
   | "mcp_error"
-  | "invalid_params";
+  | "invalid_params"
+  | "not_found";
 
 interface RouterBatchCall {
   server?: string;
@@ -83,6 +84,7 @@ export type RouterDispatchResponse =
   | { action: "search"; query: string; results: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string; signed?: boolean }> }
   | { action: "catalog"; recipes: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string; signed?: boolean }> }
   | { action: "install"; server: string; installed: boolean; message: string; missingEnvVars?: string[]; credentialsUrl?: string }
+  | { action: "remove"; server: string; removed: boolean; message: string }
   | { action: "set-mode"; mode: string; message: string; requiresRestart?: boolean }
   | { action: "set-env"; key: string; message: string }
   | {
@@ -383,6 +385,55 @@ export class McpRouter {
         } catch (err) {
           return this.error("mcp_error", `Install failed: ${err instanceof Error ? err.message : String(err)}`);
         }
+      }
+
+      if (normalizedAction === "remove") {
+        const serverName = server || params?.server || params?.name;
+        if (!serverName) {
+          return this.error("invalid_params", "server name is required for action=remove");
+        }
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(serverName)) {
+          return this.error("invalid_params", `Invalid server name "${serverName}". Must match /^[a-z0-9][a-z0-9-]*$/.`);
+        }
+        if (!this.servers[serverName]) {
+          return this.error("not_found", `Server "${serverName}" is not configured.`);
+        }
+
+        // Disconnect if connected
+        const state = this.states.get(serverName);
+        if (state?.transport?.isConnected()) {
+          try { await state.transport.disconnect(); } catch { /* ignore */ }
+        }
+        this.states.delete(serverName);
+
+        // Remove from runtime config
+        delete this.servers[serverName];
+        delete this.clientConfig.servers[serverName];
+
+        // Remove from config file
+        try {
+          const os = await import("os");
+          const fs = await import("fs");
+          const path = await import("path");
+          const configPath = path.join(os.homedir(), ".mcp-bridge", "config.json");
+          if (fs.existsSync(configPath)) {
+            const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+            if (raw.servers?.[serverName]) {
+              delete raw.servers[serverName];
+              fs.writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+              this.logger.info(`Removed "${serverName}" from ${configPath}`);
+            }
+          }
+          // Remove tool cache
+          const cachePath = path.join(os.homedir(), ".mcp-bridge", "cache", `${serverName}-tools.json`);
+          if (fs.existsSync(cachePath)) {
+            fs.unlinkSync(cachePath);
+          }
+        } catch (err) {
+          this.logger.warn(`Could not persist removal of "${serverName}": ${err instanceof Error ? err.message : String(err)}`);
+        }
+
+        return { action: "remove" as const, server: serverName, removed: true, message: `Server "${serverName}" removed.` };
       }
 
       if (normalizedAction === "batch") {
