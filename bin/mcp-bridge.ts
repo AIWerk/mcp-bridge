@@ -51,7 +51,7 @@ function createLogger(level: LogLevel): Logger {
 // -- Arg parsing ----------------------------------------------------------
 
 interface CliArgs {
-  command: "serve" | "init" | "install" | "remove" | "catalog" | "servers" | "search" | "update" | "version" | "help" | "auth" | "usage" | "limit";
+  command: "serve" | "init" | "install" | "remove" | "set-env" | "catalog" | "servers" | "search" | "update" | "version" | "help" | "auth" | "usage" | "limit";
   authSubcommand?: "login" | "logout" | "status";
   sse: boolean;
   http: boolean;
@@ -126,6 +126,7 @@ function parseArgs(argv: string[]): CliArgs {
       case "init": args.command = "init"; break;
       case "install": args.command = "install"; break;
       case "remove": case "uninstall": args.command = "remove"; break;
+      case "set-env": args.command = "set-env"; break;
       case "catalog": args.command = "catalog"; break;
       case "servers": args.command = "servers"; break;
       case "search": args.command = "search"; break;
@@ -172,6 +173,7 @@ Usage:
   mcp-bridge init [--register <client>] [--mode router|direct]  Create config + optionally register
   mcp-bridge install <server>       Install a server from the catalog
   mcp-bridge remove <server>        Remove a configured server
+  mcp-bridge set-env <KEY> <value>  Set an API key in ~/.mcp-bridge/.env
   mcp-bridge catalog [--offline]    List available servers
   mcp-bridge servers                List configured servers
   mcp-bridge search <query>         Search catalog by keyword
@@ -685,6 +687,26 @@ function cmdRemove(serverName: string, args: CliArgs, logger: Logger): void {
   }
 }
 
+function cmdSetEnv(key: string, value: string, args: CliArgs, logger: Logger): void {
+  if (!/^[A-Z][A-Z0-9_]*$/.test(key)) {
+    logger.error(`Invalid key format: "${key}". Use UPPER_SNAKE_CASE (e.g. TODOIST_API_TOKEN).`);
+    process.exit(1);
+  }
+  const configDir = dirname(resolveConfigPath(args.configPath));
+  const envPath = join(configDir, ".env");
+  let envContent = "";
+  if (existsSync(envPath)) {
+    envContent = readFileSync(envPath, "utf-8");
+  }
+  const lines = envContent.split("\n");
+  const keyLine = `${key}=${value}`;
+  const idx = lines.findIndex(l => l.startsWith(`${key}=`));
+  if (idx >= 0) { lines[idx] = keyLine; } else { lines.push(keyLine); }
+  const newContent = lines.filter(l => l.trim() !== "").join("\n") + "\n";
+  writeFileSync(envPath, newContent, { mode: 0o600 });
+  process.stdout.write(`✓ Set ${key} in ${envPath}\n`);
+}
+
 async function cmdUpdate(logger: Logger, checkOnly: boolean): Promise<void> {
   if (checkOnly) {
     const info = await checkForUpdate(logger);
@@ -801,6 +823,27 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
         }
 
         process.stdout.write(`  ${name.padEnd(maxName)}${label.padEnd(14)}${envStatus.slice(0, 27).padEnd(28)}${status}\n`);
+
+        // Show help for missing env vars
+        if (status === "missing env vars") {
+          try {
+            const cacheDir = join(dirname(resolveConfigPath(args.configPath)), "recipes");
+            const helpClient = new CatalogClient({ cacheDir, logger });
+            const recipe = await helpClient.resolve(name);
+            const recipeAuth = recipe?.auth as any;
+            if (recipeAuth?.credentialsUrl) {
+              process.stdout.write(`  ${" ".repeat(maxName)}Get credentials: ${recipeAuth.credentialsUrl}\n`);
+            }
+            if (recipeAuth?.instructions) {
+              process.stdout.write(`  ${" ".repeat(maxName)}${recipeAuth.instructions}\n`);
+            }
+            const missingKeys = envKeys.filter(k => !envVars.has(k) && !process.env[k]);
+            if (missingKeys.length > 0) {
+              process.stdout.write(`  ${" ".repeat(maxName)}Set with: mcp-bridge set-env ${missingKeys[0]} <your-key>\n`);
+            }
+          } catch { /* recipe not in cache, skip help */ }
+        }
+
         shown.add(name);
       }
     }
@@ -981,6 +1024,13 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       cmdRemove(args.positional[0], args, logger);
+      break;
+    case "set-env":
+      if (args.positional.length < 2) {
+        process.stderr.write("Usage: mcp-bridge set-env <KEY> <value>\n");
+        process.exit(1);
+      }
+      cmdSetEnv(args.positional[0], args.positional[1], args, logger);
       break;
     case "update":
       await cmdUpdate(logger, args.checkOnly);

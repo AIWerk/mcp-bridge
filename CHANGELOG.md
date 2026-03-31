@@ -13,6 +13,12 @@
 - **Cache TTL** (24h) with cachedAt wrapper, corrupt JSON handling, path sanitization
 - 8 new tests (remove action + cache validation), total 337
 
+## [2.8.42] - 2026-03-31
+
+### Added
+- CLI `mcp-bridge set-env <KEY> <value>` — set API keys from command line
+- `auth status` shows credentials URL and instructions from recipe when env vars are missing
+
 ## [2.8.41] - 2026-03-31
 
 ### Fixed
