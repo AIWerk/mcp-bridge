@@ -175,7 +175,7 @@ Usage:
   mcp-bridge remove <server>        Remove a configured server
   mcp-bridge set-env <KEY> <value>  Set an API key in ~/.mcp-bridge/.env
   mcp-bridge catalog [--offline]    List available servers
-  mcp-bridge servers                List configured servers
+  mcp-bridge servers                List configured servers and current mode
   mcp-bridge search <query>         Search catalog by keyword
   mcp-bridge usage                  Show current per-server call usage
   mcp-bridge limit <server> [--daily N] [--monthly N]

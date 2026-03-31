@@ -565,6 +565,12 @@ NOTION_TOKEN=ntn_xxxxx
 
 Use `${VAR_NAME}` in config — resolved from `.env` + system env.
 
+You can also set env vars via CLI or at runtime:
+```bash
+mcp-bridge set-env TODOIST_API_TOKEN your-token-here
+```
+Or via the agent: `mcp(action="set-env", params={key: "TODOIST_API_TOKEN", value: "..."})`
+
 ## CLI Reference
 
 ```bash
@@ -581,8 +587,9 @@ mcp-bridge init --register codex        # Init + register with Codex
 mcp-bridge init --register cursor       # Init + register with Cursor
 mcp-bridge init --register windsurf     # Init + register with Windsurf
 mcp-bridge install <server>       # Install from online catalog
+mcp-bridge set-env <KEY> <value>  # Set an API key in ~/.mcp-bridge/.env
 mcp-bridge catalog                # Browse 100+ available servers
-mcp-bridge servers                # List configured servers
+mcp-bridge servers                # List configured servers and current mode
 mcp-bridge search <query>         # Search catalog by keyword
 mcp-bridge update [--check]       # Check for / install updates
 mcp-bridge --version              # Print version
@@ -599,6 +606,7 @@ When connected to an MCP client (Claude Code, Codex, Cursor, etc.), the bridge e
 ```
 mcp(action="search", params={query: "task management"})  # Search catalog
 mcp(action="install", params={name: "todoist"})           # Install server (persisted to config)
+mcp(action="set-env", params={key: "TODOIST_API_TOKEN", value: "your-key"})  # Set API key
 mcp(action="catalog")                                      # Browse all servers
 mcp(action="list", server="todoist")                       # Discover tools on a server
 mcp(action="call", server="todoist", tool="find-tasks", params={query: "today"})
