@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.8.24] - 2026-03-31
+
+### Added
+- CLI --mode flag: `mcp-bridge init --mode direct` to switch between router and direct mode
+- Direct mode exposes all tools individually (ideal for clients with deferred/lazy tool loading)
+
 ## [2.8.23] - 2026-03-31
 
 ### Changed

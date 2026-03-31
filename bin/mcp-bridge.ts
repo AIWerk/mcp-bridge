@@ -65,6 +65,7 @@ interface CliArgs {
   daily?: number;
   monthly?: number;
   register?: string;
+  mode?: "router" | "direct";
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -106,6 +107,11 @@ function parseArgs(argv: string[]): CliArgs {
         i++;
         if (!argv[i]) { process.stderr.write("Error: --register requires a client name (claude-code, codex, cursor, windsurf)\n"); process.exit(1); }
         args.register = argv[i];
+        break;
+      case "--mode":
+        i++;
+        if (argv[i] !== "router" && argv[i] !== "direct") { process.stderr.write("Error: --mode must be 'router' or 'direct'\n"); process.exit(1); }
+        args.mode = argv[i] as "router" | "direct";
         break;
       case "--daily":
         i++;
@@ -162,7 +168,7 @@ Usage:
   mcp-bridge                        Start in stdio mode (default)
   mcp-bridge --sse --port 3000      Start as SSE server
   mcp-bridge --http --port 3000     Start as streamable-http server
-  mcp-bridge init [--register <client>]  Create config + optionally register with a client
+  mcp-bridge init [--register <client>] [--mode router|direct]  Create config + optionally register
   mcp-bridge install <server>       Install a server from the catalog
   mcp-bridge catalog [--offline]    List available servers
   mcp-bridge servers                List configured servers
@@ -195,8 +201,23 @@ function whichCmd(name: string): boolean {
   }
 }
 
-function cmdInit(logger: Logger, register?: string): void {
+function cmdInit(logger: Logger, register?: string, mode?: "router" | "direct"): void {
   initConfigDir(logger);
+
+  // Apply --mode if config exists and mode was specified
+  if (mode) {
+    const configPath = join(homedir(), ".mcp-bridge", "config.json");
+    if (existsSync(configPath)) {
+      try {
+        const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+        if (raw.mode !== mode) {
+          raw.mode = mode;
+          writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
+          process.stdout.write(`Mode set to "${mode}" in ${configPath}\n`);
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
 
   const isGlobal = __dirname.includes("node_modules") && (
     __dirname.includes("/lib/node_modules/") || __dirname.includes("\\lib\\node_modules\\")
@@ -798,7 +819,7 @@ async function main(): Promise<void> {
       printHelp();
       break;
     case "init":
-      cmdInit(logger, args.register);
+      cmdInit(logger, args.register, args.mode);
       break;
     case "catalog":
       await cmdCatalog(logger, args.offline);
