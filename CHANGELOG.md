@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.40] - 2026-03-31
+
+### Fixed
+- CLI `auth status` shows "env-key" auth type for servers using environment variable API keys (was "none")
+
 ## [2.8.39] - 2026-03-31
 
 ### Fixed

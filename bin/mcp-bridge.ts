@@ -752,12 +752,6 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
     const shown = new Set<string>();
     if (config) {
       for (const [name, serverConfig] of Object.entries(config.servers)) {
-        const authType = serverConfig.auth?.type ?? "none";
-        const grantType = serverConfig.auth?.type === "oauth2" && "grantType" in serverConfig.auth
-          ? (serverConfig.auth as any).grantType
-          : serverConfig.auth?.type === "oauth2" ? "client_credentials" : "";
-        const label = authType === "oauth2" ? `oauth2 (${grantType})` : authType;
-
         // Find required env vars from raw config (before env var resolution)
         const envKeys: string[] = [];
         try {
@@ -769,6 +763,12 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
             if (match) envKeys.push(match[1]);
           }
         } catch { /* ignore */ }
+
+        const authType = serverConfig.auth?.type ?? (envKeys.length > 0 ? "env-key" : "none");
+        const grantType = serverConfig.auth?.type === "oauth2" && "grantType" in serverConfig.auth
+          ? (serverConfig.auth as any).grantType
+          : serverConfig.auth?.type === "oauth2" ? "client_credentials" : "";
+        const label = authType === "oauth2" ? `oauth2 (${grantType})` : authType;
 
         let envStatus = "-";
         if (envKeys.length > 0) {
