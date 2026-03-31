@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.41] - 2026-03-31
+
+### Fixed
+- CLI auth status shows "api-key" instead of "env-key" for servers using environment variable API keys
+
 ## [2.8.40] - 2026-03-31
 
 ### Fixed
