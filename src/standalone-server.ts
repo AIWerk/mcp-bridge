@@ -415,20 +415,17 @@ export class StandaloneServer {
       if (serverName) {
         this.logger.info(`[mcp-bridge] Lazy discovery for server: ${serverName} (triggered by ${toolName})`);
         await this.discoverSingleServer(serverName);
-        entry = this.directTools.find(t => t.registeredName === toolName);
 
-        // If the original call was a placeholder (_discover), return discovered tools
-        if (!entry && toolArgs?._discover) {
-          const serverTools = this.directTools.filter(t => t.serverName === serverName);
-          const discovered = serverTools.map(t => `${t.registeredName}: ${t.description}`);
-          return {
-            jsonrpc: "2.0",
-            id,
-            result: {
-              content: [{ type: "text", text: `Discovered ${serverTools.length} tools from ${serverName}:\n${discovered.join("\n")}` }]
-            }
-          };
-        }
+        // After discovery, the placeholder tool no longer exists - return discovered tools
+        const serverTools = this.directTools.filter(t => t.serverName === serverName);
+        const discovered = serverTools.map(t => `${t.registeredName}: ${t.description}`);
+        return {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            content: [{ type: "text", text: `Discovered ${serverTools.length} tools from ${serverName}. Available tools:\n\n${discovered.join("\n")}\n\nCall any of these tools directly by name.` }]
+          }
+        };
       }
     }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.30] - 2026-03-31
+
+### Fixed
+- Direct mode: placeholder tool call now returns discovered tools list instead of "Tool call not found" error
+
 ## [2.8.29] - 2026-03-31
 
 ### Fixed
