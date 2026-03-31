@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.28] - 2026-03-31
+
+### Fixed
+- Direct mode: per-server lazy discovery (only connect to the server being called, not all servers at once)
+- Direct mode: tool cache on disk (~/.mcp-bridge/cache/) - second startup uses cached tools, no child process needed for tools/list
+- First run: placeholder tools per server, subsequent runs: full tool list from cache
+
 ## [2.8.27] - 2026-03-31
 
 ### Fixed

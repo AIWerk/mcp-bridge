@@ -17,6 +17,9 @@ import { StdioTransport } from "./transport-stdio.js";
 import { StreamableHttpTransport } from "./transport-streamable-http.js";
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import { FileTokenStore } from "./token-store.js";
+import { homedir } from "os";
+import { join } from "path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 
 interface DirectToolEntry {
   serverName: string;
@@ -305,23 +308,48 @@ export class StandaloneServer {
       return { jsonrpc: "2.0", id, result: { tools } };
     }
 
-    // Lazy: generate tool entries from server config (no connect yet)
-    const placeholderTools: Array<{ name: string; description: string; inputSchema: any }> = [];
+    // Lazy: try cache first, then placeholder
+    const lazyTools: Array<{ name: string; description: string; inputSchema: any }> = [];
     const globalNames = new Set<string>();
     for (const [serverName, serverConfig] of Object.entries(this.config.servers)) {
-      const desc = serverConfig.description || serverName;
-      const registeredName = pickRegisteredToolName(
-        serverName, "call", this.config.toolPrefix,
-        new Set<string>(), globalNames, this.logger
-      );
-      globalNames.add(registeredName);
-      placeholderTools.push({
-        name: registeredName,
-        description: `[${serverName}] ${desc} — tools will be discovered on first call. Use this tool to trigger discovery.`,
-        inputSchema: { type: "object", properties: { _discover: { type: "boolean", description: "Set to true to discover all tools from this server" } } }
-      });
+      const cached = this.loadToolCache(serverName);
+      if (cached && cached.length > 0) {
+        // Use cached tools (real tool names + descriptions, no child process)
+        const localNames = new Set<string>();
+        for (const tool of cached) {
+          const registeredName = pickRegisteredToolName(
+            serverName, tool.name, this.config.toolPrefix,
+            localNames, globalNames, this.logger
+          );
+          localNames.add(registeredName);
+          globalNames.add(registeredName);
+          lazyTools.push({ name: registeredName, description: tool.description, inputSchema: tool.inputSchema });
+          // Also populate directTools so call works with lazy connect
+          this.directTools.push({
+            serverName, originalName: tool.name, registeredName,
+            description: tool.description, inputSchema: tool.inputSchema
+          });
+        }
+      } else {
+        // No cache: single placeholder per server
+        const desc = serverConfig.description || serverName;
+        const registeredName = pickRegisteredToolName(
+          serverName, "call", this.config.toolPrefix,
+          new Set<string>(), globalNames, this.logger
+        );
+        globalNames.add(registeredName);
+        lazyTools.push({
+          name: registeredName,
+          description: `[${serverName}] ${desc} — call this tool to discover all available tools from this server.`,
+          inputSchema: { type: "object", properties: { _discover: { type: "boolean", description: "Set to true to discover all tools" } } }
+        });
+        this.directTools.push({
+          serverName, originalName: "call", registeredName,
+          description: `[${serverName}] ${desc}`, inputSchema: {}
+        });
+      }
     }
-    return { jsonrpc: "2.0", id, result: { tools: placeholderTools } };
+    return { jsonrpc: "2.0", id, result: { tools: lazyTools } };
   }
 
   private async handleToolsCall(id: number, params: any): Promise<McpResponse> {
@@ -380,23 +408,24 @@ export class StandaloneServer {
     // Direct mode: find and call the tool
     let entry = this.directTools.find(t => t.registeredName === toolName);
 
-    // Lazy discovery: if tool not found, maybe we haven't connected yet
+    // Lazy discovery: if tool not found, discover only the relevant server (not all)
     if (!entry) {
-      // Check if this looks like a placeholder tool (serverName_call pattern) or just unknown
-      // Try full discovery if we haven't done it yet
-      if (this.directTools.length === 0 || toolArgs?._discover) {
-        this.logger.info(`[mcp-bridge] Lazy discovery triggered by tool call: ${toolName}`);
-        await this.discoverDirectTools();
+      // Extract server name from tool name (prefix_toolname pattern)
+      const serverName = this.guessServerFromToolName(toolName);
+      if (serverName) {
+        this.logger.info(`[mcp-bridge] Lazy discovery for server: ${serverName} (triggered by ${toolName})`);
+        await this.discoverSingleServer(serverName);
         entry = this.directTools.find(t => t.registeredName === toolName);
 
-        // If the original call was a placeholder, send back the discovered tools list
+        // If the original call was a placeholder (_discover), return discovered tools
         if (!entry && toolArgs?._discover) {
-          const discovered = this.directTools.map(t => `${t.registeredName}: ${t.description}`);
+          const serverTools = this.directTools.filter(t => t.serverName === serverName);
+          const discovered = serverTools.map(t => `${t.registeredName}: ${t.description}`);
           return {
             jsonrpc: "2.0",
             id,
             result: {
-              content: [{ type: "text", text: `Discovered ${this.directTools.length} tools:\n${discovered.join("\n")}` }]
+              content: [{ type: "text", text: `Discovered ${serverTools.length} tools from ${serverName}:\n${discovered.join("\n")}` }]
             }
           };
         }
@@ -554,6 +583,86 @@ export class StandaloneServer {
         this.logger.error(`[mcp-bridge] Failed to connect to ${serverName}:`, err);
       }
     }
+  }
+
+  /** Extract server name from a tool name like "todoist_call" or "github_call" */
+  private guessServerFromToolName(toolName: string): string | null {
+    // Try exact match with placeholder pattern: serverName_call
+    for (const serverName of Object.keys(this.config.servers)) {
+      if (toolName.startsWith(serverName + "_") || toolName === serverName) {
+        return serverName;
+      }
+    }
+    return null;
+  }
+
+  /** Discover tools from a single server (lazy, per-server) */
+  private async discoverSingleServer(serverName: string): Promise<void> {
+    const serverConfig = this.config.servers[serverName];
+    if (!serverConfig) return;
+
+    // Skip if already connected
+    const existing = this.directConnections.get(serverName);
+    if (existing?.initialized) return;
+
+    try {
+      const transport = this.createTransport(serverName, serverConfig);
+      await transport.connect();
+      await initializeProtocol(transport, PACKAGE_VERSION);
+      this.directConnections.set(serverName, { transport, initialized: true });
+
+      const tools = await fetchToolsList(transport);
+      const globalNames = new Set(this.directTools.map(t => t.registeredName));
+      const localNames = new Set<string>();
+
+      // Remove placeholder entries for this server
+      this.directTools = this.directTools.filter(t => t.serverName !== serverName);
+
+      for (const tool of tools) {
+        const registeredName = pickRegisteredToolName(
+          serverName, tool.name, this.config.toolPrefix,
+          localNames, globalNames, this.logger
+        );
+        localNames.add(registeredName);
+        globalNames.add(registeredName);
+
+        this.directTools.push({
+          serverName,
+          originalName: tool.name,
+          registeredName,
+          description: tool.description,
+          inputSchema: tool.inputSchema
+        });
+      }
+
+      // Cache tools to disk
+      this.saveToolCache(serverName, tools);
+
+      this.logger.info(`[mcp-bridge] Discovered ${tools.length} tools from ${serverName}`);
+    } catch (err) {
+      this.logger.error(`[mcp-bridge] Failed to discover ${serverName}:`, err);
+    }
+  }
+
+  /** Save discovered tools to disk cache */
+  private saveToolCache(serverName: string, tools: McpTool[]): void {
+    try {
+      const cacheDir = join(homedir(), ".mcp-bridge", "cache");
+      mkdirSync(cacheDir, { recursive: true });
+      const cachePath = join(cacheDir, `${serverName}-tools.json`);
+      writeFileSync(cachePath, JSON.stringify(tools, null, 2), "utf-8");
+    } catch { /* ignore cache write errors */ }
+  }
+
+  /** Load cached tools from disk */
+  private loadToolCache(serverName: string): McpTool[] | null {
+    try {
+      const cachePath = join(homedir(), ".mcp-bridge", "cache", `${serverName}-tools.json`);
+      if (existsSync(cachePath)) {
+        return JSON.parse(readFileSync(cachePath, "utf-8"));
+      }
+    } catch { /* ignore cache read errors */ }
+    return null;
   }
 
   private nextRequestId(): number {
