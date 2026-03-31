@@ -601,6 +601,48 @@ async function cmdInstall(serverName: string, args: CliArgs, logger: Logger): Pr
     process.stdout.write(`\nSet them in your environment or ~/.mcp-bridge/.env before starting the bridge.\n`);
   } else {
     process.stdout.write(`All required environment variables are set. Ready to use.\n`);
+
+    // Pre-discover tools and cache them (so direct mode has tools on first start)
+    process.stdout.write(`\nDiscovering tools...\n`);
+    try {
+      const { StdioTransport } = await import("../src/transport-stdio.js");
+      const { SseTransport } = await import("../src/transport-sse.js");
+      const { StreamableHttpTransport } = await import("../src/transport-streamable-http.js");
+      const { fetchToolsList, initializeProtocol, PACKAGE_VERSION } = await import("../src/protocol.js");
+
+      let transport: any;
+      if (serverConfig.transport === "stdio") {
+        transport = new StdioTransport(serverConfig, { servers: {} } as any, logger, async () => {});
+      } else if (serverConfig.transport === "sse") {
+        transport = new SseTransport(serverConfig, { servers: {} } as any, logger, async () => {});
+      } else if (serverConfig.transport === "streamable-http") {
+        transport = new StreamableHttpTransport(serverConfig, { servers: {} } as any, logger, async () => {});
+      }
+
+      if (transport) {
+        await transport.connect();
+        await initializeProtocol(transport, PACKAGE_VERSION);
+        const tools = await fetchToolsList(transport);
+
+        // Save to cache
+        const cacheToolDir = join(configDir, "cache");
+        mkdirSync(cacheToolDir, { recursive: true });
+        writeFileSync(
+          join(cacheToolDir, `${serverName}-tools.json`),
+          JSON.stringify(tools, null, 2),
+          "utf-8"
+        );
+
+        process.stdout.write(`✓ Cached ${tools.length} tools from "${serverName}"\n`);
+
+        // Disconnect
+        await transport.disconnect().catch(() => {});
+      }
+    } catch (discErr) {
+      // Non-fatal: tool discovery is a nice-to-have, server still installed
+      logger.info(`Tool discovery skipped: ${discErr instanceof Error ? discErr.message : String(discErr)}`);
+      process.stdout.write(`Tool discovery skipped (server will discover tools on first use).\n`);
+    }
   }
 }
 

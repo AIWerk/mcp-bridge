@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.33] - 2026-03-31
+
+### Added
+- Install-time tool discovery: `mcp-bridge install` now connects to the server, discovers tools, and caches them to disk. Direct mode uses cached tools on startup (no child process needed).
+
+### Changed
+- Direct mode: `mcp_discover` tool only appears for servers without cache. After install, all tools are immediately available.
+
 ## [2.8.32] - 2026-03-31
 
 ### Changed
