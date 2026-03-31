@@ -318,6 +318,10 @@ export class McpRouter {
         if (!serverName) {
           return this.error("invalid_params", "server name is required for action=install (pass as server field or params.name)");
         }
+        // Sanitize serverName: only lowercase alphanumeric + hyphens (matches recipe spec id format)
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(serverName)) {
+          return this.error("invalid_params", `Invalid server name "${serverName}". Must match /^[a-z0-9][a-z0-9-]*$/ (lowercase alphanumeric + hyphens).`);
+        }
         if (this.servers[serverName]) {
           return { action: "install", server: serverName, installed: true, message: `Server "${serverName}" is already configured.` };
         }
@@ -357,7 +361,7 @@ export class McpRouter {
             this.logger.warn(`Could not persist "${serverName}" to config: ${persistErr instanceof Error ? persistErr.message : String(persistErr)}`);
           }
           
-          const credUrl = (recipe as any).auth?.credentialsUrl;
+          const credUrl = recipe.auth?.credentialsUrl;
           if (missing.length > 0) {
             return {
               action: "install",

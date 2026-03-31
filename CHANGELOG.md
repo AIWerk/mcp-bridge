@@ -111,16 +111,6 @@
 ### Fixed
 - Debug type safety improvements, spec §7/§11 clarifications
 
-## [Unreleased]
-
-### Features
-- **Debug mode** — `config.debug: true` or `--debug` CLI flag adds `_debug` metadata to tool call responses (server, tool, transport, latencyMs, cached)
-
-### Spec
-- **§11 Skills — Bridge-Injected MCP Prompts** — recipe.json `skill` field for gotchas, workflows, bestPractices; bridge generates MCP prompts when server provides none
-- **§7.2 Validator** — malformed skill entries emit warnings
-- **§11.4 Schema** — stale tool name references are informational (warning, not error)
-
 ## [2.8.3] - 2026-03-28
 
 ### Fixed

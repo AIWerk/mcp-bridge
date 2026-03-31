@@ -46,6 +46,7 @@ export interface CatalogRecipe {
     type: string;
     required?: boolean;
     envVars?: string[];
+    credentialsUrl?: string;
   };
   [key: string]: unknown;
 }
