@@ -276,7 +276,7 @@ export class StandaloneServer {
               type: "object",
               properties: {
                 server: { type: "string", description: "Server name" },
-                action: { type: "string", description: "list | call | batch | refresh | status | intent | schema | promotions | search | catalog | install | remove | set-mode | set-env" },
+                action: { type: "string", description: "list | call | batch | refresh | status | intent | schema | promotions | remove | set-mode | set-env" },
                 tool: { type: "string", description: "Tool name for action=call/schema" },
                 params: { type: "object", description: "Tool arguments" },
                 calls: {
@@ -479,26 +479,21 @@ export class StandaloneServer {
         }
       }
 
-      if (action === "search" || action === "install" || action === "catalog" || action === "set-mode" || action === "remove") {
+      if (action === "set-mode" || action === "remove") {
         // Delegate to router dispatch (create a temporary router for management actions)
         if (!this.router) {
           const { McpRouter } = await import("./mcp-router.js");
           this.router = new McpRouter(this.config.servers, this.config, this.logger);
         }
         const params: Record<string, unknown> = {};
-        if (query) params.query = query;
         if (server) params.server = server;
         if (server) params.name = server;
         if (toolArgs?.mode) params.mode = toolArgs.mode;
         const result = await this.router.dispatch(server, action, undefined, params);
-        // If install succeeded, notify about new tools
-        if (action === "install" && "installed" in result && (result as any).installed) {
-          this.sendToolsChanged();
-        }
         return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result) }] } };
       }
 
-      return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Unknown action. Use: search, install, remove, catalog, status, servers, discover, set-mode" }] } };
+      return { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Unknown action. Use: remove, status, servers, discover, set-mode, set-env" }] } };
     }
 
     // Handle mcp_discover tool (legacy, kept for backward compatibility)
@@ -696,13 +691,12 @@ export class StandaloneServer {
     const serverNames = Object.keys(this.config.servers);
     return {
       name: "mcp_manage",
-      description: `MCP server manager. Actions: 'search' to find servers in the verified catalog (100+ signed recipes), 'install' to add a server by name, 'remove' to remove a server, 'catalog' to browse all, 'status' to check connections, 'servers' to list configured servers, 'discover' to connect a server and discover its tools, 'set-mode' to switch between router/direct mode, 'set-env' to configure API keys in ~/.mcp-bridge/.env. Connected servers: ${serverNames.join(", ") || "none"}.`,
+      description: `MCP server manager. Actions: 'remove' to remove a server, 'status' to check connections, 'servers' to list configured servers, 'discover' to connect a server and discover its tools, 'set-mode' to switch between router/direct mode, 'set-env' to configure API keys in ~/.mcp-bridge/.env. Connected servers: ${serverNames.join(", ") || "none"}.`,
       inputSchema: {
         type: "object",
         properties: {
-          action: { type: "string", description: "search | install | remove | catalog | status | servers | discover | set-mode | set-env", enum: ["search", "install", "remove", "catalog", "status", "servers", "discover", "set-mode", "set-env"] },
-          server: { type: "string", description: "Server name (for install, remove, discover)" },
-          query: { type: "string", description: "Search query (for action=search)" },
+          action: { type: "string", description: "remove | status | servers | discover | set-mode | set-env", enum: ["remove", "status", "servers", "discover", "set-mode", "set-env"] },
+          server: { type: "string", description: "Server name (for remove, discover)" },
           mode: { type: "string", description: "Mode (for action=set-mode): router or direct", enum: ["router", "direct"] },
           key: { type: "string", description: "Environment variable name for action=set-env (e.g. TODOIST_API_TOKEN)" },
           value: { type: "string", description: "Environment variable value for action=set-env" }

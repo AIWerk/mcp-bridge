@@ -307,8 +307,6 @@ test("generateDescription includes configured servers", () => {
   assert.match(description, /\'list\'/);
   assert.match(description, /\'call\'/);
   assert.match(description, /\'refresh\'/);
-  assert.match(description, /\'search\'/);
-  assert.match(description, /\'install\'/);
 });
 
 test("status action returns all servers with connection state", async () => {

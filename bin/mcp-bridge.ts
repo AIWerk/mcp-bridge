@@ -5,14 +5,13 @@ import { join, dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
 import { platform, homedir } from "os";
 import { execFileSync, execSync } from "child_process";
-import { loadConfig, initConfigDir, warnDeprecatedBundledRecipes, recipeToServerConfig, collectRequiredEnvVars } from "../src/config.js";
+import { loadConfig, initConfigDir } from "../src/config.js";
 import { StandaloneServer } from "../src/standalone-server.js";
 import { PACKAGE_VERSION } from "../src/protocol.js";
 import { checkForUpdate, runUpdate } from "../src/update-checker.js";
 import { FileTokenStore } from "../src/token-store.js";
 import { performAuthCodeLogin, performDeviceCodeLogin } from "../src/cli-auth.js";
 import { RateLimiter } from "../src/rate-limiter.js";
-import { CatalogClient } from "../src/catalog-client.js";
 import type { Logger, HttpAuthConfig } from "../src/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,7 +50,7 @@ function createLogger(level: LogLevel): Logger {
 // -- Arg parsing ----------------------------------------------------------
 
 interface CliArgs {
-  command: "serve" | "init" | "install" | "remove" | "set-env" | "catalog" | "servers" | "search" | "update" | "version" | "help" | "auth" | "usage" | "limit";
+  command: "serve" | "init" | "remove" | "set-env" | "servers" | "update" | "version" | "help" | "auth" | "usage" | "limit";
   authSubcommand?: "login" | "logout" | "status";
   sse: boolean;
   http: boolean;
@@ -124,12 +123,9 @@ function parseArgs(argv: string[]): CliArgs {
         if (isNaN(args.monthly)) { process.stderr.write("Error: --monthly requires a number\n"); process.exit(1); }
         break;
       case "init": args.command = "init"; break;
-      case "install": args.command = "install"; break;
       case "remove": case "uninstall": args.command = "remove"; break;
       case "set-env": args.command = "set-env"; break;
-      case "catalog": args.command = "catalog"; break;
       case "servers": args.command = "servers"; break;
-      case "search": args.command = "search"; break;
       case "update": args.command = "update"; break;
       case "usage": args.command = "usage"; break;
       case "limit": args.command = "limit"; break;
@@ -171,12 +167,9 @@ Usage:
   mcp-bridge --sse --port 3000      Start as SSE server
   mcp-bridge --http --port 3000     Start as streamable-http server
   mcp-bridge init [--register <client>] [--mode router|direct]  Create config + optionally register
-  mcp-bridge install <server>       Install a server from the catalog
   mcp-bridge remove <server>        Remove a configured server
   mcp-bridge set-env <KEY> <value>  Set an API key in ~/.mcp-bridge/.env
-  mcp-bridge catalog [--offline]    List available servers
   mcp-bridge servers                List configured servers and current mode
-  mcp-bridge search <query>         Search catalog by keyword
   mcp-bridge usage                  Show current per-server call usage
   mcp-bridge limit <server> [--daily N] [--monthly N]
                                     Set per-server rate limits (0 = unlimited)
@@ -331,30 +324,6 @@ function registerClient(client: string, bridgeCmd: string, bridgeArgs: string[],
   }
 }
 
-async function cmdCatalog(logger: Logger, offline: boolean): Promise<void> {
-  const client = new CatalogClient({ logger });
-  try {
-    const result = await client.list({ limit: 200 });
-    const recipes = result.results || [];
-
-    process.stdout.write(`\nAvailable servers (${recipes.length} from catalog.aiwerk.ch):\n\n`);
-    process.stdout.write("  Server                Auth        Category         Description\n");
-    process.stdout.write("  " + "─".repeat(90) + "\n");
-
-    for (const r of recipes as any[]) {
-      const name = (r.name || "").padEnd(22);
-      const auth = (r.authSummary || "none").padEnd(12);
-      const cat = (r.category || "").padEnd(17);
-      const desc = (r.description || "").slice(0, 60);
-      process.stdout.write(`  ${name}${auth}${cat}${desc}\n`);
-    }
-    process.stdout.write("\n");
-  } catch (err) {
-    logger.error(`Failed to fetch catalog: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-}
-
 function cmdServers(logger: Logger, configPath?: string): void {
   try {
     const config = loadConfig({ configPath, logger });
@@ -382,29 +351,6 @@ function cmdServers(logger: Logger, configPath?: string): void {
     process.stdout.write("\n");
   } catch (err) {
     logger.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
-  }
-}
-
-async function cmdSearch(query: string, logger: Logger): Promise<void> {
-  const client = new CatalogClient({ logger });
-  try {
-    const searchResponse = await client.search(query);
-    const results = Array.isArray(searchResponse) ? searchResponse : (searchResponse as any).results || [];
-
-    if (results.length === 0) {
-      process.stdout.write(`No servers matching "${query}"\n`);
-      return;
-    }
-
-    process.stdout.write(`\nSearch results for "${query}" (${results.length} found):\n\n`);
-    for (const [i, r] of (results as any[]).entries()) {
-      const auth = r.authSummary || (r.authRequired ? "required" : "none");
-      process.stdout.write(`  ${i + 1}  ${(r.name || "").padEnd(22)}[${auth}] ${r.description || ""}\n`);
-    }
-    process.stdout.write("\n");
-  } catch (err) {
-    logger.error(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
 }
@@ -537,123 +483,6 @@ function cmdLimit(args: CliArgs, logger: Logger): void {
   } catch (err) {
     logger.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
-  }
-}
-
-async function cmdInstall(serverName: string, args: CliArgs, logger: Logger): Promise<void> {
-  const configPath = resolveConfigPath(args.configPath);
-  const configDir = dirname(configPath);
-  
-  // Ensure config dir exists
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true });
-  }
-  
-  // Ensure config file exists
-  if (!existsSync(configPath)) {
-    writeFileSync(configPath, JSON.stringify({ servers: {} }, null, 2) + "\n", "utf-8");
-    logger.info(`Created config: ${configPath}`);
-  }
-
-  // Read current config
-  const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-  if (!raw.servers) raw.servers = {};
-  
-  // Check if already configured
-  if (raw.servers[serverName]) {
-    process.stdout.write(`Server "${serverName}" is already configured.\n`);
-    process.stdout.write(`Config: ${configPath}\n`);
-    return;
-  }
-
-  // Fetch recipe from catalog
-  process.stdout.write(`Fetching recipe for ${serverName}...\n`);
-  const cacheDir = join(configDir, "recipes");
-  const client = new CatalogClient({ cacheDir, logger });
-  
-  let recipe;
-  try {
-    recipe = await client.resolve(serverName);
-  } catch (err) {
-    logger.error(`Recipe not found: ${serverName}`);
-    process.exit(1);
-  }
-
-  // Convert recipe to server config
-  const serverConfig = recipeToServerConfig(recipe);
-  if (!serverConfig) {
-    logger.error(`Unsupported recipe format for "${serverName}"`);
-    process.exit(1);
-  }
-
-  // Check required env vars
-  const requiredVars = collectRequiredEnvVars(recipe);
-  const missing = requiredVars.filter(v => !process.env[v]);
-
-  // Add to config
-  raw.servers[serverName] = serverConfig;
-  writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
-
-  process.stdout.write(`\n✓ Added "${serverName}" to ${configPath}\n\n`);
-
-  if (missing.length > 0) {
-    process.stdout.write(`⚠ Missing environment variables:\n`);
-    for (const v of missing) {
-      process.stdout.write(`  ${v}\n`);
-    }
-    // Show credentials URL if available
-    const credUrl = (recipe.auth as any)?.credentialsUrl;
-    if (credUrl) {
-      process.stdout.write(`\nGet credentials: ${credUrl}\n`);
-    }
-    process.stdout.write(`\nSet them in your environment or ~/.mcp-bridge/.env before starting the bridge.\n`);
-  } else {
-    process.stdout.write(`All required environment variables are set. Ready to use.\n`);
-  }
-
-  // Pre-discover tools and cache them (so direct mode has tools on first start)
-  // Try even with missing env vars — many servers respond to tools/list without auth
-  process.stdout.write(`\nDiscovering tools...\n`);
-  {
-    try {
-      const { StdioTransport } = await import("../src/transport-stdio.js");
-      const { SseTransport } = await import("../src/transport-sse.js");
-      const { StreamableHttpTransport } = await import("../src/transport-streamable-http.js");
-      const { fetchToolsList, initializeProtocol, PACKAGE_VERSION } = await import("../src/protocol.js");
-
-      let transport: any;
-      if (serverConfig.transport === "stdio") {
-        transport = new StdioTransport(serverConfig, { servers: {} } as any, logger, async () => {});
-      } else if (serverConfig.transport === "sse") {
-        transport = new SseTransport(serverConfig, { servers: {} } as any, logger, async () => {});
-      } else if (serverConfig.transport === "streamable-http") {
-        transport = new StreamableHttpTransport(serverConfig, { servers: {} } as any, logger, async () => {});
-      }
-
-      if (transport) {
-        await transport.connect();
-        await initializeProtocol(transport, PACKAGE_VERSION);
-        const tools = await fetchToolsList(transport);
-
-        // Save to cache
-        const cacheToolDir = join(configDir, "cache");
-        mkdirSync(cacheToolDir, { recursive: true });
-        writeFileSync(
-          join(cacheToolDir, `${serverName}-tools.json`),
-          JSON.stringify(tools, null, 2),
-          "utf-8"
-        );
-
-        process.stdout.write(`✓ Cached ${tools.length} tools from "${serverName}"\n`);
-
-        // Disconnect
-        await transport.disconnect().catch(() => {});
-      }
-    } catch (discErr) {
-      // Non-fatal: tool discovery is a nice-to-have, server still installed
-      logger.info(`Tool discovery skipped: ${discErr instanceof Error ? discErr.message : String(discErr)}`);
-      process.stdout.write(`Tool discovery skipped (server will discover tools on first use).\n`);
-    }
   }
 }
 
@@ -827,22 +656,10 @@ async function cmdAuth(args: CliArgs, logger: Logger): Promise<void> {
 
         // Show help for missing env vars
         if (status === "missing env vars") {
-          try {
-            const cacheDir = join(dirname(resolveConfigPath(args.configPath)), "recipes");
-            const helpClient = new CatalogClient({ cacheDir, logger });
-            const recipe = await helpClient.resolve(name);
-            const recipeAuth = recipe?.auth as any;
-            if (recipeAuth?.credentialsUrl) {
-              process.stdout.write(`  ${" ".repeat(maxName)}Get credentials: ${recipeAuth.credentialsUrl}\n`);
-            }
-            if (recipeAuth?.instructions) {
-              process.stdout.write(`  ${" ".repeat(maxName)}${recipeAuth.instructions}\n`);
-            }
-            const missingKeys = envKeys.filter(k => !envVars.has(k) && !process.env[k]);
-            if (missingKeys.length > 0) {
-              process.stdout.write(`  ${" ".repeat(maxName)}Set with: mcp-bridge set-env ${missingKeys[0]} <your-key>\n`);
-            }
-          } catch { /* recipe not in cache, skip help */ }
+          const missingKeys = envKeys.filter(k => !envVars.has(k) && !process.env[k]);
+          if (missingKeys.length > 0) {
+            process.stdout.write(`  ${" ".repeat(maxName)}Set with: mcp-bridge set-env ${missingKeys[0]} <your-key>\n`);
+          }
         }
 
         shown.add(name);
@@ -953,9 +770,6 @@ async function cmdServe(args: CliArgs, logger: Logger): Promise<void> {
     process.exit(1);
   }
 
-  // Warn about deprecated bundled recipes (v2.8.0+)
-  warnDeprecatedBundledRecipes(logger);
-
   const server = new StandaloneServer(config, logger);
 
   // Graceful shutdown
@@ -993,31 +807,14 @@ async function main(): Promise<void> {
     case "init":
       cmdInit(logger, args.register, args.mode);
       break;
-    case "catalog":
-      await cmdCatalog(logger, args.offline);
-      break;
     case "servers":
       cmdServers(logger, args.configPath);
-      break;
-    case "search":
-      if (args.positional.length === 0) {
-        process.stderr.write("Usage: mcp-bridge search <query>\n");
-        process.exit(1);
-      }
-      await cmdSearch(args.positional[0], logger);
       break;
     case "usage":
       cmdUsage(args.configPath, logger);
       break;
     case "limit":
       cmdLimit(args, logger);
-      break;
-    case "install":
-      if (args.positional.length === 0) {
-        process.stderr.write("Usage: mcp-bridge install <server>\n");
-        process.exit(1);
-      }
-      await cmdInstall(args.positional[0], args, logger);
       break;
     case "remove":
       if (args.positional.length === 0) {

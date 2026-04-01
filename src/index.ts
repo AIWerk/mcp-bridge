@@ -48,7 +48,7 @@ export { convertJsonSchemaToTypeBox, createToolParameters, setTypeBoxLoader, set
 export { initializeProtocol, fetchToolsList, PACKAGE_VERSION } from "./protocol.js";
 
 // Config
-export { loadConfig, parseEnvFile, initConfigDir, getConfigDir, bootstrapCatalog, mergeRecipesIntoConfig, warnDeprecatedBundledRecipes } from "./config.js";
+export { loadConfig, parseEnvFile, initConfigDir, getConfigDir } from "./config.js";
 
 // Types
 export type {
@@ -83,10 +83,3 @@ export type { UpdateInfo, PluginUpdateInfo } from "./update-checker.js";
 // Smart filter
 export { filterServers, buildFilteredDescription } from "./smart-filter.js";
 
-// Catalog client
-export { CatalogClient, CatalogError } from "./catalog-client.js";
-export type { CatalogRecipe, CatalogSearchResult } from "./catalog-client.js";
-
-// Recipe cache
-export { RecipeCache } from "./recipe-cache.js";
-export type { CachedRecipe } from "./recipe-cache.js";

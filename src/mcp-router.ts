@@ -21,8 +21,6 @@ import { ToolResolver } from "./tool-resolution.js";
 import { OAuth2TokenManager } from "./oauth2-token-manager.js";
 import { FileTokenStore } from "./token-store.js";
 import { RateLimiter } from "./rate-limiter.js";
-import { CatalogClient } from "./catalog-client.js";
-import { recipeToServerConfig, collectRequiredEnvVars } from "./config.js";
 
 type RouterErrorCode =
   | "unknown_server"
@@ -81,9 +79,6 @@ export type RouterDispatchResponse =
   | { action: "status"; mode: string; servers: RouterServerStatus[] }
   | { action: "batch"; results: RouterBatchResult[] }
   | { action: "promotions"; promoted: Array<{ server: string; tool: string; callCount: number }>; stats: Array<{ server: string; tool: string; callCount: number; lastCall: string }> }
-  | { action: "search"; query: string; results: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string; signed?: boolean }> }
-  | { action: "catalog"; recipes: Array<{ id: string; name: string; description: string; category?: string; auth?: string; origin?: string; maturity?: string; sideEffects?: string; pricing?: string; signed?: boolean }> }
-  | { action: "install"; server: string; installed: boolean; message: string; missingEnvVars?: string[]; credentialsUrl?: string }
   | { action: "remove"; server: string; removed: boolean; message: string }
   | { action: "set-mode"; mode: string; message: string; requiresRestart?: boolean }
   | { action: "set-env"; key: string; message: string }
@@ -177,7 +172,6 @@ export class McpRouter {
   private readonly tokenManager: OAuth2TokenManager;
   private readonly rateLimiter: RateLimiter;
   private readonly requestIdState: RequestIdState = { value: 0 };
-  private readonly catalogClient: CatalogClient | null;
   private intentRouter: IntentRouter | null = null;
   private promotion: AdaptivePromotion | null = null;
 
@@ -209,7 +203,6 @@ export class McpRouter {
     this.toolResolver = new ToolResolver(Object.keys(servers));
     this.tokenManager = new OAuth2TokenManager(logger, new FileTokenStore());
     this.rateLimiter = new RateLimiter();
-    this.catalogClient = new CatalogClient({ logger });
 
     if (clientConfig.adaptivePromotion?.enabled) {
       this.promotion = new AdaptivePromotion(clientConfig.adaptivePromotion, logger);
@@ -219,7 +212,7 @@ export class McpRouter {
   static generateDescription(servers: Record<string, McpServerConfig>): string {
     const serverNames = Object.keys(servers);
     if (serverNames.length === 0) {
-      return "MCP server manager with no servers configured yet. To add MCP servers, always use this tool first (not npm install): action='search' to find servers in the verified catalog (100+ signed, security-audited recipes), action='install' to add a server by name, action='catalog' to browse all available servers.";
+      return "MCP server manager with no servers configured yet.";
     }
 
     const serverList = serverNames
@@ -229,7 +222,7 @@ export class McpRouter {
       })
       .join(", ");
 
-    return `MCP server manager with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. To add new MCP servers, always use this tool first (not npm install): 'search' to find servers in the verified catalog (100+ signed, security-audited recipes), 'install' to add a server by name. Use 'set-env' with params.key and params.value to configure API keys (stored in ~/.mcp-bridge/.env). If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
+    return `MCP server manager with ${serverNames.length} connected servers: ${serverList}. Actions: 'call' to execute a tool, 'list' to discover tools on a server, 'batch' for multiple calls in one round-trip, 'status' to check connections, 'refresh' to re-discover tools. Use 'set-env' with params.key and params.value to configure API keys (stored in ~/.mcp-bridge/.env). If the user mentions a specific tool by name, the call action auto-connects and works without listing first.`;
   }
 
   async dispatch(server?: string, action: string = "call", tool?: string, params?: any): Promise<RouterDispatchResponse> {
@@ -253,138 +246,6 @@ export class McpRouter {
           return this.error("invalid_params", "intent string is required for action=intent");
         }
         return this.resolveIntent(intent);
-      }
-
-      // Search catalog
-      if (normalizedAction === "search") {
-        const query = params?.query || server || tool;
-        if (!query) {
-          return this.error("invalid_params", "query is required for action=search (pass as params.query or server field)");
-        }
-        if (!this.catalogClient) {
-          return this.error("mcp_error", "Catalog client not available");
-        }
-        try {
-          const searchResponse = await this.catalogClient.search(query);
-          // search() may return array or {results: [...]} depending on catalog API version
-          const results = Array.isArray(searchResponse) ? searchResponse : (searchResponse as any).results || [];
-          return {
-            action: "search",
-            query,
-            results: results.map((r: any) => ({
-              id: r.name,
-              name: r.name,
-              description: r.description || "",
-              category: r.category,
-              auth: r.authSummary || (r.authRequired ? "required" : "none"),
-              origin: r.origin,
-              maturity: r.maturity,
-              sideEffects: r.sideEffects,
-              pricing: r.pricing,
-              signed: Array.isArray(r.badges) ? r.badges.includes("signed") : false,
-            }))
-          };
-        } catch (err) {
-          return this.error("mcp_error", `Catalog search failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-
-      // Browse catalog
-      if (normalizedAction === "catalog") {
-        if (!this.catalogClient) {
-          return this.error("mcp_error", "Catalog client not available");
-        }
-        try {
-          const recipeList = await this.catalogClient.list({ limit: 200 });
-          return {
-            action: "catalog",
-            recipes: recipeList.results.map((r: any) => ({
-              id: r.name,
-              name: r.name,
-              description: r.description || "",
-              category: r.category,
-              auth: r.authSummary || (r.authRequired ? "required" : "none"),
-              origin: r.origin,
-              maturity: r.maturity,
-              sideEffects: r.sideEffects,
-              pricing: r.pricing,
-              signed: Array.isArray(r.badges) ? r.badges.includes("signed") : false,
-            }))
-          };
-        } catch (err) {
-          return this.error("mcp_error", `Catalog browse failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-
-      // Install server from catalog (runtime + persisted to config file)
-      if (normalizedAction === "install") {
-        const serverName = server || params?.server || params?.name;
-        if (!serverName) {
-          return this.error("invalid_params", "server name is required for action=install (pass as server field or params.name)");
-        }
-        // Sanitize serverName: only lowercase alphanumeric + hyphens (matches recipe spec id format)
-        if (!/^[a-z0-9][a-z0-9-]*$/.test(serverName)) {
-          return this.error("invalid_params", `Invalid server name "${serverName}". Must match /^[a-z0-9][a-z0-9-]*$/ (lowercase alphanumeric + hyphens).`);
-        }
-        if (this.servers[serverName]) {
-          return { action: "install", server: serverName, installed: true, message: `Server "${serverName}" is already configured.` };
-        }
-        if (!this.catalogClient) {
-          return this.error("mcp_error", "Catalog client not available");
-        }
-        try {
-          const recipe = await this.catalogClient.resolve(serverName);
-          const serverConfig = recipeToServerConfig(recipe);
-          if (!serverConfig) {
-            return this.error("mcp_error", `Unsupported recipe format for "${serverName}"`);
-          }
-          // Check env vars
-          const requiredVars = collectRequiredEnvVars(recipe);
-          const missing = requiredVars.filter(v => !process.env[v]);
-          
-          // Add to runtime config
-          this.servers[serverName] = serverConfig;
-          this.clientConfig.servers[serverName] = serverConfig;
-
-          // Persist to config file
-          try {
-            const os = await import("os");
-            const fs = await import("fs");
-            const path = await import("path");
-            const configPath = path.join(os.homedir(), ".mcp-bridge", "config.json");
-            if (fs.existsSync(configPath)) {
-              const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-              if (!raw.servers) raw.servers = {};
-              if (!raw.servers[serverName]) {
-                raw.servers[serverName] = serverConfig;
-                fs.writeFileSync(configPath, JSON.stringify(raw, null, 2) + "\n", "utf-8");
-                this.logger.info(`Persisted "${serverName}" to ${configPath}`);
-              }
-            }
-          } catch (persistErr) {
-            this.logger.warn(`Could not persist "${serverName}" to config: ${persistErr instanceof Error ? persistErr.message : String(persistErr)}`);
-          }
-          
-          const credUrl = recipe.auth?.credentialsUrl;
-          if (missing.length > 0) {
-            return {
-              action: "install",
-              server: serverName,
-              installed: true,
-              message: `Server "${serverName}" installed. Missing env vars: ${missing.join(", ")}. Set them before calling.`,
-              missingEnvVars: missing,
-              ...(credUrl ? { credentialsUrl: credUrl } : {}),
-            };
-          }
-          return {
-            action: "install",
-            server: serverName,
-            installed: true,
-            message: `Server "${serverName}" installed and ready to use.`
-          };
-        } catch (err) {
-          return this.error("mcp_error", `Install failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
       }
 
       if (normalizedAction === "remove") {
@@ -626,7 +487,7 @@ export class McpRouter {
       }
 
       if (normalizedAction !== "call") {
-        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions, search, catalog, install, set-mode, set-env`);
+        return this.error("invalid_params", `action must be one of: list, call, batch, refresh, schema, intent, status, promotions, remove, set-mode, set-env`);
       }
 
       if (!tool) {
