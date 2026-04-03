@@ -73,7 +73,7 @@ https://bridge.aiwerk.ch/u/<user-id>/health    — health check
 
 Each user's **stdio MCP servers** run in isolated Docker containers:
 - **Filesystem isolation** — a stdio server cannot read the DB, .env, or other users' data
-- **Network isolation** — `--network=none` prevents access to Vault, localhost services
+- **Network isolation** — `--network=bridge` allows outbound API calls (BYOK servers need HTTP access to external APIs like Cal.com, Todoist) while preventing access to host network namespace; Docker bridge provides NAT egress without exposing host-local services (Vault, DB)
 - **Resource limits** — `--memory=1g --cpus=1` per container
 - **Separate secret namespace** — User A cannot access User B's API keys
 - **Separate config** — each user has their own server list, preferences, retry config
