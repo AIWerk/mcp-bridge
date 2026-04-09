@@ -3,12 +3,42 @@
 [![CI](https://github.com/AIWerk/mcp-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/AIWerk/mcp-bridge/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@aiwerk/mcp-bridge.svg)](https://www.npmjs.com/package/@aiwerk/mcp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Status: maintenance](https://img.shields.io/badge/status-maintenance-blue.svg)](#status)
 
 **Your AI, Connected to Everything.** Multiplex multiple MCP servers into one interface. One config, one connection, all your tools.
 
 🌐 **[aiwerkmcp.com](https://aiwerkmcp.com)** — Learn more about the AIWerk MCP Platform
 
 Works with **Claude Code**, **Codex (OpenAI)**, **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, **OpenClaw**, or any MCP client.
+
+## Status
+
+`@aiwerk/mcp-bridge` is in **maintenance mode** as of 2026-04-10.
+
+Primary development has moved to the hosted **AIWerk MCP Platform** at
+[aiwerkmcp.com](https://aiwerkmcp.com) — a multi-tenant hosted MCP bridge
+with catalog, authentication, per-user isolation and OAuth2 built in.
+For most use cases, the hosted platform is a simpler and more featureful
+choice than running the standalone router yourself.
+
+This standalone package remains supported for:
+
+- **OpenClaw plugin users** via [`@aiwerk/openclaw-mcp-bridge`](https://github.com/AIWerk/openclaw-mcp-bridge),
+  which embeds this library and ships its own recipe-install tooling.
+- **Self-hosted / offline deployments** where talking to a hosted service
+  is not an option.
+- **Library consumers** that import `McpRouter`, transports and the OAuth2
+  token manager directly.
+
+The published package is frozen on version `2.8.x`. Security fixes and
+compatibility updates (new Node.js, new MCP protocol revisions) may still
+ship, but no new features are planned. The bundled `servers/` directory
+is retained as a set of **reference recipe examples** you can copy into
+your own `~/.mcp-bridge/config.json` — it is not a curated catalog and
+does not auto-update. As of this release the only remaining network
+coupling with AIWerk infrastructure has been removed: the install helper
+no longer fetches recipes over HTTP and only reads from the bundled
+`servers/` directory.
 
 ## Why?
 
@@ -27,7 +57,7 @@ Most AI agents connect to MCP servers one-by-one. With 10+ servers, that's 10+ c
 - **Graceful shutdown**: clean process termination and connection cleanup
 - **Direct mode**: all tools registered individually with automatic prefixing
 - **3 transports**: stdio, SSE, streamable-http
-- **Built-in catalog**: 14 pre-configured servers, install with one command (bundled servers deprecated — use [MCP Catalog](https://catalog.aiwerk.ch) with 104+ recipes instead)
+- **Bundled recipe examples**: 14+ reference server recipes in `servers/` — copy one as a starting point for your own config, or bring your own MCP server entirely
 - **Zero config secrets in files**: `${ENV_VAR}` resolution from `.env`
 
 ## Install

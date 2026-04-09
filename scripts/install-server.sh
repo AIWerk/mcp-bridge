@@ -50,33 +50,17 @@ done
 
 SERVER_DIR="$SCRIPT_DIR/../servers/$SERVER_NAME"
 
-# v2.8.0: Try catalog first, fall back to bundled servers/
-RECIPE_CACHE_DIR="$HOME/.mcp-bridge/recipes/$SERVER_NAME"
-if [[ -f "$RECIPE_CACHE_DIR/recipe.json" ]]; then
-    echo "[mcp-bridge] Using cached catalog recipe for $SERVER_NAME"
-    SERVER_DIR="$RECIPE_CACHE_DIR"
-elif command -v curl &>/dev/null; then
-    echo "[mcp-bridge] Fetching recipe from catalog..."
-    mkdir -p "$RECIPE_CACHE_DIR"
-    ENCODED_NAME="$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$SERVER_NAME" 2>/dev/null || echo "$SERVER_NAME")"
-    # v2.8.45: catalog moved from catalog.aiwerk.ch (deprecated, proxied) to
-    # the unified bridge.aiwerk.ch backend. The old URL still works via a
-    # transparent Caddy proxy, but new installs should go direct.
-    if curl -sf --connect-timeout 5 --max-time 15 \
-        "https://bridge.aiwerk.ch/api/recipes/$ENCODED_NAME/download" \
-        -o "$RECIPE_CACHE_DIR/recipe.json" 2>/dev/null \
-        && [[ -s "$RECIPE_CACHE_DIR/recipe.json" ]]; then
-        echo "[mcp-bridge] ✓ Recipe downloaded from catalog"
-        SERVER_DIR="$RECIPE_CACHE_DIR"
-    else
-        rm -f "$RECIPE_CACHE_DIR/recipe.json"
-        echo "[mcp-bridge] Catalog unavailable, using bundled recipe"
-        # Fall through to existing SERVER_DIR
-    fi
-fi
+# Historical note (2026-04-10): earlier versions of this script fetched
+# recipes over HTTP from catalog.aiwerk.ch (and briefly from
+# bridge.aiwerk.ch) before falling back to the bundled servers/ directory.
+# That coupling has been removed — mcp-bridge is a pure router and the
+# bundled servers/ tree is the only recipe source. Users who want to add
+# their own server should either copy a bundled recipe into servers/ as a
+# starting point, or write their own ~/.mcp-bridge/config.json entry
+# directly and point it to any MCP server they want.
 
 if [[ ! -d "$SERVER_DIR" ]]; then
-    echo "Error: Server '$SERVER_NAME' not found."
+    echo "Error: Server '$SERVER_NAME' not found in $SCRIPT_DIR/../servers/"
     usage
 fi
 

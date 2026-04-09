@@ -1,9 +1,34 @@
 # Changelog
 
-## [2.8.45] - 2026-04-09
+## [2.8.45] - 2026-04-10
+
+> **Maintenance mode.** See README [Status](./README.md#status). Primary
+> development has moved to [aiwerkmcp.com](https://aiwerkmcp.com). The
+> standalone package remains supported for OpenClaw plugin users,
+> self-hosted deployments and direct library consumers. No npm release
+> accompanies this entry — the changes affect the install helper only,
+> which the published package does not run at `npm install` time.
+
+### Removed
+- `scripts/install-server.sh`: the HTTP fetch block that downloaded recipes
+  from `catalog.aiwerk.ch` / `bridge.aiwerk.ch` has been deleted. Recipes
+  now come exclusively from the bundled `servers/` directory. This
+  supersedes the earlier 2.8.45 entry below (the URL retarget is moot now
+  that the fetch is gone entirely) and removes the only remaining HTTP
+  coupling between `mcp-bridge` and AIWerk-hosted infrastructure.
 
 ### Changed
-- `scripts/install-server.sh`: recipe download URL now points to `bridge.aiwerk.ch/api/recipes/<name>/download` instead of the deprecated `catalog.aiwerk.ch`. The old hostname still works through a transparent Caddy proxy (for users on 2.8.44 or earlier), but new installs bypass the legacy layer and hit the unified catalog directly.
+- README: new **Status** section declaring maintenance mode and explaining
+  who the standalone package is still for.
+- README: feature list no longer advertises a built-in remote catalog —
+  the bundled `servers/` tree is now described as "reference recipe
+  examples" rather than a curated catalog.
+
+### Historical (superseded)
+- `scripts/install-server.sh`: recipe download URL was briefly retargeted
+  from `catalog.aiwerk.ch` to `bridge.aiwerk.ch/api/recipes/<name>/download`
+  (commit `f6b5fe6`). That change is obsolete — the fetch logic no longer
+  exists.
 
 ## [2.8.44] - 2026-03-31
 
