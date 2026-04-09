@@ -59,8 +59,11 @@ elif command -v curl &>/dev/null; then
     echo "[mcp-bridge] Fetching recipe from catalog..."
     mkdir -p "$RECIPE_CACHE_DIR"
     ENCODED_NAME="$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$SERVER_NAME" 2>/dev/null || echo "$SERVER_NAME")"
+    # v2.8.45: catalog moved from catalog.aiwerk.ch (deprecated, proxied) to
+    # the unified bridge.aiwerk.ch backend. The old URL still works via a
+    # transparent Caddy proxy, but new installs should go direct.
     if curl -sf --connect-timeout 5 --max-time 15 \
-        "https://catalog.aiwerk.ch/api/recipes/$ENCODED_NAME/download" \
+        "https://bridge.aiwerk.ch/api/recipes/$ENCODED_NAME/download" \
         -o "$RECIPE_CACHE_DIR/recipe.json" 2>/dev/null \
         && [[ -s "$RECIPE_CACHE_DIR/recipe.json" ]]; then
         echo "[mcp-bridge] ✓ Recipe downloaded from catalog"

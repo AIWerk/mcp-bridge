@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.8.45] - 2026-04-09
+
+### Changed
+- `scripts/install-server.sh`: recipe download URL now points to `bridge.aiwerk.ch/api/recipes/<name>/download` instead of the deprecated `catalog.aiwerk.ch`. The old hostname still works through a transparent Caddy proxy (for users on 2.8.44 or earlier), but new installs bypass the legacy layer and hit the unified catalog directly.
+
 ## [2.8.44] - 2026-03-31
 
 ### Added
