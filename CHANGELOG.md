@@ -1,13 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+> **Back to active development** as of 2026-05-03. The hosted bridge has
+> grown a `localOnly` recipe flag (recipes that need the user's local
+> Chrome, display, USB or user-specific paths and cannot run on the
+> multi-tenant cloud), and `@aiwerk/mcp-bridge` is the recommended local
+> runtime for those recipes. The Universal Recipe Spec v2 has also gained
+> several fields since 2.8.45 (`multiInstance`, `instanceNameHint`,
+> `auth.options[]`, `envBinding`, `credentialsFileType`) — these are
+> being ported to the standalone validator and bundled recipes are being
+> kept in sync with the catalog. See `TODO.md` for the v2.9.0 catch-up
+> plan. No npm release yet.
+
 ## [2.8.45] - 2026-04-10
 
-> **Maintenance mode.** See README [Status](./README.md#status). Primary
-> development has moved to [aiwerkmcp.com](https://aiwerkmcp.com). The
-> standalone package remains supported for OpenClaw plugin users,
-> self-hosted deployments and direct library consumers. No npm release
-> accompanies this entry — the changes affect the install helper only,
-> which the published package does not run at `npm install` time.
+> **Maintenance mode (superseded 2026-05-03).** See README [Status](./README.md#status).
+> Primary development had moved to [aiwerkmcp.com](https://aiwerkmcp.com).
+> The standalone package was kept for OpenClaw plugin users, self-hosted
+> deployments and direct library consumers. No npm release accompanied
+> this entry — the changes affect the install helper only, which the
+> published package does not run at `npm install` time.
 
 ### Removed
 - `scripts/install-server.sh`: the HTTP fetch block that downloaded recipes

@@ -3,7 +3,7 @@
 [![CI](https://github.com/AIWerk/mcp-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/AIWerk/mcp-bridge/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@aiwerk/mcp-bridge.svg)](https://www.npmjs.com/package/@aiwerk/mcp-bridge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Status: maintenance](https://img.shields.io/badge/status-maintenance-blue.svg)](#status)
+[![Status: active](https://img.shields.io/badge/status-active-brightgreen.svg)](#status)
 
 **Your AI, Connected to Everything.** Multiplex multiple MCP servers into one interface. One config, one connection, all your tools.
 
@@ -13,32 +13,29 @@ Works with **Claude Code**, **Codex (OpenAI)**, **Claude Desktop**, **Cursor**, 
 
 ## Status
 
-`@aiwerk/mcp-bridge` is in **maintenance mode** as of 2026-04-10.
+`@aiwerk/mcp-bridge` is **actively developed** as of 2026-05-03.
 
-Primary development has moved to the hosted **AIWerk MCP Platform** at
-[aiwerkmcp.com](https://aiwerkmcp.com) — a multi-tenant hosted MCP bridge
-with catalog, authentication, per-user isolation and OAuth2 built in.
-For most use cases, the hosted platform is a simpler and more featureful
-choice than running the standalone router yourself.
+The primary use case is the **local install path for the AIWerk catalog** at
+[aiwerkmcp.com](https://aiwerkmcp.com). Some recipes (those marked
+`localOnly: true`, e.g. `chrome-devtools`) need a browser, display, USB
+device or user-specific local path that the hosted bridge cannot reach;
+this package is the recommended way to run them.
 
-This standalone package remains supported for:
+It also serves:
 
 - **OpenClaw plugin users** via [`@aiwerk/openclaw-mcp-bridge`](https://github.com/AIWerk/openclaw-mcp-bridge),
   which embeds this library and ships its own recipe-install tooling.
-- **Self-hosted / offline deployments** where talking to a hosted service
-  is not an option.
+- **Self-hosted / offline deployments** where the hosted service is not an
+  option.
 - **Library consumers** that import `McpRouter`, transports and the OAuth2
   token manager directly.
 
-The published package is frozen on version `2.8.x`. Security fixes and
-compatibility updates (new Node.js, new MCP protocol revisions) may still
-ship, but no new features are planned. The bundled `servers/` directory
-is retained as a set of **reference recipe examples** you can copy into
-your own `~/.mcp-bridge/config.json` — it is not a curated catalog and
-does not auto-update. As of this release the only remaining network
-coupling with AIWerk infrastructure has been removed: the install helper
-no longer fetches recipes over HTTP and only reads from the bundled
-`servers/` directory.
+Active development tracks the **Universal Recipe Spec v2** alongside the
+hosted bridge — new fields like `localOnly`, `multiInstance`,
+`auth.options[]` and `envBinding` are being ported, and the bundled
+`servers/` directory is being kept in sync with the catalog. The install
+helper does not fetch recipes over HTTP — recipes come from the bundled
+`servers/` directory only.
 
 ## Why?
 
