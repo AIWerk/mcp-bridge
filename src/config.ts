@@ -228,3 +228,81 @@ export function initConfigDir(logger: Logger): void {
 
   logger.info(`Config directory ready: ${dir}`);
 }
+
+// ── Catalog recipe → server config conversion ──────────────────────────────
+//
+// Restored 2026-05-03. Used by `mcp-bridge install <name>` to convert a
+// fetched recipe into a McpServerConfig entry under config.servers.
+
+import type { CatalogRecipe } from "./catalog-client.js";
+
+export function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | null {
+  if (Array.isArray(recipe.transports) && recipe.transports.length > 0) {
+    const t = recipe.transports[0];
+    if (t.type === "stdio") {
+      return {
+        transport: "stdio",
+        description: recipe.description,
+        command: t.command,
+        args: t.args,
+        env: t.env,
+      };
+    }
+    if (t.type === "sse" || t.type === "streamable-http") {
+      return {
+        transport: t.type,
+        description: recipe.description,
+        url: t.url,
+        headers: t.headers,
+      };
+    }
+    return null;
+  }
+
+  if (recipe.transport === "stdio") {
+    return {
+      transport: "stdio",
+      description: recipe.description,
+      command: recipe.command,
+      args: recipe.args,
+      env: recipe.env,
+    };
+  }
+  if (recipe.transport === "sse" || recipe.transport === "streamable-http") {
+    return {
+      transport: recipe.transport,
+      description: recipe.description,
+      url: recipe.url,
+      headers: recipe.headers,
+    };
+  }
+
+  return null;
+}
+
+/** Collect all env var names required by a recipe (auth.envVars + ${VAR} refs). */
+export function collectRequiredEnvVars(recipe: CatalogRecipe): string[] {
+  const vars = new Set<string>();
+
+  if (Array.isArray(recipe.auth?.envVars)) {
+    for (const v of recipe.auth.envVars) vars.add(v);
+  }
+
+  const envObj = Array.isArray(recipe.transports)
+    ? recipe.transports[0]?.env
+    : recipe.env;
+  if (envObj && typeof envObj === "object") {
+    for (const val of Object.values(envObj)) {
+      if (typeof val === "string") {
+        const matches = val.matchAll(/\$\{([^}]+)\}/g);
+        for (const m of matches) vars.add(m[1]);
+      }
+    }
+  }
+
+  if (recipe.auth?.required === true && vars.size === 0) {
+    vars.add("__AUTH_REQUIRED__");
+  }
+
+  return Array.from(vars);
+}

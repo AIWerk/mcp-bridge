@@ -419,6 +419,76 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
     }
   }
 
+  // ── v2 spec field acceptance (Universal Recipe Spec v2, fields added since 2.8.x) ──
+  //
+  // These are typo-guarded boolean/string checks. Recipes shipped from the
+  // hosted bridge use them; the standalone runtime mostly informs the user
+  // and does not enforce hosted-only semantics (e.g. localOnly is not a
+  // gate locally — every recipe runs on the user's machine anyway).
+
+  // localOnly: top-level boolean. Hosted bridge refuses these recipes;
+  // standalone accepts them and lets the user spawn locally.
+  if (recipe.localOnly !== undefined && typeof recipe.localOnly !== "boolean") {
+    errors.push(`localOnly must be boolean, got ${typeof recipe.localOnly}`);
+  }
+
+  // multiInstance + instanceNameHint: hosted-only semantics today. Standalone
+  // accepts the fields without enforcing multi-instance install behavior.
+  if (recipe.multiInstance !== undefined && typeof recipe.multiInstance !== "boolean") {
+    errors.push(`multiInstance must be boolean, got ${typeof recipe.multiInstance}`);
+  }
+  if (recipe.instanceNameHint !== undefined && typeof recipe.instanceNameHint !== "string") {
+    errors.push(`instanceNameHint must be string, got ${typeof recipe.instanceNameHint}`);
+  }
+
+  // auth.options[]: multi-auth picker. If present, must be an array of objects
+  // with an id (string), label (string), and type (string).
+  const authOptions = (recipe.auth as Record<string, unknown> | undefined)?.options;
+  if (authOptions !== undefined) {
+    if (!Array.isArray(authOptions)) {
+      errors.push("auth.options must be an array");
+    } else {
+      for (let i = 0; i < authOptions.length; i++) {
+        const opt = authOptions[i] as Record<string, unknown>;
+        if (!opt || typeof opt !== "object") {
+          errors.push(`auth.options[${i}]: must be an object`);
+          continue;
+        }
+        if (typeof opt.id !== "string" || opt.id.trim().length === 0) {
+          errors.push(`auth.options[${i}]: id is required (non-empty string)`);
+        }
+        if (typeof opt.label !== "string" || opt.label.trim().length === 0) {
+          errors.push(`auth.options[${i}]: label is required (non-empty string)`);
+        }
+        if (typeof opt.type !== "string" || opt.type.trim().length === 0) {
+          errors.push(`auth.options[${i}]: type is required (non-empty string)`);
+        }
+        if (opt.recommended !== undefined && typeof opt.recommended !== "boolean") {
+          errors.push(`auth.options[${i}]: recommended must be boolean if present`);
+        }
+      }
+    }
+  }
+
+  // oauth2.envBinding: env var name to bind the OAuth access_token at spawn time.
+  // oauth2.credentialsFileType: marks recipes that need a credentials file
+  //   written to disk (e.g. workspace-mcp). Standalone reads but does not yet
+  //   write the file; will be plumbed through OAuth2 token manager when the
+  //   feature is needed locally.
+  const oauth2 = (recipe.auth as Record<string, unknown> | undefined)?.oauth2 as
+    | Record<string, unknown>
+    | undefined;
+  if (oauth2 && typeof oauth2 === "object") {
+    if (oauth2.envBinding !== undefined && typeof oauth2.envBinding !== "string") {
+      errors.push(`auth.oauth2.envBinding must be string, got ${typeof oauth2.envBinding}`);
+    }
+    if (oauth2.credentialsFileType !== undefined && typeof oauth2.credentialsFileType !== "string") {
+      errors.push(
+        `auth.oauth2.credentialsFileType must be string, got ${typeof oauth2.credentialsFileType}`
+      );
+    }
+  }
+
   // ── Build result ───────────────────────────────────────────────────────────
   const valid = errors.length === 0;
 

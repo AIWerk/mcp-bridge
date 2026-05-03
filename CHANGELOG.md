@@ -1,17 +1,60 @@
 # Changelog
 
-## [Unreleased]
+## [2.9.0] - 2026-05-03
 
-> **Back to active development** as of 2026-05-03. The hosted bridge has
-> grown a `localOnly` recipe flag (recipes that need the user's local
-> Chrome, display, USB or user-specific paths and cannot run on the
-> multi-tenant cloud), and `@aiwerk/mcp-bridge` is the recommended local
-> runtime for those recipes. The Universal Recipe Spec v2 has also gained
-> several fields since 2.8.45 (`multiInstance`, `instanceNameHint`,
-> `auth.options[]`, `envBinding`, `credentialsFileType`) — these are
-> being ported to the standalone validator and bundled recipes are being
-> kept in sync with the catalog. See `TODO.md` for the v2.9.0 catch-up
-> plan. No npm release yet.
+> **Back to active development.** The hosted bridge added a `localOnly`
+> recipe flag (recipes that need the user's local Chrome, display, USB
+> or user-specific paths and cannot run on the multi-tenant cloud), and
+> `@aiwerk/mcp-bridge` is the recommended local runtime for those.
+> v2.9.0 catches up the standalone validator with the Universal Recipe
+> Spec v2 fields shipped since 2.8.45, and restores the catalog client
+> that was deleted in `3197064`. Existing 2.8.x users see no behavior
+> change — `config.servers` continues to work as before; `mcp-bridge
+> install <name>` is the new (or rather, restored) CLI path.
+
+### Added
+- **`mcp-bridge install <name>`** — CLI command restored. Fetches a
+  recipe from `bridge.aiwerk.ch/api/recipes/<name>/download`, verifies
+  the Ed25519 signature against the bundled AIWerk catalog public key,
+  caches it under `~/.mcp-bridge/recipes/<name>/recipe.json`, and adds
+  the resolved server to `~/.mcp-bridge/config.json`. Pre-discovers
+  tools where credentials allow.
+- **`mcp-bridge catalog [--offline]`** — list available servers from
+  `bridge.aiwerk.ch/api/recipes`, or list cached recipes when offline.
+- **`mcp-bridge search <query>`** — keyword search against the catalog.
+- **`CatalogClient`** (`src/catalog-client.ts`) — restored REST client,
+  default endpoint `https://bridge.aiwerk.ch`. **Every fetched and
+  cached recipe is Ed25519-verified before it is returned.** Tampered
+  or unsigned recipes throw `CatalogSignatureError` and are not written
+  to the cache.
+- **Validator** (`src/validate-recipe.ts`) — accepts the v2 spec fields
+  shipped on the hosted bridge since 2.8.45:
+  - `localOnly` (boolean, top-level)
+  - `multiInstance` (boolean) + `instanceNameHint` (string)
+  - `auth.options[]` (multi-auth picker shape with id, label, type, recommended)
+  - `auth.oauth2.envBinding` (string, OAuth env-var binding)
+  - `auth.oauth2.credentialsFileType` (string, file-based credential dispatch)
+  Each field is typo-guarded — a non-boolean `localOnly` errors like
+  `publicAccess` does today.
+
+### Changed
+- README Status section: maintenance mode → actively developed (badge,
+  copy, framing).
+
+### Tests
+- 16 new tests: 8 in `tests/validate-recipe.test.ts` covering all v2
+  spec fields, 8 in `tests/catalog-client.test.ts` covering signature
+  verification, offline cache fallback, and CatalogSignatureError on
+  tampered cached recipes. Existing 305 tests unchanged.
+
+## [2.8.45] - 2026-04-10
+
+> **Maintenance mode (superseded 2026-05-03).** See README [Status](./README.md#status).
+> Primary development had moved to [aiwerkmcp.com](https://aiwerkmcp.com).
+> The standalone package was kept for OpenClaw plugin users, self-hosted
+> deployments and direct library consumers. No npm release accompanied
+> this entry — the changes affect the install helper only, which the
+> published package does not run at `npm install` time.
 
 ## [2.8.45] - 2026-04-10
 

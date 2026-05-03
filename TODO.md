@@ -1,37 +1,24 @@
 # TODO - @aiwerk/mcp-bridge (core)
 
-## v2.9.0 catch-up (back to active development 2026-05-03)
+## v3.0.0 plan (next major)
 
-The hosted bridge has shipped Universal Recipe Spec v2 fields the
-standalone validator does not yet recognize. v2.9.0 closes that gap so
-the same recipe.json works on both runtimes.
-
-- [ ] **`localOnly: true`** — top-level boolean. Lokálisan: NOT a gate
-  (every recipe runs locally), but emit a one-time stderr note at
-  startup so users understand why the recipe was flagged. Validator
-  must accept the field; a typo should error like `publicAccess` does.
-- [ ] **`multiInstance: true`** + **`instanceNameHint`** — local install
-  treats every install as singleton today. Decide: support multiple
-  named instances per recipe locally, or document as "hosted-bridge
-  only" and warn at parse time. Likely the latter for v2.9.0.
-- [ ] **`auth.options[]`** (multi-auth picker) — accept the new shape;
-  the local CLI install can prompt the user to pick an option, or
-  default to the `recommended: true` one and document the override.
-- [ ] **`oauth2.envBinding`** — bind the OAuth access_token to a
-  recipe-native env name (e.g. `GITHUB_PERSONAL_ACCESS_TOKEN` on
-  github so PAT and OAuth share the same transport template). Plumb
-  through the OAuth2 token manager.
-- [ ] **`oauth2.credentialsFileType`** (file-based credentials, e.g.
-  workspace-mcp) — emit a credentials file at the path the upstream
-  library expects, populated from the OAuth refresh.
-- [ ] **Recipe sync** — copy the 9 recipes that are in
-  `aiwerkmcp.com/data/recipes/` but not yet in `servers/`: cal,
-  clawhub, shopify, wheel-size, coinmarketcap, dbhub, jina, mesh,
-  google-workspace.
-- [ ] **chrome-devtools** — already in `servers/`; add the `localOnly`
-  field once the validator supports it.
-- [ ] Bump to v2.9.0, run full 337-test suite, commit, tag, npm publish
-  (with Attila approval).
+- [ ] **Empty bundled `servers/`** — npm tarball ships only an
+  `index.json` placeholder. Existing users keep working via
+  `config.servers`; new users discover via `mcp-bridge install`.
+- [ ] **OpenClaw plugin redesign (`@aiwerk/openclaw-mcp-bridge` 0.14)** —
+  read recipes from `~/.mcp-bridge/recipes/` instead of the bundled
+  `node_modules/.../servers/` directory. Synchronise with the empty
+  bundle change.
+- [ ] **`oauth2.envBinding` plumb-through** — accepted in v2.9.0
+  validator, but the OAuth2 token manager does not yet bind the
+  access token to the recipe-native env name. Wire end-to-end.
+- [ ] **`oauth2.credentialsFileType` writer** — emit credentials files
+  to disk for recipes (e.g. workspace-mcp) that read auth from a file
+  instead of env vars.
+- [ ] **`mcp-bridge` itself in the AIWerk catalog** — recipe
+  `@aiwerk/mcp-bridge` with `localOnly: true`, signed and seeded into
+  `data/recipes/mcp-bridge/`. Becomes the canonical "install local
+  runtime" landing page from the hosted SPA.
 
 
 ## ✅ Done

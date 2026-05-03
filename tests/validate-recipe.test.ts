@@ -493,3 +493,97 @@ test("multiple errors reported together", () => {
   assert.equal(result.valid, false);
   assert.ok(result.errors.length >= 4, `Expected >=4 errors, got ${result.errors.length}: ${result.errors.join("; ")}`);
 });
+
+// ─── v2 spec field acceptance (added 2026-05-03) ──────────────────────────────
+
+test("validator accepts localOnly: true", () => {
+  const result = validateRecipe(validStdioRecipe({ localOnly: true }));
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("validator rejects non-boolean localOnly", () => {
+  const result = validateRecipe(validStdioRecipe({ localOnly: "yes" } as never));
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("localOnly must be boolean")));
+});
+
+test("validator accepts multiInstance + instanceNameHint", () => {
+  const result = validateRecipe(
+    validStdioRecipe({ multiInstance: true, instanceNameHint: "<workspace>" } as never),
+  );
+  assert.equal(result.valid, true);
+});
+
+test("validator rejects non-string instanceNameHint", () => {
+  const result = validateRecipe(
+    validStdioRecipe({ instanceNameHint: 42 } as never),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("instanceNameHint must be string")));
+});
+
+test("validator accepts auth.options[] multi-auth picker", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      auth: {
+        required: true,
+        type: "api-key",
+        envVars: ["MY_API_KEY"],
+        options: [
+          { id: "pat", label: "Personal Access Token", type: "api-key", recommended: true },
+          { id: "oauth", label: "OAuth", type: "oauth2" },
+        ],
+      } as never,
+    }),
+  );
+  assert.equal(result.valid, true, result.errors.join("; "));
+});
+
+test("validator rejects auth.options[] without id", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      auth: {
+        required: true,
+        type: "api-key",
+        envVars: ["MY_API_KEY"],
+        options: [{ label: "PAT", type: "api-key" }],
+      } as never,
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("auth.options[0]: id is required")));
+});
+
+test("validator accepts auth.oauth2.envBinding + credentialsFileType", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      auth: {
+        required: true,
+        type: "oauth2",
+        envVars: ["MY_API_KEY"],
+        oauth2: {
+          envBinding: "GITHUB_PERSONAL_ACCESS_TOKEN",
+          credentialsFileType: "google-workspace",
+        },
+      } as never,
+    }),
+  );
+  assert.equal(result.valid, true);
+});
+
+test("validator rejects non-string oauth2.envBinding", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      auth: {
+        required: true,
+        type: "oauth2",
+        envVars: ["MY_API_KEY"],
+        oauth2: { envBinding: 42 },
+      } as never,
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("oauth2.envBinding must be string")));
+});
+
