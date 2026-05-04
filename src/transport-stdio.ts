@@ -1,12 +1,29 @@
 import { spawn, ChildProcess } from "child_process";
-import { McpRequest, McpResponse } from "./types.js";
-import { BaseTransport, resolveEnvRecord, resolveArgs } from "./transport-base.js";
+import { McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, RequestIdGenerator } from "./types.js";
+import { BaseTransport, resolveEnvRecord, resolveArgs, resolveOauth2EnvAsync } from "./transport-base.js";
+import type { OAuth2TokenManager } from "./oauth2-token-manager.js";
 
 export class StdioTransport extends BaseTransport {
   private process: ChildProcess | null = null;
   private framingMode: "auto" | "lsp" | "newline" = "auto";
   private stdoutBuffer = Buffer.alloc(0);
   private isShuttingDown = false;
+  private readonly tokenManager?: OAuth2TokenManager;
+  private readonly serverName?: string;
+
+  constructor(
+    config: McpServerConfig,
+    clientConfig: McpClientConfig,
+    logger: Logger,
+    onReconnected?: () => Promise<void>,
+    requestIdGenerator?: RequestIdGenerator,
+    tokenManager?: OAuth2TokenManager,
+    serverName?: string,
+  ) {
+    super(config, clientConfig, logger, onReconnected, requestIdGenerator);
+    this.tokenManager = tokenManager;
+    this.serverName = serverName;
+  }
 
   protected get transportName(): string { return "stdio"; }
 
@@ -30,7 +47,16 @@ export class StdioTransport extends BaseTransport {
     if (!this.config.command) return;
 
     const configEnv = resolveEnvRecord(this.config.env || {}, "env key");
-    const env = { ...process.env, ...configEnv };
+    let oauthEnv: Record<string, string> = {};
+    if (this.config.oauth2EnvBinding && this.tokenManager) {
+      try {
+        oauthEnv = await resolveOauth2EnvAsync(this.config, this.tokenManager, undefined, undefined, this.serverName);
+      } catch (error) {
+        this.logger.error(`[mcp-bridge] Failed to resolve OAuth2 envBinding for stdio server ${this.serverName ?? "<unnamed>"}:`, error);
+        throw error;
+      }
+    }
+    const env = { ...process.env, ...configEnv, ...oauthEnv };
     const args = resolveArgs(this.config.args || [], env);
 
     if (process.env.DEBUG_STDIO_ENV) {

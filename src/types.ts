@@ -51,6 +51,21 @@ export interface McpServerConfig {
   url?: string;
   headers?: Record<string, string>;
   auth?: HttpAuthConfig;
+  /**
+   * If set, the OAuth2 access token is injected into the spawned process
+   * (or HTTP request env) under this name instead of (or in addition to) the
+   * default Authorization header. Used by stdio servers that read their
+   * credentials from a specific env var (e.g. GITHUB_PERSONAL_ACCESS_TOKEN).
+   * Sourced from recipe.auth.oauth2.envBinding.
+   */
+  oauth2EnvBinding?: string;
+  /**
+   * If set, the OAuth2 token + refresh token are written to a credentials
+   * file in a vendor-specific format, and the file path is injected into
+   * the spawned process via env var. Sourced from recipe.auth.oauth2.credentialsFileType.
+   * Format dictates the file shape (e.g. "google-workspace" follows Google's tz-naive expiry).
+   */
+  oauth2CredentialsFile?: { format: "google-workspace"; envVar?: string };
   // Stdio transport
   command?: string;
   args?: string[];

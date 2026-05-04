@@ -332,6 +332,38 @@ export function resolveDeviceCodeOAuth2Config(
   };
 }
 
+/**
+ * Resolve an OAuth2 access token by picking the correct flow (auth code, device
+ * code, or client credentials). Returns null if config.auth is not OAuth2.
+ * Shared between resolveAuthHeadersAsync (HTTP transports) and
+ * resolveOauth2EnvAsync (stdio transports with envBinding).
+ */
+async function resolveOauth2AccessToken(
+  config: McpServerConfig,
+  tokenManager: OAuth2TokenManager,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>,
+  serverName?: string,
+): Promise<string | null> {
+  if (!config.auth || config.auth.type !== "oauth2") return null;
+  if (isAuthCodeOAuth2(config.auth)) {
+    if (!serverName) {
+      throw new Error("[mcp-bridge] serverName is required for authorization_code OAuth2 flow");
+    }
+    const authCodeConfig = resolveAuthCodeOAuth2Config(config, extraEnv, envFallback);
+    return tokenManager.getTokenForAuthCode(serverName, authCodeConfig);
+  }
+  if (isDeviceCodeOAuth2(config.auth)) {
+    if (!serverName) {
+      throw new Error("[mcp-bridge] serverName is required for device_code OAuth2 flow");
+    }
+    const deviceCodeConfig = resolveDeviceCodeOAuth2Config(config, extraEnv, envFallback);
+    return tokenManager.getTokenForDeviceCode(serverName, deviceCodeConfig);
+  }
+  const oauth2Config = resolveOAuth2Config(config, extraEnv, envFallback);
+  return tokenManager.getToken(oauth2Config);
+}
+
 export async function resolveAuthHeadersAsync(
   config: McpServerConfig,
   tokenManager: OAuth2TokenManager,
@@ -340,32 +372,32 @@ export async function resolveAuthHeadersAsync(
   serverName?: string,
 ): Promise<Record<string, string>> {
   if (!config.auth) return {};
-
   if (config.auth.type === "oauth2") {
-    if (isAuthCodeOAuth2(config.auth)) {
-      if (!serverName) {
-        throw new Error("[mcp-bridge] serverName is required for authorization_code OAuth2 flow");
-      }
-      const authCodeConfig = resolveAuthCodeOAuth2Config(config, extraEnv, envFallback);
-      const token = await tokenManager.getTokenForAuthCode(serverName, authCodeConfig);
-      return { Authorization: `Bearer ${token}` };
-    }
-
-    if (isDeviceCodeOAuth2(config.auth)) {
-      if (!serverName) {
-        throw new Error("[mcp-bridge] serverName is required for device_code OAuth2 flow");
-      }
-      const deviceCodeConfig = resolveDeviceCodeOAuth2Config(config, extraEnv, envFallback);
-      const token = await tokenManager.getTokenForDeviceCode(serverName, deviceCodeConfig);
-      return { Authorization: `Bearer ${token}` };
-    }
-
-    const oauth2Config = resolveOAuth2Config(config, extraEnv, envFallback);
-    const token = await tokenManager.getToken(oauth2Config);
-    return { Authorization: `Bearer ${token}` };
+    const token = await resolveOauth2AccessToken(config, tokenManager, extraEnv, envFallback, serverName);
+    if (token) return { Authorization: `Bearer ${token}` };
+    return {};
   }
-
   return resolveAuthHeaders(config, extraEnv, envFallback);
+}
+
+/**
+ * Resolve OAuth2 access token into a stdio env-var binding (for servers that
+ * read credentials from a specific env var, e.g. GITHUB_PERSONAL_ACCESS_TOKEN).
+ * Returns an empty record if no envBinding is configured or auth is not OAuth2.
+ * Sourced from McpServerConfig.oauth2EnvBinding (set by recipeToServerConfig
+ * from recipe.auth.oauth2.envBinding).
+ */
+export async function resolveOauth2EnvAsync(
+  config: McpServerConfig,
+  tokenManager: OAuth2TokenManager,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>,
+  serverName?: string,
+): Promise<Record<string, string>> {
+  if (!config.oauth2EnvBinding) return {};
+  const token = await resolveOauth2AccessToken(config, tokenManager, extraEnv, envFallback, serverName);
+  if (!token) return {};
+  return { [config.oauth2EnvBinding]: token };
 }
 
 /**

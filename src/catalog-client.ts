@@ -84,6 +84,12 @@ export interface CatalogRecipe {
     required?: boolean;
     envVars?: string[];
     credentialsUrl?: string;
+    oauth2?: {
+      envBinding?: string;
+      credentialsFileType?: "google-workspace";
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
   };
   signature?: RecipeSignature;
   localOnly?: boolean;

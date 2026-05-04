@@ -837,7 +837,7 @@ export class StandaloneServer {
       case "sse":
         return new SseTransport(serverConfig, this.config, this.logger, onReconnected, this.tokenManager, () => this.nextRequestId(), serverName);
       case "stdio":
-        return new StdioTransport(serverConfig, this.config, this.logger, onReconnected, () => this.nextRequestId());
+        return new StdioTransport(serverConfig, this.config, this.logger, onReconnected, () => this.nextRequestId(), this.tokenManager, serverName);
       case "streamable-http":
         return new StreamableHttpTransport(
           serverConfig,

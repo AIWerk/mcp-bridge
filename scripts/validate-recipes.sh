@@ -4,6 +4,10 @@
 # Exit code 1 if any URL is broken.
 
 set -uo pipefail
+# nullglob: an unmatched glob expands to nothing, not the literal pattern.
+# Without this, an empty `servers/` (as of v3.0.0) would make the loop
+# try to read `servers/*/recipe.json` literally and fail.
+shopt -s nullglob
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVERS_DIR="$SCRIPT_DIR/../servers"

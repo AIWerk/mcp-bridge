@@ -237,6 +237,15 @@ export function initConfigDir(logger: Logger): void {
 import type { CatalogRecipe } from "./catalog-client.js";
 
 export function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | null {
+  // Extract optional v2 spec fields. The validator (validate-recipe.ts) accepts
+  // these on every recipe; this is the runtime plumb-through.
+  const oauth2 = recipe.auth?.oauth2 as undefined | { envBinding?: string; credentialsFileType?: "google-workspace" };
+  const envBinding = oauth2?.envBinding;
+  const credFileType = oauth2?.credentialsFileType;
+  const cfgExtras: Partial<McpServerConfig> = {};
+  if (typeof envBinding === "string" && envBinding) cfgExtras.oauth2EnvBinding = envBinding;
+  if (credFileType === "google-workspace") cfgExtras.oauth2CredentialsFile = { format: "google-workspace" };
+
   if (Array.isArray(recipe.transports) && recipe.transports.length > 0) {
     const t = recipe.transports[0];
     if (t.type === "stdio") {
@@ -246,6 +255,7 @@ export function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | n
         command: t.command,
         args: t.args,
         env: t.env,
+        ...cfgExtras,
       };
     }
     if (t.type === "sse" || t.type === "streamable-http") {
@@ -254,6 +264,7 @@ export function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | n
         description: recipe.description,
         url: t.url,
         headers: t.headers,
+        ...cfgExtras,
       };
     }
     return null;
@@ -266,6 +277,7 @@ export function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | n
       command: recipe.command,
       args: recipe.args,
       env: recipe.env,
+      ...cfgExtras,
     };
   }
   if (recipe.transport === "sse" || recipe.transport === "streamable-http") {
@@ -274,6 +286,7 @@ export function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | n
       description: recipe.description,
       url: recipe.url,
       headers: recipe.headers,
+      ...cfgExtras,
     };
   }
 

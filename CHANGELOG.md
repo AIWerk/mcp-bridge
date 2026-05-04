@@ -1,5 +1,52 @@
 # Changelog
 
+## [3.0.0] - 2026-05-04
+
+> **Major release.** Bundled `servers/` directory is now intentionally empty,
+> and OAuth2 server-side plumb-through fields are wired through to spawn time.
+> See "BREAKING" below before upgrading from 2.x.
+
+### BREAKING
+- **`servers/` bundle emptied.** Previous versions shipped 16 pre-built
+  recipe directories under `node_modules/@aiwerk/mcp-bridge/servers/`.
+  These are gone; only the `index.json` placeholder remains. Recipes are
+  now fetched on demand from `bridge.aiwerk.ch` via `mcp-bridge install <name>`
+  and cached at `~/.mcp-bridge/recipes/<name>/recipe.json`.
+- **No regression for existing 2.x users.** The bridge runtime only reads
+  `~/.mcp-bridge/config.json#servers` — the bundled `servers/` directory was
+  never read at runtime, only at install time. Existing `config.servers`
+  entries continue to work unchanged. Upgrade is invisible until you try to
+  add a NEW server, which now requires `mcp-bridge install <name>` (or for
+  OpenClaw plugin users, the v0.14.0 plugin which carries its own bundle
+  for backwards compatibility).
+
+### Added
+- **OAuth2 envBinding plumb-through to stdio servers** (`recipe.auth.oauth2.envBinding`).
+  When set, the OAuth2 access token is injected into the spawned process under
+  the recipe-declared env var (e.g. `GITHUB_PERSONAL_ACCESS_TOKEN`) instead of
+  / in addition to the default Authorization header. New helper
+  `resolveOauth2EnvAsync()` in `transport-base.ts`. `StdioTransport` constructor
+  now accepts optional `tokenManager` + `serverName` parameters.
+- **OAuth2 credentials file emitter** (`recipe.auth.oauth2.credentialsFileType: "google-workspace"`).
+  New module `src/oauth2-credentials-file.ts` with `writeGoogleWorkspaceCredentials()`
+  that emits the JSON shape expected by workspace-mcp's
+  LocalDirectoryCredentialStore (Google Auth Library, tz-naive ISO expiry,
+  0o600 perms, dir 0o700). Default base dir `~/.mcp-bridge/google-credentials/<server-name>/`,
+  overridable via `MCP_BRIDGE_GOOGLE_CREDENTIALS_DIR` env. The full spawn-time
+  wiring (email lookup, refresh-on-rotate, env var injection) is left for v3.1
+  pending OAuth2TokenManager.getStoredToken() expose; the writer helper is
+  callable today.
+- **`recipeToServerConfig()` plumbs new OAuth2 fields** (`oauth2EnvBinding`,
+  `oauth2CredentialsFile.format`) from `auth.oauth2.*` onto `McpServerConfig`.
+- 10 new unit tests (6 envBinding + 4 credentials-file).
+
+### Changed
+- `OpenClaw plugin` (`@aiwerk/openclaw-mcp-bridge` 0.14.0) now carries its own
+  `servers/` bundle so existing installs see no behavior change. Plugin also
+  gained a new `~/.mcp-bridge/recipes/<name>/recipe.json` lookup with on-the-fly
+  Universal Recipe Spec v2 → legacy config.json conversion. See plugin
+  CHANGELOG for details.
+
 ## [2.9.0] - 2026-05-03
 
 > **Back to active development.** The hosted bridge added a `localOnly`
