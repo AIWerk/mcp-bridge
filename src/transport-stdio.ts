@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
 import { McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, RequestIdGenerator } from "./types.js";
-import { BaseTransport, resolveEnvRecord, resolveArgs, resolveOauth2EnvAsync } from "./transport-base.js";
+import { BaseTransport, resolveEnvRecord, resolveArgs, resolveOauth2EnvAsync, resolveOauth2CredentialsFileAsync } from "./transport-base.js";
 import type { OAuth2TokenManager } from "./oauth2-token-manager.js";
 
 export class StdioTransport extends BaseTransport {
@@ -56,7 +56,16 @@ export class StdioTransport extends BaseTransport {
         throw error;
       }
     }
-    const env = { ...process.env, ...configEnv, ...oauthEnv };
+    let credFileEnv: Record<string, string> = {};
+    if (this.config.oauth2CredentialsFile && this.tokenManager) {
+      try {
+        credFileEnv = await resolveOauth2CredentialsFileAsync(this.config, this.tokenManager, undefined, undefined, this.serverName);
+      } catch (error) {
+        this.logger.error(`[mcp-bridge] Failed to resolve OAuth2 credentials file for stdio server ${this.serverName ?? "<unnamed>"}:`, error);
+        throw error;
+      }
+    }
+    const env = { ...process.env, ...configEnv, ...oauthEnv, ...credFileEnv };
     const args = resolveArgs(this.config.args || [], env);
 
     if (process.env.DEBUG_STDIO_ENV) {

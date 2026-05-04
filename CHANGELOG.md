@@ -1,5 +1,43 @@
 # Changelog
 
+## [3.0.1] - 2026-05-04
+
+> **Patch release.** Completes the `oauth2.credentialsFileType` spawn-time
+> wiring that was left as helper-only in 3.0.0.
+
+### Added
+- **`OAuth2TokenManager.getStoredToken(serverName)`** — public method,
+  forwards to the underlying TokenStore. Returns `null` when no store is
+  configured or the server has not authenticated.
+- **`fetchGoogleUserEmail(accessToken)`** in `src/oauth2-credentials-file.ts`
+  — hits `https://www.googleapis.com/oauth2/v2/userinfo` with the token and
+  returns the `email` field.
+- **`findCachedEmailForServer(serverName)`** — looks up a previously
+  written credentials file and returns the embedded email so subsequent
+  spawns skip the userinfo fetch.
+- **`resolveOauth2CredentialsFileAsync()`** in `src/transport-base.ts` —
+  the spawn-time orchestrator. Refreshes via the right grant flow
+  (auth_code / device_code), reads the StoredToken, looks up the email
+  (cached or fresh), and writes the credentials JSON. Returns the
+  `GOOGLE_MCP_CREDENTIALS_DIR` env entry pointed at the per-server dir.
+  Rejects `client_credentials` grants (no persistent refresh_token).
+- **`StdioTransport.startProcess()`** now invokes
+  `resolveOauth2CredentialsFileAsync` when `config.oauth2CredentialsFile`
+  is set, merging the result into the spawn env so workspace-mcp finds
+  `<email>.json` at boot.
+- 11 new unit tests covering: getStoredToken forwarding, email fetch
+  (success + 401), email cache lookup, format gate, grant-type gate,
+  end-to-end e2e (refresh → userinfo → file write → env), and the
+  not-logged-in error path.
+
+### Notes
+- Backwards-compatible. Recipes without `auth.oauth2.credentialsFileType`
+  see no behavior change.
+- workspace-mcp runs its own internal token refresh via google-auth-library,
+  so the bridge writes the credentials file at every spawn (the StoredToken
+  is always fresh because `getTokenForAuthCode` refreshes if expired) and
+  workspace-mcp takes it from there.
+
 ## [3.0.0] - 2026-05-04
 
 > **Major release.** Bundled `servers/` directory is now intentionally empty,

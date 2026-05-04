@@ -92,6 +92,17 @@ export class OAuth2TokenManager {
   }
 
   /**
+   * Read the persistent stored token for a server (auth_code / device_code
+   * flows). Returns null if no token store is configured or the server has
+   * never authenticated. Used by the credentialsFileType writer to populate
+   * a credentials file with refresh_token + scopes after `getTokenForAuthCode`
+   * (or device_code) has refreshed and persisted the token.
+   */
+  getStoredToken(serverName: string): import("./token-store.js").StoredToken | null {
+    return this.tokenStore?.load(serverName) ?? null;
+  }
+
+  /**
    * Get a token for an authorization_code flow server.
    * Checks TokenStore, refreshes if expired, throws if unavailable.
    */

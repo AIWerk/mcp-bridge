@@ -10,7 +10,7 @@
  * taylorwilsdon/google_workspace_mcp.
  */
 
-import { mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { mkdirSync, writeFileSync, chmodSync, readdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { StoredToken } from "./token-store.js";
@@ -75,4 +75,42 @@ export function writeGoogleWorkspaceCredentials(opts: GoogleWorkspaceCredentialO
   writeFileSync(filePath, JSON.stringify(credential, null, 2), { mode: 0o600 });
   chmodSync(filePath, 0o600);
   return { dir, filePath };
+}
+
+/**
+ * Resolve the user's Google email by hitting the userinfo endpoint with the
+ * given access token. Used at spawn time when no cached credentials file
+ * exists yet for the server. Throws on HTTP error or missing email.
+ */
+export async function fetchGoogleUserEmail(accessToken: string): Promise<string> {
+  const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`google userinfo fetch failed: HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { email?: string };
+  if (typeof json.email !== "string" || json.email.length === 0) {
+    throw new Error("google userinfo response missing email");
+  }
+  return json.email;
+}
+
+/**
+ * Look up a previously written credentials file for this server and return
+ * the embedded Google email (the file basename, sans .json). Returns null
+ * if no credentials file exists yet. Used to skip the userinfo fetch on
+ * subsequent spawns of the same server.
+ */
+export function findCachedEmailForServer(serverName: string, baseOverride?: string): string | null {
+  const dir = getGoogleCredentialsServerDir(serverName, baseOverride);
+  if (!existsSync(dir)) return null;
+  try {
+    const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
+    if (files.length === 0) return null;
+    return files[0].slice(0, -".json".length);
+  } catch {
+    return null;
+  }
 }

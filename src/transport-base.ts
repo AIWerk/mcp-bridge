@@ -401,6 +401,88 @@ export async function resolveOauth2EnvAsync(
 }
 
 /**
+ * Resolve OAuth2 credentials into a vendor-specific credentials file and
+ * return the env var binding (e.g. GOOGLE_MCP_CREDENTIALS_DIR for the
+ * google-workspace format consumed by workspace-mcp). The bridge writes
+ * <base>/<server>/<email>.json with the access_token + refresh_token + scopes
+ * and points the spawned process at the directory.
+ *
+ * Only auth_code and device_code grants are supported (workspace-mcp's
+ * primary use case); client_credentials lacks the persistent refresh_token
+ * the file format requires.
+ *
+ * Returns an empty record if config.oauth2CredentialsFile is not set.
+ * Throws on missing token store, missing stored token, or userinfo fetch
+ * failure (the spawn surfaces a clear error rather than booting a server
+ * that cannot read credentials).
+ */
+export async function resolveOauth2CredentialsFileAsync(
+  config: McpServerConfig,
+  tokenManager: OAuth2TokenManager,
+  extraEnv?: Record<string, string | undefined>,
+  envFallback?: () => Record<string, string>,
+  serverName?: string,
+): Promise<Record<string, string>> {
+  const cf = config.oauth2CredentialsFile;
+  if (!cf) return {};
+  if (cf.format !== "google-workspace") {
+    throw new Error(`[mcp-bridge] Unsupported oauth2CredentialsFile.format: ${cf.format}`);
+  }
+  if (!serverName) {
+    throw new Error("[mcp-bridge] serverName is required for oauth2CredentialsFile resolution");
+  }
+  if (!config.auth || config.auth.type !== "oauth2") {
+    throw new Error(`[mcp-bridge] oauth2CredentialsFile requires auth.type === "oauth2" for server ${serverName}`);
+  }
+
+  // Refresh + resolve clientId/clientSecret. Force the right grant flow
+  // through the token manager so the StoredToken is populated/up-to-date.
+  let resolvedClientId = "";
+  let resolvedClientSecret = "";
+  if (isAuthCodeOAuth2(config.auth)) {
+    const ac = resolveAuthCodeOAuth2Config(config, extraEnv, envFallback);
+    resolvedClientId = ac.clientId ?? "";
+    resolvedClientSecret = ac.clientSecret ?? "";
+    await tokenManager.getTokenForAuthCode(serverName, ac);
+  } else if (isDeviceCodeOAuth2(config.auth)) {
+    const dc = resolveDeviceCodeOAuth2Config(config, extraEnv, envFallback);
+    resolvedClientId = dc.clientId;
+    resolvedClientSecret = dc.clientSecret ?? "";
+    await tokenManager.getTokenForDeviceCode(serverName, dc);
+  } else {
+    throw new Error(
+      `[mcp-bridge] oauth2CredentialsFile requires auth_code or device_code grant for server ${serverName}; client_credentials lacks a persistent refresh_token`
+    );
+  }
+
+  const stored = tokenManager.getStoredToken(serverName);
+  if (!stored) {
+    throw new Error(
+      `[mcp-bridge] No stored OAuth2 token for server "${serverName}". Run: mcp-bridge auth login ${serverName}`
+    );
+  }
+
+  // Lazy import keeps the helper module out of the cold-start path for
+  // servers that do not use the credentials-file feature.
+  const credMod = await import("./oauth2-credentials-file.js");
+  let email = credMod.findCachedEmailForServer(serverName);
+  if (!email) {
+    email = await credMod.fetchGoogleUserEmail(stored.accessToken);
+  }
+
+  const { dir } = credMod.writeGoogleWorkspaceCredentials({
+    serverName,
+    stored,
+    email,
+    clientId: resolvedClientId,
+    clientSecret: resolvedClientSecret,
+  });
+
+  const envVar = cf.envVar ?? "GOOGLE_MCP_CREDENTIALS_DIR";
+  return { [envVar]: dir };
+}
+
+/**
  * Resolve server headers and merge auth headers (auth takes precedence).
  */
 export function resolveServerHeaders(
