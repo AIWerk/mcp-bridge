@@ -426,10 +426,27 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
   // and does not enforce hosted-only semantics (e.g. localOnly is not a
   // gate locally — every recipe runs on the user's machine anyway).
 
-  // localOnly: top-level boolean. Hosted bridge refuses these recipes;
-  // standalone accepts them and lets the user spawn locally.
-  if (recipe.localOnly !== undefined && typeof recipe.localOnly !== "boolean") {
-    errors.push(`localOnly must be boolean, got ${typeof recipe.localOnly}`);
+  // localOnly: two accepted forms.
+  //   - boolean true  → hosted bridge refuses install entirely (chrome-devtools);
+  //                     standalone accepts and spawns locally
+  //   - string[]      → per-tool hosted-bridge filter (the listed names are
+  //                     stripped from tools/list on hosted); standalone IGNORES
+  //                     the array — every tool runs locally regardless.
+  // Standalone runtime accepts both forms; we only validate the shape here so
+  // a typo (`"yes"`, number, object) is caught at recipe-load time.
+  if (recipe.localOnly !== undefined) {
+    const lo = recipe.localOnly as unknown;
+    if (typeof lo === "boolean") {
+      // OK
+    } else if (Array.isArray(lo)) {
+      if (lo.length === 0) {
+        errors.push("localOnly array must be non-empty (use false or omit instead)");
+      } else if (lo.some((t) => typeof t !== "string" || t.trim().length === 0)) {
+        errors.push("localOnly array must contain only non-empty tool-name strings");
+      }
+    } else {
+      errors.push(`localOnly must be boolean or string[], got ${typeof lo}`);
+    }
   }
 
   // multiInstance + instanceNameHint: hosted-only semantics today. Standalone

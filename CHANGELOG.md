@@ -1,5 +1,33 @@
 # Changelog
 
+## [3.0.2] - 2026-05-12
+
+> **Patch release.** Accepts the tool-level `localOnly` array form alongside
+> the existing boolean. Backward-compatible — no runtime behavior change in
+> standalone mode (every tool runs locally regardless), only the
+> schema-validator now permits the array shape so recipes shipped from
+> the hosted bridge with per-tool filters load without errors.
+
+### Added
+- **`localOnly: string[]`** — Recipe interface in `src/catalog-client.ts`
+  and validator in `src/validate-recipe.ts` now accept `boolean | string[]`.
+  Array form lists tool names that the hosted bridge filters from
+  `tools/list`. Standalone bridges ignore the array; every tool runs locally.
+- Validator surface-area: rejects empty arrays, non-string entries, and
+  scalar non-booleans. Matches `recipe-validator.ts` in the hosted-bridge
+  repo so a recipe lints identically on both sides.
+- 6 new tests in `tests/validate-recipe.test.ts` covering boolean both
+  values, array form, empty-array reject, non-string-entry reject, scalar
+  non-boolean reject.
+
+### Why
+The hosted bridge (`aiwerkmcp.com` Phase 1) introduces a per-tool filter
+so recipes like `imap-email` can keep their read tools available on hosted
+while hiding `email_send` / `email_reply` (anti-spam policy — the bridge
+VPS IP would appear in every recipient's headers and one bad actor could
+poison deliverability for all users). The validator update keeps standalone
+in sync so the same recipe.json works in both environments.
+
 ## [3.0.1] - 2026-05-04
 
 > **Patch release.** Completes the `oauth2.credentialsFileType` spawn-time

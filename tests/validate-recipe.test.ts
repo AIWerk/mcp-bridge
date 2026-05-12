@@ -502,10 +502,41 @@ test("validator accepts localOnly: true", () => {
   assert.deepEqual(result.errors, []);
 });
 
-test("validator rejects non-boolean localOnly", () => {
+test("validator accepts localOnly: false", () => {
+  const result = validateRecipe(validStdioRecipe({ localOnly: false }));
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("validator accepts localOnly array of tool names (per-tool hosted filter)", () => {
+  const result = validateRecipe(
+    validStdioRecipe({ localOnly: ["email_send", "email_reply"] } as never),
+  );
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("validator rejects scalar non-boolean localOnly (e.g. string 'yes')", () => {
   const result = validateRecipe(validStdioRecipe({ localOnly: "yes" } as never));
   assert.equal(result.valid, false);
-  assert.ok(result.errors.some((e) => e.includes("localOnly must be boolean")));
+  assert.ok(
+    result.errors.some((e) => e.includes("localOnly must be boolean or string[]")),
+    `expected new error wording, got: ${result.errors.join(" | ")}`,
+  );
+});
+
+test("validator rejects empty localOnly array", () => {
+  const result = validateRecipe(validStdioRecipe({ localOnly: [] } as never));
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("non-empty")));
+});
+
+test("validator rejects localOnly array with non-string entries", () => {
+  const result = validateRecipe(
+    validStdioRecipe({ localOnly: ["good", 42] } as never),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("only non-empty tool-name strings")));
 });
 
 test("validator accepts multiInstance + instanceNameHint", () => {

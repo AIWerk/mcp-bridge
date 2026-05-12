@@ -92,7 +92,12 @@ export interface CatalogRecipe {
     [key: string]: unknown;
   };
   signature?: RecipeSignature;
-  localOnly?: boolean;
+  /**
+   * Local-only marker. Boolean form (true) blocks hosted install entirely;
+   * string[] form lists tool names the hosted bridge hides from tools/list
+   * (standalone ignores the array — all tools run locally).
+   */
+  localOnly?: boolean | string[];
   [key: string]: unknown;
 }
 
