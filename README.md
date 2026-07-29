@@ -115,7 +115,7 @@ npx @aiwerk/mcp-bridge validate-recipe ./recipe.json
 
 ## Catalog Integration (v2.8.0+)
 
-mcp-bridge now fetches recipes from [catalog.aiwerk.ch](https://catalog.aiwerk.ch) instead of relying on bundled recipe files.
+mcp-bridge now fetches recipes from the [AIWerk MCP Catalog](https://aiwerkmcp.com) (API host: `bridge.aiwerk.ch`) instead of relying on bundled recipe files.
 
 ### How it works
 1. **First run**: Automatically downloads the top 15 most popular recipes
@@ -153,7 +153,7 @@ Two config options control catalog behavior:
 ```
 
 - **`autoMerge` defaults to `false`** (opt-in) — cached recipes are **not** automatically added to your server list unless you explicitly enable it. This prevents servers without required credentials from being silently activated.
-- **`catalog` defaults to `true`** — recipe discovery from [catalog.aiwerk.ch](https://catalog.aiwerk.ch) is enabled by default. Set to `false` to skip all remote fetching.
+- **`catalog` defaults to `true`** — recipe discovery from the [AIWerk MCP Catalog](https://aiwerkmcp.com) is enabled by default. Set to `false` to skip all remote fetching.
 
 > **Breaking change (v2.9.0):** Previously, all cached recipes whose env vars were present were auto-merged. Now you must set `"autoMerge": true` to restore that behavior.
 
@@ -615,7 +615,7 @@ mcp-bridge init --register cursor       # Init + register with Cursor
 mcp-bridge init --register windsurf     # Init + register with Windsurf
 mcp-bridge install <server>       # Install from online catalog
 mcp-bridge set-env <KEY> <value>  # Set an API key in ~/.mcp-bridge/.env
-mcp-bridge catalog                # Browse 100+ available servers
+mcp-bridge catalog                # Browse 38 available servers
 mcp-bridge servers                # List configured servers and current mode
 mcp-bridge search <query>         # Search catalog by keyword
 mcp-bridge update [--check]       # Check for / install updates
@@ -643,15 +643,15 @@ The tool description automatically includes all connected servers with their des
 
 ## Server Catalog
 
-Browse and install from the [AIWerk MCP Catalog](https://catalog.aiwerk.ch) with 100+ verified, signed recipes:
+Browse and install from the [AIWerk MCP Catalog](https://aiwerkmcp.com) with <!-- recipe-count -->38<!-- /recipe-count --> verified, signed recipes:
 
 ```bash
-mcp-bridge catalog                # Browse all 100+ servers
+mcp-bridge catalog                # Browse all 38 servers
 mcp-bridge search payments        # Search by keyword
 mcp-bridge install todoist        # Install from catalog
 ```
 
-Popular servers include: todoist, github, notion, stripe, linear, google-maps, slack, supabase, mongodb, playwright, docker, and many more.
+Popular servers include: todoist, github, notion, stripe, linear, atlassian, shopify, google-workspace, firecrawl, tavily, and more.
 
 All catalog recipes are Ed25519 signed and security-audited. The bridge verifies signatures before installation.
 

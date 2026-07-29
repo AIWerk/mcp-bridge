@@ -25,3 +25,12 @@ jobs:
         run: bash scripts/validate-recipes.sh --ci
       - name: Verify recipe signatures
         run: node scripts/verify-signatures.mjs --ci
+      - name: Check README recipe count matches live catalog
+        run: |
+          code=0
+          node scripts/sync-recipe-count.mjs || code=$?
+          if [ "$code" = "2" ]; then
+            echo "::warning::catalog API unreachable, recipe-count check skipped"
+            exit 0
+          fi
+          exit "$code"
