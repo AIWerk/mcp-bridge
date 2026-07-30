@@ -1,5 +1,34 @@
 # Changelog
 
+## [3.1.0] - 2026-07-30
+
+> **Minor release.** Recipes can declare static config files that the bridge
+> writes before spawn. Needed because some upstream servers moved settings
+> that matter out of flags and env vars and into a file: `@bytebase/dbhub`
+> 0.22+ expresses read-only mode only in a TOML config, and its old
+> `READONLY` env var is silently ignored unless a `.env` file happens to
+> exist, so an env-only setup starts in **write** mode with no warning.
+
+### Added
+- **`install.configFiles`** — array of `{ name, content }`. Written to
+  `~/.mcp-bridge/config/<instance>/<name>` (dir `0700`, file `0600`) before
+  the server spawns. Idempotent: an unchanged file is left untouched.
+  Override the base directory with `MCP_BRIDGE_CONFIG_FILES_DIR`.
+- **`${CONFIG_DIR}` arg placeholder** — resolved to that per-instance
+  directory in stdio args. Substituted *before* the existing `${VAR}` secret
+  pass and never looked up in the secrets map: it is a bridge-internal path,
+  not a credential.
+- Validator accepts and checks `install.configFiles` (name required, plain
+  filename only, string content), and exempts bridge-internal placeholders
+  from the `auth.envVars` cross-check so `${CONFIG_DIR}` no longer trips it.
+- Content is static and secret-free by design. Servers that expand `${VAR}`
+  inside their own config (dbhub does) keep credentials in the process
+  environment where they already live.
+
+### Notes
+- The AIWerk catalog's `dbhub` recipe uses this from 0.24.0. On 3.0.x that
+  recipe fails loudly at validation or spawn; upgrade to run it locally.
+
 ## [3.0.2] - 2026-05-12
 
 > **Patch release.** Accepts the tool-level `localOnly` array form alongside
