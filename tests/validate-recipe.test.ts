@@ -618,3 +618,64 @@ test("validator rejects non-string oauth2.envBinding", () => {
   assert.ok(result.errors.some((e) => e.includes("oauth2.envBinding must be string")));
 });
 
+test("validator accepts install.configFiles with valid name + content", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: {
+        method: "npx",
+        package: "@example/my-server",
+        configFiles: [{ name: "dbhub.toml", content: '[[sources]]\nid = "default"\ndsn = "${DSN}"\n' }],
+      },
+    }),
+  );
+  assert.equal(result.valid, true);
+});
+
+test("validator rejects install.configFiles that is not an array", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: { method: "npx", package: "@example/my-server", configFiles: "nope" as never },
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("install.configFiles must be an array")));
+});
+
+test("validator rejects install.configFiles entry missing name", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: { method: "npx", package: "@example/my-server", configFiles: [{ content: "x = 1\n" } as never] },
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("name is required")));
+});
+
+test("validator rejects install.configFiles entry with path-traversal name", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: {
+        method: "npx",
+        package: "@example/my-server",
+        configFiles: [{ name: "../../etc/passwd", content: "x" }],
+      },
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("plain filename")));
+});
+
+test("validator rejects install.configFiles entry with non-string content", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: {
+        method: "npx",
+        package: "@example/my-server",
+        configFiles: [{ name: "dbhub.toml", content: 123 } as never],
+      },
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("content must be a string")));
+});
+

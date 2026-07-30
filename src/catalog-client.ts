@@ -78,6 +78,7 @@ export interface CatalogRecipe {
     version?: string;
     npm?: { package: string; version?: string };
     docker?: { image: string };
+    configFiles?: Array<{ name: string; content: string }>;
   };
   auth?: {
     type: string;

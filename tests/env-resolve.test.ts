@@ -1,10 +1,48 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveEnvVars, resolveEnvRecord, resolveArgs } from "../src/transport-base.ts";
+import { resolveEnvVars, resolveEnvRecord, resolveArgs, resolveConfigDirPlaceholder } from "../src/transport-base.ts";
 import { resetOpenClawDotEnvCache } from "../src/config.ts";
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+
+test("resolveConfigDirPlaceholder replaces ${CONFIG_DIR} without touching env", () => {
+  const result = resolveConfigDirPlaceholder(
+    ["--config=${CONFIG_DIR}/dbhub.toml", "--verbose"],
+    "/home/user/.mcp-bridge/config/dbhub"
+  );
+  assert.deepStrictEqual(result, [
+    "--config=/home/user/.mcp-bridge/config/dbhub/dbhub.toml",
+    "--verbose",
+  ]);
+});
+
+test("CONFIG_DIR placeholder and a real secret placeholder coexist in resolveArgs", () => {
+  // Regression test for the collision Brian flagged: ${CONFIG_DIR} must be
+  // substituted BEFORE resolveArgs's ${VAR} secret resolution runs, so it
+  // never has to appear in the env/secrets map alongside a real secret like
+  // ${DSN} — and resolveArgs must still resolve ${DSN} correctly afterward.
+  const argsWithConfigDir = resolveConfigDirPlaceholder(
+    ["--config=${CONFIG_DIR}/dbhub.toml", "--dsn=${DSN}"],
+    "/tmp/mcp-bridge-config/dbhub"
+  );
+  const result = resolveArgs(argsWithConfigDir, { DSN: "postgres://user:pass@host/db" });
+  assert.deepStrictEqual(result, [
+    "--config=/tmp/mcp-bridge-config/dbhub/dbhub.toml",
+    "--dsn=postgres://user:pass@host/db",
+  ]);
+});
+
+test("resolveArgs still throws for CONFIG_DIR left unresolved (no configFiles configured)", () => {
+  // If a recipe references ${CONFIG_DIR} but the server has no configFiles,
+  // startProcess() never calls resolveConfigDirPlaceholder, so the literal
+  // placeholder falls through to resolveArgs and fails loudly rather than
+  // spawning with a broken --config path.
+  assert.throws(
+    () => resolveArgs(["--config=${CONFIG_DIR}/dbhub.toml"], {}),
+    /Missing required environment variable "CONFIG_DIR"/
+  );
+});
 
 test("resolveEnvRecord throws when env var is missing", () => {
   assert.throws(

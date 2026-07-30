@@ -219,6 +219,19 @@ export function resolveArgs(
 }
 
 /**
+ * Substitute the `${CONFIG_DIR}` placeholder in stdio args with the
+ * directory where the spawned server's recipe-declared configFiles were
+ * written (see config-files.ts). This is a plain literal replace, run
+ * BEFORE resolveArgs's `${VAR}` secret resolution — CONFIG_DIR is a
+ * bridge-internal path, not a secret, so it must never be looked up against
+ * the env/secrets map (it isn't there, and resolveEnvVars would otherwise
+ * throw "missing required environment variable CONFIG_DIR").
+ */
+export function resolveConfigDirPlaceholder(args: string[], configDir: string): string[] {
+  return args.map(arg => arg.split("${CONFIG_DIR}").join(configDir));
+}
+
+/**
  * Resolve auth config into HTTP headers.
  */
 export function resolveAuthHeaders(

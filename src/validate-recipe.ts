@@ -44,6 +44,7 @@ export interface RecipeInstall {
   preInstall?: string[];
   postInstall?: string[];
   platforms?: Record<string, unknown>;
+  configFiles?: Array<{ name: string; content: string }>;
 }
 
 export interface RecipeAuth {
@@ -503,6 +504,36 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
       errors.push(
         `auth.oauth2.credentialsFileType must be string, got ${typeof oauth2.credentialsFileType}`
       );
+    }
+  }
+
+  // install.configFiles: static config files the bridge writes to disk at
+  // spawn time (e.g. dbhub.toml with a ${DSN} placeholder the upstream
+  // server itself resolves from its own env, not the bridge). Names must be
+  // plain filenames — no path separators or ".." — since the bridge joins
+  // them directly under ~/.mcp-bridge/config/<instance>/.
+  const configFiles = recipe.install?.configFiles;
+  if (configFiles !== undefined) {
+    if (!Array.isArray(configFiles)) {
+      errors.push(`install.configFiles must be an array, got ${typeof configFiles}`);
+    } else {
+      for (let i = 0; i < configFiles.length; i++) {
+        const f = configFiles[i] as Record<string, unknown>;
+        if (!f || typeof f !== "object") {
+          errors.push(`install.configFiles[${i}]: must be an object`);
+          continue;
+        }
+        if (typeof f.name !== "string" || f.name.trim().length === 0) {
+          errors.push(`install.configFiles[${i}]: name is required (non-empty string)`);
+        } else if (f.name.includes("/") || f.name.includes("\\") || f.name.includes("..")) {
+          errors.push(
+            `install.configFiles[${i}]: name must be a plain filename with no path separators or "..", got "${f.name}"`
+          );
+        }
+        if (typeof f.content !== "string") {
+          errors.push(`install.configFiles[${i}]: content must be a string, got ${typeof f.content}`);
+        }
+      }
     }
   }
 

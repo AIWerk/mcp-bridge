@@ -66,6 +66,15 @@ export interface McpServerConfig {
    * Format dictates the file shape (e.g. "google-workspace" follows Google's tz-naive expiry).
    */
   oauth2CredentialsFile?: { format: "google-workspace"; envVar?: string };
+  /**
+   * Static config files written to disk at spawn time (0600, one dir per
+   * instance under ~/.mcp-bridge/config/<instance>/). Content is static and
+   * secret-free — any ${VAR} inside it is resolved by the upstream server
+   * itself from its own env, not by the bridge. Sourced from
+   * recipe.install.configFiles. Use the ${CONFIG_DIR} placeholder in `args`
+   * to point the spawned command at the written directory.
+   */
+  configFiles?: Array<{ name: string; content: string }>;
   // Stdio transport
   command?: string;
   args?: string[];
