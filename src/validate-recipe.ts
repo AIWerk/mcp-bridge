@@ -21,6 +21,15 @@ const KNOWN_CATEGORIES = new Set([
   "other",
 ]);
 
+// ─── Bridge-internal ${VAR} placeholders (§7.1 Rule 8 exemption) ────────────
+//
+// These placeholders resolve from bridge-managed state at spawn time (e.g.
+// the directory a recipe's install.configFiles were written to), not from a
+// user-supplied secret. They must never be required in auth.envVars — that
+// would ask recipe authors to declare a value that doesn't exist and never
+// will. Extend this set as more bridge-internal placeholders are added.
+const BRIDGE_INTERNAL_PLACEHOLDERS = new Set(["CONFIG_DIR"]);
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface RecipeTransport {
@@ -248,7 +257,7 @@ export function validateRecipe(recipe: UniversalRecipe): ValidationResult {
     if (transportVarRefs.size > 0) {
       const declaredEnvVars = new Set(recipe.auth?.envVars ?? []);
       const missing = [...transportVarRefs].filter(
-        (v) => !declaredEnvVars.has(v)
+        (v) => !declaredEnvVars.has(v) && !BRIDGE_INTERNAL_PLACEHOLDERS.has(v)
       );
       if (missing.length > 0) {
         errors.push(

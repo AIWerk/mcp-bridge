@@ -288,6 +288,32 @@ test("undeclared ${VAR} in transport headers fails", () => {
   assert.ok(result.errors.some((e) => e.includes("SECRET_TOKEN")));
 });
 
+test("${CONFIG_DIR} in transport args does NOT require an auth.envVars entry", () => {
+  // Regression test: CONFIG_DIR is a bridge-internal placeholder (resolved
+  // from where install.configFiles were written at spawn time), never a
+  // user secret — recipe authors must never be asked to declare it.
+  const result = validateRecipe(
+    validStdioRecipe({
+      transports: [
+        {
+          type: "stdio",
+          command: "npx",
+          args: ["-y", "@bytebase/dbhub", "--config=${CONFIG_DIR}/dbhub.toml"],
+          env: { DSN: "${DSN}" },
+        },
+      ],
+      auth: { required: true, envVars: ["DSN"] },
+      install: {
+        method: "npx",
+        package: "@bytebase/dbhub",
+        configFiles: [{ name: "dbhub.toml", content: '[[sources]]\nid = "default"\ndsn = "${DSN}"\n' }],
+      },
+    })
+  );
+  assert.equal(result.valid, true);
+  assert.ok(!result.errors.some((e) => e.includes("CONFIG_DIR")));
+});
+
 // ─── ID format edge cases (§7.3) ──────────────────────────────────────────────
 
 test("id 'todoist' is valid", () => {
