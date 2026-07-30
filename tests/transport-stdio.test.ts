@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { StdioTransport } from "../src/transport-stdio.ts";
 import type { McpServerConfig, McpClientConfig, Logger } from "../src/types.ts";
 
@@ -203,4 +206,102 @@ test("stdio transport: connection timeout proceeds optimistically on non-respons
 
   assert.equal(transport.isConnected(), true);
   await transport.disconnect().catch(() => {});
+});
+
+test("stdio transport: writes configFiles and substitutes ${CONFIG_DIR} in args before spawn", async () => {
+  // Echo server that reports back its own argv, so the test can verify the
+  // actual spawned command line — proof the file was written AND the
+  // ${CONFIG_DIR} arg placeholder was substituted, without relying on
+  // internals of transport-stdio. Written to a real script file (not -e)
+  // so process.argv slicing behaves like a normal CLI invocation.
+  const tempBase = mkdtempSync(join(tmpdir(), "mcp-bridge-configfiles-wiring-"));
+  const scriptPath = join(tempBase, "argv-echo-server.cjs");
+  writeFileSync(
+    scriptPath,
+    `
+    process.stdout.write("\\n"); // readiness signal
+    const readline = require("readline");
+    const rl = readline.createInterface({ input: process.stdin });
+    rl.on("line", (line) => {
+      let req;
+      try { req = JSON.parse(line); } catch { return; }
+      if (req.method === "initialize") {
+        process.stdout.write(JSON.stringify({
+          jsonrpc: "2.0", id: req.id,
+          result: { protocolVersion: "2025-06-18", serverInfo: { name: "argv-echo", version: "1.0" }, capabilities: { tools: {} } }
+        }) + "\\n");
+      } else if (req.method === "tools/call") {
+        process.stdout.write(JSON.stringify({
+          jsonrpc: "2.0", id: req.id,
+          result: { content: [{ type: "text", text: JSON.stringify(process.argv.slice(2)) }] }
+        }) + "\\n");
+      }
+    });
+    `
+  );
+
+  const original = process.env.MCP_BRIDGE_CONFIG_FILES_DIR;
+  process.env.MCP_BRIDGE_CONFIG_FILES_DIR = tempBase;
+
+  const config: McpServerConfig = {
+    transport: "stdio",
+    command: process.execPath,
+    args: [scriptPath, "--config=${CONFIG_DIR}/dbhub.toml", "--dsn=${DSN}"],
+    env: { DSN: "postgres://user:pass@host/db" },
+    configFiles: [{ name: "dbhub.toml", content: '[[sources]]\nid = "default"\ndsn = "${DSN}"\n' }],
+  };
+  const clientConfig: McpClientConfig = {
+    servers: {},
+    connectionTimeoutMs: 5000,
+    requestTimeoutMs: 5000,
+    reconnectIntervalMs: 300000,
+  };
+  const transport = new StdioTransport(config, clientConfig, makeLogger(), undefined, undefined, undefined, "test-dbhub");
+
+  try {
+    await transport.connect();
+
+    await transport.sendRequest({
+      jsonrpc: "2.0",
+      method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } },
+    });
+    await transport.sendNotification({ jsonrpc: "2.0", method: "notifications/initialized" });
+
+    const callRes = await transport.sendRequest({ jsonrpc: "2.0", method: "tools/call", params: { name: "getArgv" } });
+    const receivedArgs = JSON.parse(callRes.result.content[0].text);
+    const expectedConfigDir = join(tempBase, "test-dbhub");
+
+    assert.deepStrictEqual(receivedArgs, [
+      `--config=${expectedConfigDir}/dbhub.toml`,
+      "--dsn=postgres://user:pass@host/db",
+    ]);
+
+    const written = readFileSync(join(expectedConfigDir, "dbhub.toml"), "utf-8");
+    assert.equal(written, '[[sources]]\nid = "default"\ndsn = "${DSN}"\n');
+  } finally {
+    await transport.disconnect().catch(() => {});
+    if (original === undefined) delete process.env.MCP_BRIDGE_CONFIG_FILES_DIR;
+    else process.env.MCP_BRIDGE_CONFIG_FILES_DIR = original;
+    rmSync(tempBase, { recursive: true, force: true });
+  }
+});
+
+test("stdio transport: throws if configFiles set but serverName missing", async () => {
+  const config: McpServerConfig = {
+    transport: "stdio",
+    command: process.execPath,
+    args: ["-e", "setTimeout(() => {}, 60000);"],
+    configFiles: [{ name: "dbhub.toml", content: "x = 1\n" }],
+  };
+  const clientConfig: McpClientConfig = {
+    servers: {},
+    connectionTimeoutMs: 500,
+    requestTimeoutMs: 1000,
+    reconnectIntervalMs: 300000,
+  };
+  // No serverName passed (7th ctor arg omitted) — configFiles has no dir to write into.
+  const transport = new StdioTransport(config, clientConfig, makeLogger());
+
+  await assert.rejects(() => transport.connect(), /serverName is required to write configFiles/);
 });

@@ -245,6 +245,9 @@ export function recipeToServerConfig(recipe: CatalogRecipe): McpServerConfig | n
   const cfgExtras: Partial<McpServerConfig> = {};
   if (typeof envBinding === "string" && envBinding) cfgExtras.oauth2EnvBinding = envBinding;
   if (credFileType === "google-workspace") cfgExtras.oauth2CredentialsFile = { format: "google-workspace" };
+  if (Array.isArray(recipe.install?.configFiles) && recipe.install.configFiles.length > 0) {
+    cfgExtras.configFiles = recipe.install.configFiles;
+  }
 
   if (Array.isArray(recipe.transports) && recipe.transports.length > 0) {
     const t = recipe.transports[0];

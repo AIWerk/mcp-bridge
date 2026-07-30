@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
 import { McpRequest, McpResponse, McpServerConfig, McpClientConfig, Logger, RequestIdGenerator } from "./types.js";
-import { BaseTransport, resolveEnvRecord, resolveArgs, resolveOauth2EnvAsync, resolveOauth2CredentialsFileAsync } from "./transport-base.js";
+import { BaseTransport, resolveEnvRecord, resolveArgs, resolveConfigDirPlaceholder, resolveOauth2EnvAsync, resolveOauth2CredentialsFileAsync } from "./transport-base.js";
 import type { OAuth2TokenManager } from "./oauth2-token-manager.js";
 
 export class StdioTransport extends BaseTransport {
@@ -65,8 +65,18 @@ export class StdioTransport extends BaseTransport {
         throw error;
       }
     }
+    let configDir: string | undefined;
+    if (this.config.configFiles && this.config.configFiles.length > 0) {
+      if (!this.serverName) {
+        throw new Error("[mcp-bridge] serverName is required to write configFiles");
+      }
+      const { writeConfigFiles } = await import("./config-files.js");
+      configDir = writeConfigFiles(this.serverName, this.config.configFiles);
+    }
+
     const env = { ...process.env, ...configEnv, ...oauthEnv, ...credFileEnv };
-    const args = resolveArgs(this.config.args || [], env);
+    const rawArgs = configDir ? resolveConfigDirPlaceholder(this.config.args || [], configDir) : (this.config.args || []);
+    const args = resolveArgs(rawArgs, env);
 
     if (process.env.DEBUG_STDIO_ENV) {
       this.logger.info(`[mcp-bridge] stdio spawn: ${this.config.command} ${args.join(" ")}`);

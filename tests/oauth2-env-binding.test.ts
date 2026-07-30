@@ -63,6 +63,40 @@ test("recipeToServerConfig: missing oauth2 fields produce no extras", () => {
   assert.equal(cfg?.oauth2CredentialsFile, undefined);
 });
 
+test("recipeToServerConfig plumbs install.configFiles through to McpServerConfig.configFiles", () => {
+  const recipe = {
+    id: "dbhub",
+    name: "DBHub",
+    description: "Database MCP server",
+    transports: [{ type: "stdio", command: "npx", args: ["-y", "@bytebase/dbhub", "--config=${CONFIG_DIR}/dbhub.toml"], env: { DSN: "${DSN}" } }],
+    auth: { type: "api-key", required: true, envVars: ["DSN"] },
+    install: {
+      method: "npx",
+      package: "@bytebase/dbhub",
+      configFiles: [{ name: "dbhub.toml", content: '[[sources]]\nid = "default"\ndsn = "${DSN}"\n' }],
+    },
+  } as unknown as CatalogRecipe;
+
+  const cfg = recipeToServerConfig(recipe);
+  assert.deepEqual(cfg?.configFiles, [
+    { name: "dbhub.toml", content: '[[sources]]\nid = "default"\ndsn = "${DSN}"\n' },
+  ]);
+});
+
+test("recipeToServerConfig: empty install.configFiles produces no extras", () => {
+  const recipe = {
+    id: "tavily",
+    name: "Tavily",
+    description: "Tavily search",
+    transports: [{ type: "stdio", command: "npx", args: ["-y", "tavily-mcp"] }],
+    auth: { type: "bearer", required: true, envVars: ["TAVILY_API_KEY"] },
+    install: { method: "npx", package: "tavily-mcp", configFiles: [] },
+  } as unknown as CatalogRecipe;
+
+  const cfg = recipeToServerConfig(recipe);
+  assert.equal(cfg?.configFiles, undefined);
+});
+
 test("resolveOauth2EnvAsync returns {[envBinding]: token} when configured", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: string | URL | Request): Promise<Response> => {

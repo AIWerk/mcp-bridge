@@ -288,6 +288,32 @@ test("undeclared ${VAR} in transport headers fails", () => {
   assert.ok(result.errors.some((e) => e.includes("SECRET_TOKEN")));
 });
 
+test("${CONFIG_DIR} in transport args does NOT require an auth.envVars entry", () => {
+  // Regression test: CONFIG_DIR is a bridge-internal placeholder (resolved
+  // from where install.configFiles were written at spawn time), never a
+  // user secret — recipe authors must never be asked to declare it.
+  const result = validateRecipe(
+    validStdioRecipe({
+      transports: [
+        {
+          type: "stdio",
+          command: "npx",
+          args: ["-y", "@bytebase/dbhub", "--config=${CONFIG_DIR}/dbhub.toml"],
+          env: { DSN: "${DSN}" },
+        },
+      ],
+      auth: { required: true, envVars: ["DSN"] },
+      install: {
+        method: "npx",
+        package: "@bytebase/dbhub",
+        configFiles: [{ name: "dbhub.toml", content: '[[sources]]\nid = "default"\ndsn = "${DSN}"\n' }],
+      },
+    })
+  );
+  assert.equal(result.valid, true);
+  assert.ok(!result.errors.some((e) => e.includes("CONFIG_DIR")));
+});
+
 // ─── ID format edge cases (§7.3) ──────────────────────────────────────────────
 
 test("id 'todoist' is valid", () => {
@@ -616,5 +642,66 @@ test("validator rejects non-string oauth2.envBinding", () => {
   );
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.includes("oauth2.envBinding must be string")));
+});
+
+test("validator accepts install.configFiles with valid name + content", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: {
+        method: "npx",
+        package: "@example/my-server",
+        configFiles: [{ name: "dbhub.toml", content: '[[sources]]\nid = "default"\ndsn = "${DSN}"\n' }],
+      },
+    }),
+  );
+  assert.equal(result.valid, true);
+});
+
+test("validator rejects install.configFiles that is not an array", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: { method: "npx", package: "@example/my-server", configFiles: "nope" as never },
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("install.configFiles must be an array")));
+});
+
+test("validator rejects install.configFiles entry missing name", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: { method: "npx", package: "@example/my-server", configFiles: [{ content: "x = 1\n" } as never] },
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("name is required")));
+});
+
+test("validator rejects install.configFiles entry with path-traversal name", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: {
+        method: "npx",
+        package: "@example/my-server",
+        configFiles: [{ name: "../../etc/passwd", content: "x" }],
+      },
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("plain filename")));
+});
+
+test("validator rejects install.configFiles entry with non-string content", () => {
+  const result = validateRecipe(
+    validStdioRecipe({
+      install: {
+        method: "npx",
+        package: "@example/my-server",
+        configFiles: [{ name: "dbhub.toml", content: 123 } as never],
+      },
+    }),
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes("content must be a string")));
 });
 
