@@ -615,7 +615,7 @@ mcp-bridge init --register cursor       # Init + register with Cursor
 mcp-bridge init --register windsurf     # Init + register with Windsurf
 mcp-bridge install <server>       # Install from online catalog
 mcp-bridge set-env <KEY> <value>  # Set an API key in ~/.mcp-bridge/.env
-mcp-bridge catalog                # Browse 38 available servers
+mcp-bridge catalog                # Browse 39 available servers
 mcp-bridge servers                # List configured servers and current mode
 mcp-bridge search <query>         # Search catalog by keyword
 mcp-bridge update [--check]       # Check for / install updates
@@ -643,10 +643,10 @@ The tool description automatically includes all connected servers with their des
 
 ## Server Catalog
 
-Browse and install from the [AIWerk MCP Catalog](https://aiwerkmcp.com) with <!-- recipe-count -->38<!-- /recipe-count --> verified, signed recipes:
+Browse and install from the [AIWerk MCP Catalog](https://aiwerkmcp.com) with <!-- recipe-count -->39<!-- /recipe-count --> verified, signed recipes:
 
 ```bash
-mcp-bridge catalog                # Browse all 38 servers
+mcp-bridge catalog                # Browse all 39 servers
 mcp-bridge search payments        # Search by keyword
 mcp-bridge install todoist        # Install from catalog
 ```
